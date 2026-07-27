@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NumSprite — a tiny text engine for beginners</title>
+<style>
+  :root{
+    --bg:#14161c; --panel:#1c1f28; --panel2:#232734; --line:#333a4a;
+    --fg:#e8ecf5; --dim:#8b95ab; --accent:#5ac8fa; --accent2:#ffd166; --bad:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--fg);
+    font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  header{
+    display:flex; align-items:center; gap:8px; padding:8px 12px;
+    background:var(--panel); border-bottom:1px solid var(--line); flex:none;
+  }
+  header h1{font-size:15px;margin:0 12px 0 0;letter-spacing:.5px}
+  header h1 span{color:var(--accent)}
+  .tabs{display:flex;gap:4px}
+  button{
+    font:inherit; color:var(--fg); background:var(--panel2);
+    border:1px solid var(--line); border-radius:6px; padding:5px 11px; cursor:pointer;
+  }
+  button:hover{border-color:var(--accent)}
+  button.on{background:var(--accent); color:#0b1017; border-color:var(--accent); font-weight:700}
+  .spacer{flex:1}
+  main{flex:1; display:flex; min-height:0}
+  .view{display:none; flex:1; min-height:0}
+  .view.on{display:flex}
+
+  /* ---- shared column bits ---- */
+  .col{display:flex;flex-direction:column;min-height:0}
+  .pane{background:var(--panel); border-right:1px solid var(--line); padding:10px; overflow:auto}
+  .pane h3{margin:0 0 8px; font-size:11px; letter-spacing:1.5px; color:var(--dim); text-transform:uppercase}
+  .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+
+  /* ---- code view ---- */
+  #code{
+    flex:1; resize:none; border:0; outline:0; padding:14px;
+    background:#12141a; color:#e8ecf5; font:14px/1.6 inherit; tab-size:2;
+  }
+  #stage-wrap{background:#0c0e13;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px}
+  canvas{image-rendering:pixelated; background:#000; border:1px solid var(--line); border-radius:4px}
+  #console{
+    height:130px; overflow:auto; background:#0c0e13; border-top:1px solid var(--line);
+    padding:8px 12px; color:var(--dim); font-size:12px; white-space:pre-wrap;
+  }
+  #console .err{color:var(--bad)}
+  #console .ok{color:var(--accent)}
+
+  /* ---- sprite list ---- */
+  .sprites{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px}
+  .chip{
+    background:var(--panel2); border:2px solid transparent; border-radius:6px;
+    padding:4px; cursor:pointer; text-align:center;
+  }
+  .chip.on{border-color:var(--accent)}
+  .chip canvas{width:100%;height:auto;display:block;border:0;background:#0c0e13;border-radius:3px}
+  .chip b{font-size:11px;color:var(--dim);font-weight:700}
+  .chip.on b{color:var(--accent)}
+
+  /* ---- paint ---- */
+  #paint-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:#0c0e13}
+  #palette{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+  .sw{aspect-ratio:1;border-radius:4px;border:2px solid transparent;cursor:pointer}
+  .sw.on{border-color:#fff}
+  .sw.eraser{background:
+    linear-gradient(45deg,#444 25%,transparent 25%,transparent 75%,#444 75%),
+    linear-gradient(45deg,#444 25%,#222 25%,#222 75%,#444 75%);
+    background-size:10px 10px;background-position:0 0,5px 5px}
+
+  label{color:var(--dim);font-size:12px}
+  input[type=text],input[type=number]{
+    background:#0c0e13;color:var(--fg);border:1px solid var(--line);
+    border-radius:5px;padding:4px 6px;font:inherit;width:100%
+  }
+  .hint{color:var(--dim);font-size:12px;line-height:1.6}
+  .hint code{color:var(--accent2)}
+  .list{display:flex;flex-direction:column;gap:4px}
+  .list button{text-align:left}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Num<span>Sprite</span></h1>
+  <div class="tabs">
+    <button id="t-code" class="on" onclick="tab('code')">1 · Code</button>
+    <button id="t-paint" onclick="tab('paint')">2 · Paint</button>
+    <button id="t-rooms" onclick="tab('rooms')">3 · Rooms</button>
+    <button id="t-help" onclick="tab('help')">? · Help</button>
+  </div>
+  <div class="spacer"></div>
+  <button onclick="run()" style="background:#2e7d32;border-color:#2e7d32">▶ Run</button>
+  <button onclick="stop()">■ Stop</button>
+  <button onclick="saveFile()">Save</button>
+  <button onclick="document.getElementById('load').click()">Load</button>
+  <input id="load" type="file" accept=".json" style="display:none" onchange="loadFile(this)">
+</header>
+
+<main>
+  <!-- ================= CODE ================= -->
+  <section id="v-code" class="view on">
+    <div class="col" style="flex:1">
+      <textarea id="code" spellcheck="false"></textarea>
+      <div id="console"></div>
+    </div>
+    <div id="stage-wrap" class="col" style="flex:none">
+      <canvas id="stage" width="320" height="240" style="width:480px;height:360px"></canvas>
+      <div class="hint">click the stage, then use the arrow keys / z</div>
+    </div>
+  </section>
+
+  <!-- ================= PAINT ================= -->
+  <section id="v-paint" class="view">
+    <div class="pane col" style="width:210px;flex:none">
+      <h3>Sprites</h3>
+      <div class="row" style="margin-bottom:8px">
+        <button onclick="addSprite()">+ New</button>
+        <button onclick="copySprite()">Copy</button>
+        <button onclick="clearSprite()">Clear</button>
+      </div>
+      <div id="sprite-list" class="sprites"></div>
+    </div>
+
+    <div id="paint-wrap">
+      <canvas id="paint" width="512" height="512" style="width:512px;height:512px"></canvas>
+    </div>
+
+    <div class="pane col" style="width:180px;flex:none">
+      <h3>Colours</h3>
+      <div id="palette"></div>
+      <h3 style="margin-top:14px">Sprite <span id="p-id">1</span></h3>
+      <div class="hint">
+        left-drag paints<br>right-drag erases<br><br>
+        Every sprite is just a number. Use that number in your code:<br>
+        <code>show(<span id="p-id2">1</span>)</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ROOMS ================= -->
+  <section id="v-rooms" class="view">
+    <div class="pane col" style="width:210px;flex:none">
+      <h3>Tile (pick a sprite)</h3>
+      <div id="tile-list" class="sprites"></div>
+    </div>
+
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;background:#0c0e13">
+      <canvas id="roomcv" width="320" height="240" style="width:640px;height:480px;cursor:crosshair"></canvas>
+    </div>
+
+    <div class="pane col" style="width:190px;flex:none">
+      <h3>Rooms</h3>
+      <div class="row" style="margin-bottom:8px">
+        <button onclick="addRoom()">+ New</button>
+        <button onclick="clearRoom()">Clear</button>
+      </div>
+      <div id="room-list" class="list"></div>
+      <h3 style="margin-top:14px">How</h3>
+      <div class="hint">
+        Left-click paints the chosen sprite as a tile.<br>
+        Right-click erases.<br><br>
+        Show a room from code:<br><code>room(2)</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= HELP ================= -->
+  <section id="v-help" class="view">
+    <div class="pane" style="flex:1">
+      <h3>Every command</h3>
+      <div class="hint" style="max-width:760px;font-size:13px">
+<pre style="white-space:pre-wrap">
+<code>show(1)</code>              show sprite 1
+<code>hide(1)</code>              hide sprite 1
+<code>move(1, 10, 0)</code>       move sprite 1 by 10 pixels right, 0 down
+<code>put(1, 100, 50)</code>      put sprite 1 exactly at x=100 y=50
+<code>print("Hi", 0, 0)</code>    draw text at x=0 y=0
+<code>room(2)</code>             show room 2 behind everything
+<code>set(score, 0)</code>       make a variable
+<code>add(score, 1)</code>       add to a variable
+<code>wait(30)</code>            wait 30 frames (about half a second)
+<code>stop()</code>              stop the program
+
+Blocks (a block ends with <code>end</code>):
+
+<code>when start</code>            runs one time at the beginning
+  show(1)
+<code>end</code>
+
+<code>when key left</code>         runs while the left arrow is held
+  move(1, -2, 0)                keys: left right up down space z x
+<code>end</code>
+
+<code>every frame</code>           runs 60 times a second
+  print("score: ", 4, 4)
+<code>end</code>
+
+<code>repeat 5</code>              do something 5 times
+  move(1, 4, 0)
+<code>end</code>
+
+<code>if touching(1, 2)</code>      true when sprite 1 overlaps sprite 2
+  hide(2)
+<code>end</code>
+
+<code>if x(1) > 300</code>          x(1) and y(1) are a sprite's position
+  put(1, 0, y(1))
+<code>end</code>
+
+Notes
+· The screen is 320 x 240 pixels. x grows right, y grows down.
+· Sprites are 16 x 16. Sprite numbers start at 1 and never run out.
+· Anything after <code>#</code> is a comment.
+· Variables can be used anywhere a number can: <code>move(1, speed, 0)</code>
+</pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* =========================================================
+   NumSprite — sprites are numbers, rooms are grids of numbers
+   ========================================================= */
+
+const SW = 16, SH = 16;                 // sprite size
+const VW = 320, VH = 240;               // screen size
+const COLS = VW / SW, ROWS = VH / SH;   // room grid = 20 x 15
+
+const PALETTE = [
+  "#000000","#1d2b53","#7e2553","#008751",
+  "#ab5236","#5f574f","#c2c3c7","#fff1e8",
+  "#ff004d","#ffa300","#ffec27","#00e436",
+  "#29adff","#83769c","#ff77a8","#ffccaa"
+];
+
+/* ---------- project data ---------- */
+const blankSprite = () => new Array(SW * SH).fill(-1);   // -1 = transparent
+const blankRoom   = () => new Array(COLS * ROWS).fill(0); // 0 = empty
+
+let project = {
+  sprites: [blankSprite(), blankSprite(), blankSprite()], // index 0 -> sprite 1
+  rooms:   [blankRoom()],
+  code: `# welcome! press Run.
+when start
+  put(1, 150, 110)
+  show(1)
+end
+
+every frame
+  room(1)
+  print("arrow keys to move", 4, 4)
+end
+
+when key left
+  move(1, -2, 0)
+end
+when key right
+  move(1, 2, 0)
+end
+when key up
+  move(1, 0, -2)
+end
+when key down
+  move(1, 0, 2)
+end
+`
+};
+
+let curSprite = 0, curColor = 8, curRoom = 0, curTile = 1;
+
+/* ---------- tiny helpers ---------- */
+const $ = id => document.getElementById(id);
+const sprite = n => project.sprites[n - 1];
+
+function ensureSprite(n){
+  while (project.sprites.length < n) project.sprites.push(blankSprite());
+  return sprite(n);
+}
+
+/* =========================================================
+   TABS
+   ========================================================= */
+function tab(name){
+  for (const t of ["code","paint","rooms","help"]){
+    $("v-"+t).classList.toggle("on", t === name);
+    $("t-"+t).classList.toggle("on", t === name);
+  }
+  if (name === "paint") { drawPaint(); drawSpriteList(); }
+  if (name === "rooms") { drawRoom(); drawTileList(); drawRoomList(); }
+  if (name === "code")  $("code").focus();
+}
+
+/* =========================================================
+   DRAWING SPRITES
+   ========================================================= */
+function blit(ctx, n, px, py, scale = 1){
+  const s = project.sprites[n - 1];
+  if (!s) return;
+  for (let y = 0; y < SH; y++){
+    for (let x = 0; x < SW; x++){
+      const c = s[y * SW + x];
+      if (c < 0) continue;
+      ctx.fillStyle = PALETTE[c];
+      ctx.fillRect(px + x * scale, py + y * scale, scale, scale);
+    }
+  }
+}
+
+function thumb(n, size = 48){
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = SW;
+  const c = cv.getContext("2d");
+  blit(c, n, 0, 0, 1);
+  cv.style.width = cv.style.height = size + "px";
+  return cv;
+}
+
+/* =========================================================
+   PAINT EDITOR
+   ========================================================= */
+const paintCv = $("paint"), paintCtx = paintCv.getContext("2d");
+const PZ = paintCv.width / SW;   // 32 px per pixel
+
+function drawPaint(){
+  const s = ensureSprite(curSprite + 1);
+  paintCtx.fillStyle = "#0c0e13";
+  paintCtx.fillRect(0, 0, paintCv.width, paintCv.height);
+
+  // checkerboard for transparency
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
+    if (s[y*SW+x] >= 0) continue;
+    paintCtx.fillStyle = (x + y) % 2 ? "#161a22" : "#1b202b";
+    paintCtx.fillRect(x*PZ, y*PZ, PZ, PZ);
+  }
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
+    const c = s[y*SW+x];
+    if (c < 0) continue;
+    paintCtx.fillStyle = PALETTE[c];
+    paintCtx.fillRect(x*PZ, y*PZ, PZ, PZ);
+  }
+  paintCtx.strokeStyle = "rgba(255,255,255,.07)";
+  paintCtx.lineWidth = 1;
+  for (let i = 0; i <= SW; i++){
+    paintCtx.beginPath();
+    paintCtx.moveTo(i*PZ + .5, 0); paintCtx.lineTo(i*PZ + .5, paintCv.height); paintCtx.stroke();
+    paintCtx.beginPath();
+    paintCtx.moveTo(0, i*PZ + .5); paintCtx.lineTo(paintCv.width, i*PZ + .5); paintCtx.stroke();
+  }
+  $("p-id").textContent = $("p-id2").textContent = curSprite + 1;
+}
+
+let painting = 0;
+function paintAt(e, erase){
+  const r = paintCv.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / r.width  * SW);
+  const y = Math.floor((e.clientY - r.top ) / r.height * SH);
+  if (x < 0 || y < 0 || x >= SW || y >= SH) return;
+  ensureSprite(curSprite + 1)[y*SW+x] = erase ? -1 : curColor;
+  drawPaint(); drawSpriteList(); save();
+}
+paintCv.addEventListener("mousedown", e => {
+  painting = e.button === 2 ? 2 : 1;
+  paintAt(e, painting === 2);
+});
+paintCv.addEventListener("mousemove", e => { if (painting) paintAt(e, painting === 2); });
+window.addEventListener("mouseup", () => painting = 0);
+paintCv.addEventListener("contextmenu", e => e.preventDefault());
+
+function drawSpriteList(){
+  const box = $("sprite-list"); box.innerHTML = "";
+  project.sprites.forEach((_, i) => {
+    const d = document.createElement("div");
+    d.className = "chip" + (i === curSprite ? " on" : "");
+    d.appendChild(thumb(i + 1));
+    const b = document.createElement("b"); b.textContent = i + 1;
+    d.appendChild(b);
+    d.onclick = () => { curSprite = i; drawPaint(); drawSpriteList(); };
+    box.appendChild(d);
+  });
+}
+
+function addSprite(){ project.sprites.push(blankSprite()); curSprite = project.sprites.length - 1; drawPaint(); drawSpriteList(); save(); }
+function copySprite(){ project.sprites.push(sprite(curSprite + 1).slice()); curSprite = project.sprites.length - 1; drawPaint(); drawSpriteList(); save(); }
+function clearSprite(){ project.sprites[curSprite] = blankSprite(); drawPaint(); drawSpriteList(); save(); }
+
+/* ---------- palette ---------- */
+(function buildPalette(){
+  const box = $("palette");
+  PALETTE.forEach((c, i) => {
+    const d = document.createElement("div");
+    d.className = "sw" + (i === curColor ? " on" : "");
+    d.style.background = c;
+    d.onclick = () => { curColor = i; refreshPalette(); };
+    box.appendChild(d);
+  });
+})();
+function refreshPalette(){
+  [...$("palette").children].forEach((d, i) => d.classList.toggle("on", i === curColor));
+}
+
+/* =========================================================
+   ROOM EDITOR
+   ========================================================= */
+const roomCv = $("roomcv"), roomCtx = roomCv.getContext("2d");
+
+function drawRoom(){
+  roomCtx.fillStyle = "#0c0e13";
+  roomCtx.fillRect(0, 0, VW, VH);
+  const r = project.rooms[curRoom];
+  for (let i = 0; i < r.length; i++){
+    if (!r[i]) continue;
+    blit(roomCtx, r[i], (i % COLS) * SW, Math.floor(i / COLS) * SH);
+  }
+  roomCtx.strokeStyle = "rgba(255,255,255,.06)";
+  for (let x = 0; x <= COLS; x++){ roomCtx.beginPath(); roomCtx.moveTo(x*SW+.5,0); roomCtx.lineTo(x*SW+.5,VH); roomCtx.stroke(); }
+  for (let y = 0; y <= ROWS; y++){ roomCtx.beginPath(); roomCtx.moveTo(0,y*SH+.5); roomCtx.lineTo(VW,y*SH+.5); roomCtx.stroke(); }
+}
+
+let tiling = 0;
+function tileAt(e, erase){
+  const b = roomCv.getBoundingClientRect();
+  const x = Math.floor((e.clientX - b.left) / b.width  * COLS);
+  const y = Math.floor((e.clientY - b.top ) / b.height * ROWS);
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
+  project.rooms[curRoom][y*COLS+x] = erase ? 0 : curTile;
+  drawRoom(); save();
+}
+roomCv.addEventListener("mousedown", e => { tiling = e.button === 2 ? 2 : 1; tileAt(e, tiling === 2); });
+roomCv.addEventListener("mousemove", e => { if (tiling) tileAt(e, tiling === 2); });
+window.addEventListener("mouseup", () => tiling = 0);
+roomCv.addEventListener("contextmenu", e => e.preventDefault());
+
+function drawTileList(){
+  const box = $("tile-list"); box.innerHTML = "";
+  project.sprites.forEach((_, i) => {
+    const d = document.createElement("div");
+    d.className = "chip" + (i + 1 === curTile ? " on" : "");
+    d.appendChild(thumb(i + 1));
+    const b = document.createElement("b"); b.textContent = i + 1;
+    d.appendChild(b);
+    d.onclick = () => { curTile = i + 1; drawTileList(); };
+    box.appendChild(d);
+  });
+}
+
+function drawRoomList(){
+  const box = $("room-list"); box.innerHTML = "";
+  project.rooms.forEach((_, i) => {
+    const b = document.createElement("button");
+    b.textContent = "Room " + (i + 1);
+    if (i === curRoom) b.className = "on";
+    b.onclick = () => { curRoom = i; drawRoom(); drawRoomList(); };
+    box.appendChild(b);
+  });
+}
+function addRoom(){ project.rooms.push(blankRoom()); curRoom = project.rooms.length - 1; drawRoom(); drawRoomList(); save(); }
+function clearRoom(){ project.rooms[curRoom] = blankRoom(); drawRoom(); save(); }
+
+/* =========================================================
+   THE LANGUAGE
+   ---------------------------------------------------------
+   Parsed into a tree of statements. Blocks:
+     when start / every frame / when key <k> / repeat <n> / if <cond>
+   ========================================================= */
+
+function tokenizeLine(line){
+  const hash = line.indexOf("#");
+  if (hash >= 0){
+    // don't cut inside a string
+    let inStr = false, cut = -1;
+    for (let i = 0; i < line.length; i++){
+      if (line[i] === '"') inStr = !inStr;
+      else if (line[i] === "#" && !inStr){ cut = i; break; }
+    }
+    if (cut >= 0) line = line.slice(0, cut);
+  }
+  return line.trim();
+}
+
+function parse(src){
+  const lines = src.split("\n").map((t, i) => ({ text: tokenizeLine(t), n: i + 1 }))
+                   .filter(l => l.text.length);
+  let i = 0;
+
+  function block(stopAtEnd){
+    const out = [];
+    while (i < lines.length){
+      const { text, n } = lines[i];
+      if (/^end$/i.test(text)){
+        if (!stopAtEnd) throw new Err("'end' with nothing to end", n);
+        i++; return out;
+      }
+      i++;
+      let m;
+      if (/^when\s+start$/i.test(text))            out.push({ k:"start",  body: block(true), n });
+      else if (/^every\s+frame$/i.test(text))      out.push({ k:"frame",  body: block(true), n });
+      else if ((m = text.match(/^when\s+key\s+(\w+)$/i)))
+                                                   out.push({ k:"key", key:m[1].toLowerCase(), body: block(true), n });
+      else if ((m = text.match(/^repeat\s+(.+)$/i)))
+                                                   out.push({ k:"repeat", count:m[1], body: block(true), n });
+      else if ((m = text.match(/^if\s+(.+?)\s*$/i)))
+                                                   out.push({ k:"if", cond:m[1], body: block(true), n });
+      else                                         out.push({ k:"call", text, n });
+    }
+    if (stopAtEnd) throw new Err("a block was never closed with 'end'", lines.length ? lines[lines.length-1].n : 1);
+    return out;
+  }
+  return block(false);
+}
+
+function Err(msg, line){ this.msg = msg; this.line = line; }
+Err.prototype.toString = function(){ return "line " + this.line + ": " + this.msg; };
+
+/* ---------- argument splitting & evaluation ---------- */
+function splitArgs(s){
+  const out = []; let depth = 0, inStr = false, cur = "";
+  for (const ch of s){
+    if (ch === '"') inStr = !inStr;
+    if (!inStr){
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      else if (ch === "," && depth === 0){ out.push(cur.trim()); cur = ""; continue; }
+    }
+    cur += ch;
+  }
+  if (cur.trim().length) out.push(cur.trim());
+  return out;
+}
+
+/* very small expression evaluator: strings, numbers, vars,
+   x(n) y(n) touching(a,b) random(n), + - * / and comparisons */
+function evalExpr(src, line){
+  const s = src.trim();
+  if (!s.length) throw new Err("missing value", line);
+  // a single whole string literal, e.g. "hello"  (not  "a" + "b" )
+  if (s[0] === '"' && s.indexOf('"', 1) === s.length - 1) return s.slice(1, -1);
+
+  // comparisons first (lowest precedence we support)
+  const cmp = s.match(/^(.+?)\s*(>=|<=|==|!=|=|>|<)\s*(.+)$/);
+  if (cmp && !/^[-+]?[\d.]+$/.test(s)){
+    const a = evalExpr(cmp[1], line), b = evalExpr(cmp[3], line);
+    switch (cmp[2]){
+      case ">":  return a >  b;  case "<":  return a <  b;
+      case ">=": return a >= b;  case "<=": return a <= b;
+      case "!=": return a != b;  default:   return a == b;
+    }
+  }
+  // which characters sit inside a "string"? those are never operators
+  const inside = new Array(s.length).fill(false);
+  for (let i = 0, str = false; i < s.length; i++){
+    if (s[i] === '"'){ inside[i] = true; str = !str; continue; }
+    inside[i] = str;
+  }
+
+  // + and - at top level (skip a leading sign, e.g. -5)
+  let depth = 0;
+  const prevReal = i => { let j = i - 1; while (j >= 0 && s[j] === " ") j--; return j < 0 ? "" : s[j]; };
+  for (let i = s.length - 1; i > 0; i--){
+    const c = s[i];
+    if (inside[i]) continue;
+    if (c === ")") depth++; else if (c === "(") depth--;
+    else if (depth === 0 && (c === "+" || c === "-") && !"+-*/(".includes(prevReal(i))){
+      const a = evalExpr(s.slice(0, i), line), b = evalExpr(s.slice(i + 1), line);
+      if (c === "+") return (typeof a === "string" || typeof b === "string") ? "" + a + b : a + b;
+      return a - b;
+    }
+  }
+  depth = 0;
+  for (let i = s.length - 1; i > 0; i--){
+    const c = s[i];
+    if (inside[i]) continue;
+    if (c === ")") depth++; else if (c === "(") depth--;
+    else if (depth === 0 && (c === "*" || c === "/")){
+      const a = evalExpr(s.slice(0, i), line), b = evalExpr(s.slice(i + 1), line);
+      return c === "*" ? a * b : a / b;
+    }
+  }
+  if (s[0] === "(" && s[s.length-1] === ")") return evalExpr(s.slice(1, -1), line);
+  if (/^[-+]?(\d+\.?\d*|\.\d+)$/.test(s)) return parseFloat(s);
+
+  const fn = s.match(/^(\w+)\s*\((.*)\)$/s);
+  if (fn){
+    const name = fn[1].toLowerCase();
+    const args = splitArgs(fn[2]).map(a => evalExpr(a, line));
+    switch (name){
+      case "x": return actor(args[0]).x;
+      case "y": return actor(args[0]).y;
+      case "visible": return actor(args[0]).on;
+      case "touching": return touching(args[0], args[1]);
+      case "random": return Math.floor(Math.random() * (args[0] || 1));
+      case "key": return !!R.keys[String(args[0]).toLowerCase()];
+      default: throw new Err("I don't know '" + name + "'", line);
+    }
+  }
+  if (/^\w+$/.test(s)){
+    if (s.toLowerCase() === "true")  return true;
+    if (s.toLowerCase() === "false") return false;
+    if (s in R.vars) return R.vars[s];
+    throw new Err("'" + s + "' is not a variable yet — make it with set(" + s + ", 0)", line);
+  }
+  throw new Err("I can't read: " + s, line);
+}
+
+/* =========================================================
+   RUNTIME
+   ========================================================= */
+const stage = $("stage"), sctx = stage.getContext("2d");
+sctx.imageSmoothingEnabled = false;
+
+const R = {
+  running:false, prog:null, actors:{}, vars:{}, keys:{},
+  room:0, texts:[], frame:0, waitFrames:0, raf:0, startDone:false
+};
+
+function actor(n){
+  n = Math.round(n);
+  if (!R.actors[n]) R.actors[n] = { x: 0, y: 0, on: false };
+  return R.actors[n];
+}
+function touching(a, b){
+  const A = actor(a), B = actor(b);
+  if (!A.on || !B.on) return false;
+  return A.x < B.x + SW && A.x + SW > B.x && A.y < B.y + SH && A.y + SH > B.y;
+}
+
+function log(msg, cls){
+  const c = $("console");
+  const d = document.createElement("div");
+  if (cls) d.className = cls;
+  d.textContent = msg;
+  c.appendChild(d);
+  c.scrollTop = c.scrollHeight;
+}
+
+const KEYMAP = {
+  ArrowLeft:"left", ArrowRight:"right", ArrowUp:"up", ArrowDown:"down",
+  " ":"space", z:"z", x:"x", c:"c", Enter:"enter"
+};
+window.addEventListener("keydown", e => {
+  const k = KEYMAP[e.key] || KEYMAP[e.key.toLowerCase()];
+  if (k){ R.keys[k] = true; if (R.running && document.activeElement.tagName !== "TEXTAREA") e.preventDefault(); }
+});
+window.addEventListener("keyup", e => {
+  const k = KEYMAP[e.key] || KEYMAP[e.key.toLowerCase()];
+  if (k) R.keys[k] = false;
+});
+
+/* ---------- statement execution ---------- */
+class Stop { }
+class Wait { constructor(f){ this.f = f; } }
+
+function exec(list){
+  for (const st of list){
+    if (st.k === "call")        runCall(st);
+    else if (st.k === "if")   { if (evalExpr(st.cond, st.n)) exec(st.body); }
+    else if (st.k === "repeat"){
+      const n = Math.max(0, Math.min(10000, Math.round(evalExpr(st.count, st.n))));
+      for (let i = 0; i < n; i++) exec(st.body);
+    }
+  }
+}
+
+function runCall(st){
+  const m = st.text.match(/^(\w+)\s*\((.*)\)\s*$/s);
+  if (!m) throw new Err("this doesn't look like a command: " + st.text, st.n);
+  const name = m[1].toLowerCase();
+  const raw  = splitArgs(m[2]);
+  const A    = () => raw.map(a => evalExpr(a, st.n));
+
+  switch (name){
+    case "show":  { const [n] = A(); ensureSprite(Math.round(n)); actor(n).on = true;  break; }
+    case "hide":  { const [n] = A(); actor(n).on = false; break; }
+    case "move":  { const [n,dx,dy] = A(); const a = actor(n); a.x += dx||0; a.y += dy||0; break; }
+    case "put":   { const [n,x,y]  = A(); const a = actor(n); a.x = x||0; a.y = y||0; break; }
+    case "print": { const [t,x,y]  = A(); R.texts.push({ t:String(t), x:x||0, y:y||0 }); break; }
+    case "room":  { const [n] = A(); R.room = Math.round(n); break; }
+    case "set":   { R.vars[raw[0]] = raw.length > 1 ? evalExpr(raw[1], st.n) : 0; break; }
+    case "add":   { const v = raw[0];
+                    if (!(v in R.vars)) R.vars[v] = 0;
+                    R.vars[v] = (+R.vars[v]) + (+evalExpr(raw[1], st.n)); break; }
+    case "wait":  { throw new Wait(Math.max(1, Math.round(A()[0] || 1))); }
+    case "stop":  { throw new Stop(); }
+    case "say":   { log(String(A()[0])); break; }
+    default: throw new Err("I don't know the command '" + name + "'", st.n);
+  }
+}
+
+/* ---------- main loop ---------- */
+function run(){
+  stop();
+  $("console").innerHTML = "";
+  project.code = $("code").value; save();
+
+  try { R.prog = parse(project.code); }
+  catch (e){ return log("Oops — " + e, "err"); }
+
+  R.running = true; R.actors = {}; R.vars = {}; R.texts = [];
+  R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false;
+  log("running…", "ok");
+  stage.focus();
+  loop();
+}
+
+function stop(){
+  R.running = false;
+  cancelAnimationFrame(R.raf);
+}
+
+function safe(body, what){
+  try { exec(body); return true; }
+  catch (e){
+    if (e instanceof Stop){ log("stopped.", "ok"); stop(); return false; }
+    if (e instanceof Wait){ R.waitFrames = e.f; return true; }
+    log("Oops in " + what + " — " + e, "err");
+    stop(); return false;
+  }
+}
+
+function loop(){
+  if (!R.running) return;
+  R.raf = requestAnimationFrame(loop);
+
+  if (R.waitFrames > 0){ R.waitFrames--; render(); return; }
+  R.texts = [];
+
+  if (!R.startDone){
+    R.startDone = true;
+    for (const b of R.prog) if (b.k === "start") if (!safe(b.body, "when start")) return;
+  }
+  for (const b of R.prog){
+    if (b.k === "frame"){ if (!safe(b.body, "every frame")) return; }
+    else if (b.k === "key" && R.keys[b.key]){ if (!safe(b.body, "when key " + b.key)) return; }
+    else if (b.k === "call" || b.k === "if" || b.k === "repeat"){
+      // loose top-level lines run once, like "when start"
+      if (R.frame === 0 && !safe([b], "your code")) return;
+    }
+  }
+  R.frame++;
+  render();
+}
+
+function render(){
+  sctx.fillStyle = "#000";
+  sctx.fillRect(0, 0, VW, VH);
+
+  const rm = project.rooms[R.room - 1];
+  if (rm) for (let i = 0; i < rm.length; i++){
+    if (rm[i]) blit(sctx, rm[i], (i % COLS) * SW, Math.floor(i / COLS) * SH);
+  }
+  for (const n of Object.keys(R.actors)){
+    const a = R.actors[n];
+    if (a.on) blit(sctx, +n, Math.round(a.x), Math.round(a.y));
+  }
+  sctx.font = "8px ui-monospace,monospace";
+  sctx.textBaseline = "top";
+  for (const t of R.texts){
+    sctx.fillStyle = "#000";  sctx.fillText(t.t, t.x + 1, t.y + 1);
+    sctx.fillStyle = "#fff";  sctx.fillText(t.t, t.x, t.y);
+  }
+}
+
+/* =========================================================
+   SAVE / LOAD
+   ========================================================= */
+function save(){
+  project.code = $("code").value;
+  try { localStorage.setItem("numsprite", JSON.stringify(project)); } catch(e){}
+}
+function load(){
+  try {
+    const raw = localStorage.getItem("numsprite");
+    if (raw){
+      const p = JSON.parse(raw);
+      if (p.sprites && p.rooms) project = p;
+    }
+  } catch(e){}
+}
+function saveFile(){
+  save();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(project)], { type:"application/json" }));
+  a.download = "numsprite-project.json";
+  a.click();
+}
+function loadFile(input){
+  const f = input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const p = JSON.parse(r.result);
+      if (!p.sprites || !p.rooms) throw 0;
+      project = p; curSprite = 0; curRoom = 0; curTile = 1;
+      $("code").value = project.code || "";
+      drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList(); save();
+      log("loaded " + f.name, "ok");
+    } catch(e){ log("that file isn't a NumSprite project", "err"); }
+  };
+  r.readAsText(f);
+  input.value = "";
+}
+
+/* =========================================================
+   START UP  (a little default sprite so there's something to see)
+   ========================================================= */
+function defaultArt(){
+  const face = sprite(1);
+  const P = (x, y, c) => face[y*SW+x] = c;
+  for (let y = 3; y < 13; y++) for (let x = 3; x < 13; x++) P(x, y, 9);
+  for (let y = 4; y < 12; y++) for (let x = 4; x < 12; x++) P(x, y, 10);
+  P(6,7,0); P(9,7,0);
+  for (let x = 6; x < 10; x++) P(x, 10, 0);
+
+  const brick = sprite(2);
+  for (let i = 0; i < SW*SH; i++) brick[i] = 4;
+  for (let x = 0; x < SW; x++){ brick[x] = 5; brick[7*SW+x] = 5; }
+  for (let y = 0; y < SH; y++){ brick[y*SW] = 5; brick[y*SW+8] = 5; }
+
+  const star = sprite(3);
+  for (let x = 6; x < 10; x++) for (let y = 6; y < 10; y++) star[y*SW+x] = 7;
+  star[5*SW+7] = star[5*SW+8] = star[10*SW+7] = star[10*SW+8] = 7;
+  star[7*SW+5] = star[8*SW+5] = star[7*SW+10] = star[8*SW+10] = 7;
+
+  const r = project.rooms[0];
+  for (let x = 0; x < COLS; x++){ r[(ROWS-1)*COLS + x] = 2; r[x] = 2; }
+  for (let y = 0; y < ROWS; y++){ r[y*COLS] = 2; r[y*COLS + COLS - 1] = 2; }
+}
+
+load();
+if (project.sprites.every(s => s.every(p => p < 0))) defaultArt();
+$("code").value = project.code || "";
+$("code").addEventListener("input", save);
+drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
+render();
+log("press ▶ Run to start. Tab 2 paints sprites, tab 3 builds rooms.", "ok");
+</script>
+</body>
+</html>
