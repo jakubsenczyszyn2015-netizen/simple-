@@ -75,6 +75,46 @@
     linear-gradient(45deg,#444 25%,#222 25%,#222 75%,#444 75%);
     background-size:10px 10px;background-position:0 0,5px 5px}
 
+  /* ---- template gallery ---- */
+  #overlay{
+    position:fixed; inset:0; background:rgba(8,10,14,.82); z-index:50;
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  #overlay.on{display:flex}
+  .modal{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    max-width:900px; width:100%; max-height:100%; overflow:auto; padding:20px;
+  }
+  .modal h2{margin:0 0 4px;font-size:18px}
+  .modal p.sub{margin:0 0 16px;color:var(--dim);font-size:13px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
+  .card{
+    background:var(--panel2); border:1px solid var(--line); border-radius:10px;
+    padding:12px; cursor:pointer; transition:transform .08s, border-color .08s;
+  }
+  .card:hover{border-color:var(--accent); transform:translateY(-2px)}
+  .card .em{font-size:26px;line-height:1}
+  .card b{display:block;margin:6px 0 3px;font-size:14px}
+  .card span{color:var(--dim);font-size:12px;line-height:1.5}
+  .card .art{display:flex;gap:4px;margin-top:9px}
+  .card .art canvas{width:26px;height:26px;background:#0c0e13;border:0;border-radius:3px}
+
+  /* ---- learn ---- */
+  #v-learn{overflow:auto;display:block}
+  #v-learn.on{display:block}
+  .lesson{
+    background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:8px; padding:14px 16px; margin:0 0 12px; max-width:820px;
+  }
+  .lesson h4{margin:0 0 6px;font-size:14px}
+  .lesson h4 i{color:var(--accent);font-style:normal}
+  .lesson p{margin:0 0 10px;color:var(--dim);font-size:13px;line-height:1.6}
+  .lesson pre{
+    background:#0c0e13;border:1px solid var(--line);border-radius:6px;
+    padding:10px 12px;margin:0 0 10px;font-size:13px;overflow-x:auto;color:var(--accent2)
+  }
+  .lesson .done{color:#6bd66b}
+
   label{color:var(--dim);font-size:12px}
   input[type=text],input[type=number]{
     background:#0c0e13;color:var(--fg);border:1px solid var(--line);
@@ -94,9 +134,11 @@
     <button id="t-code" class="on" onclick="tab('code')">1 · Code</button>
     <button id="t-paint" onclick="tab('paint')">2 · Paint</button>
     <button id="t-rooms" onclick="tab('rooms')">3 · Rooms</button>
+    <button id="t-learn" onclick="tab('learn')">★ · Learn</button>
     <button id="t-help" onclick="tab('help')">? · Help</button>
   </div>
   <div class="spacer"></div>
+  <button onclick="openGallery()" style="background:#4a3a80;border-color:#6a55b8">✦ Templates</button>
   <button onclick="run()" style="background:#2e7d32;border-color:#2e7d32">▶ Run</button>
   <button onclick="stop()">■ Stop</button>
   <button onclick="saveFile()">Save</button>
@@ -172,6 +214,18 @@
     </div>
   </section>
 
+  <!-- ================= LEARN ================= -->
+  <section id="v-learn" class="view">
+    <div style="padding:18px">
+      <h2 style="margin:0 0 4px;font-size:18px">Ten little steps</h2>
+      <p style="margin:0 0 16px;color:var(--dim);font-size:13px">
+        Press <b>Try it</b> on a step: the code jumps into the editor and runs.
+        Change a number, run it again, see what happens. That's the whole job.
+      </p>
+      <div id="lessons"></div>
+    </div>
+  </section>
+
   <!-- ================= HELP ================= -->
   <section id="v-help" class="view">
     <div class="pane" style="flex:1">
@@ -187,6 +241,8 @@
 <code>set(score, 0)</code>       make a variable
 <code>add(score, 1)</code>       add to a variable
 <code>wait(30)</code>            wait 30 frames (about half a second)
+<code>sound(1)</code>            make a beep — try 1 to 6
+<code>settile(80, 64, 0)</code>  change the room tile at that spot (0 = rub it out)
 <code>stop()</code>              stop the program
 
 Blocks (a block ends with <code>end</code>):
@@ -215,6 +271,20 @@ Blocks (a block ends with <code>end</code>):
   put(1, 0, y(1))
 <code>end</code>
 
+<code>if free(1, -2, 0)</code>      true when sprite 1 can move that way
+  move(1, -2, 0)              without bumping into a room tile
+<code>end</code>
+
+Things you can ask about:
+
+<code>x(1)  y(1)</code>           where a sprite is
+<code>visible(1)</code>          is it shown?
+<code>touching(1, 2)</code>      are two sprites overlapping?
+<code>free(1, dx, dy)</code>     can it move there? (walls)
+<code>tile(80, 64)</code>        which sprite is painted at that spot
+<code>random(10)</code>          a surprise number from 0 to 9
+<code>key(space)</code>          is a key held down right now?
+
 Notes
 · The screen is 320 x 240 pixels. x grows right, y grows down.
 · Sprites are 16 x 16. Sprite numbers start at 1 and never run out.
@@ -225,6 +295,20 @@ Notes
     </div>
   </section>
 </main>
+
+<!-- ================= TEMPLATE GALLERY ================= -->
+<div id="overlay" onclick="if(event.target===this) closeGallery()">
+  <div class="modal">
+    <h2>Start from a template</h2>
+    <p class="sub">
+      Each one is a whole little game — sprites, rooms and code, ready to run.
+      Open it, press ▶ Run, then start breaking things. (This replaces what you have now,
+      so hit Save first if you want to keep it.)
+    </p>
+    <div id="cards" class="cards"></div>
+    <div style="margin-top:16px;text-align:right"><button onclick="closeGallery()">Close</button></div>
+  </div>
+</div>
 
 <script>
 /* =========================================================
@@ -290,7 +374,7 @@ function ensureSprite(n){
    TABS
    ========================================================= */
 function tab(name){
-  for (const t of ["code","paint","rooms","help"]){
+  for (const t of ["code","paint","rooms","learn","help"]){
     $("v-"+t).classList.toggle("on", t === name);
     $("t-"+t).classList.toggle("on", t === name);
   }
@@ -590,6 +674,8 @@ function evalExpr(src, line){
   const fn = s.match(/^(\w+)\s*\((.*)\)$/s);
   if (fn){
     const name = fn[1].toLowerCase();
+    // key(space) — the key's name isn't a variable, it's just a word
+    if (name === "key") return !!R.keys[fn[2].trim().replace(/"/g, "").toLowerCase()];
     const args = splitArgs(fn[2]).map(a => evalExpr(a, line));
     switch (name){
       case "x": return actor(args[0]).x;
@@ -597,6 +683,8 @@ function evalExpr(src, line){
       case "visible": return actor(args[0]).on;
       case "touching": return touching(args[0], args[1]);
       case "random": return Math.floor(Math.random() * (args[0] || 1));
+      case "tile": return tileAtPixel(args[0], args[1]);
+      case "free": return isFree(args[0], args[1] || 0, args[2] || 0);
       case "key": return !!R.keys[String(args[0]).toLowerCase()];
       default: throw new Err("I don't know '" + name + "'", line);
     }
@@ -630,6 +718,44 @@ function touching(a, b){
   const A = actor(a), B = actor(b);
   if (!A.on || !B.on) return false;
   return A.x < B.x + SW && A.x + SW > B.x && A.y < B.y + SH && A.y + SH > B.y;
+}
+
+/* which tile sits at a screen position? 0 = nothing there */
+function liveRoom(n){
+  const src = (R.running && R.roomData) ? R.roomData : project.rooms;
+  return src[n - 1];
+}
+function tileAtPixel(px, py){
+  const rm = liveRoom(R.room);
+  if (!rm) return 0;
+  const x = Math.floor(px / SW), y = Math.floor(py / SH);
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return 0;
+  return rm[y * COLS + x];
+}
+/* could sprite n move by dx,dy without bumping into a wall tile? */
+function isFree(n, dx, dy){
+  const a = actor(n);
+  const x = a.x + dx, y = a.y + dy;
+  if (x < 0 || y < 0 || x + SW > VW || y + SH > VH) return false;
+  return !tileAtPixel(x + 1,      y + 1     ) && !tileAtPixel(x + SW - 2, y + 1     ) &&
+         !tileAtPixel(x + 1,      y + SH - 2) && !tileAtPixel(x + SW - 2, y + SH - 2);
+}
+
+/* ---------- beeps ---------- */
+let audio = null;
+const TONES = [0, 660, 440, 330, 880, 220, 110];
+function beep(n){
+  n = Math.max(1, Math.min(TONES.length - 1, Math.round(n) || 1));
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = n >= 5 ? "square" : "triangle";
+    o.frequency.value = TONES[n];
+    g.gain.setValueAtTime(.14, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .16);
+    o.connect(g); g.connect(audio.destination);
+    o.start(); o.stop(audio.currentTime + .17);
+  } catch(e){}
 }
 
 function log(msg, cls){
@@ -687,6 +813,13 @@ function runCall(st){
     case "add":   { const v = raw[0];
                     if (!(v in R.vars)) R.vars[v] = 0;
                     R.vars[v] = (+R.vars[v]) + (+evalExpr(raw[1], st.n)); break; }
+    case "sound": { beep(A()[0]); break; }
+    case "settile": { const [x,y,n] = A();
+                      const rm = liveRoom(R.room);
+                      const cx = Math.floor(x / SW), cy = Math.floor(y / SH);
+                      if (rm && cx >= 0 && cy >= 0 && cx < COLS && cy < ROWS)
+                        rm[cy*COLS+cx] = Math.round(n) || 0;
+                      break; }
     case "wait":  { throw new Wait(Math.max(1, Math.round(A()[0] || 1))); }
     case "stop":  { throw new Stop(); }
     case "say":   { log(String(A()[0])); break; }
@@ -704,6 +837,7 @@ function run(){
   catch (e){ return log("Oops — " + e, "err"); }
 
   R.running = true; R.actors = {}; R.vars = {}; R.texts = [];
+  R.roomData = project.rooms.map(r => r.slice());   // games edit a copy, not your saved rooms
   R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false;
   log("running…", "ok");
   stage.focus();
@@ -752,7 +886,7 @@ function render(){
   sctx.fillStyle = "#000";
   sctx.fillRect(0, 0, VW, VH);
 
-  const rm = project.rooms[R.room - 1];
+  const rm = liveRoom(R.room);
   if (rm) for (let i = 0; i < rm.length; i++){
     if (rm[i]) blit(sctx, rm[i], (i % COLS) * SW, Math.floor(i / COLS) * SH);
   }
@@ -809,38 +943,540 @@ function loadFile(input){
 }
 
 /* =========================================================
+   PIXEL ART, WRITTEN AS TEXT
+   one character per pixel — a palette digit 0-f, or '.' for see-through
+   ========================================================= */
+function art(rows){
+  const s = blankSprite();
+  for (let y = 0; y < SH; y++){
+    const row = rows[y] || "";
+    for (let x = 0; x < SW; x++){
+      const c = row[x];
+      s[y*SW+x] = (!c || c === "." || c === " ") ? -1 : parseInt(c, 16);
+    }
+  }
+  return s;
+}
+
+const ART = {
+  face: art([
+    "................","................","................",
+    "...9999999999...","...9aaaaaaaa9...","...9aaaaaaaa9...",
+    "...9aaaaaaaa9...","...9a0aa0aaa9...","...9aaaaaaaa9...",
+    "...9aaaaaaaa9...","...9a000000a9...","...9aaaaaaaa9...",
+    "...9999999999...","................","................","................"]),
+  brick: art([
+    "5555555555555555","4444444455444444","4444444455444444","4444444455444444",
+    "4444444455444444","4444444455444444","4444444455444444","5555555555555555",
+    "4455444444444444","4455444444444444","4455444444444444","4455444444444444",
+    "4455444444444444","4455444444444444","4455444444444444","5555555555555555"]),
+  star: art([
+    "................",".......aa.......",".......aa.......","......aaaa......",
+    "......aaaa......","aa....aaaa....aa",".aaaaaaaaaaaaaa.","..aaaaaaaaaaaa..",
+    "...aaaaaaaaaa...","....aaaaaaaa....","....aaaaaaaa....","...aaaa..aaaa...",
+    "..aaa......aaa..","..aa........aa..",".a............a.","................"]),
+  coin: art([
+    "................","................",".....aaaaaa.....","....aa9999aa....",
+    "...aa9a99a9aa...","...a99a99a99a...","...a99a99a99a...","...a99a99a99a...",
+    "...a99a99a99a...","...a99a99a99a...","...aa9a99a9aa...","....aa9999aa....",
+    ".....aaaaaa.....","................","................","................"]),
+  paddle: art([
+    "................","................","................","................",
+    "................","cccccccccccccccc","c77777777777777c","c77777777777777c",
+    "c77777777777777c","cccccccccccccccc","................","................",
+    "................","................","................","................"]),
+  ball: art([
+    "................","................","................","......7777......",
+    ".....777777.....","....77777777....","....77777777....","....77777777....",
+    "....77777777....",".....777777.....","......7777......","................",
+    "................","................","................","................"]),
+  ship: art([
+    "................","................",".......88.......","......8888......",
+    "......8998......",".....888888.....",".....889988.....","....88888888....",
+    "...8888888888...","...8..8888..8...","......8888......",".....9.99.9.....",
+    "......9..9......","................","................","................"]),
+  rock: art([
+    "................","................","................",".....555555.....",
+    "....55666655....","...5666556665...","...5665556665...","...5666666665...",
+    "....5666666555..","....55666655....",".....555555.....","................",
+    "................","................","................","................"]),
+  wall: art([
+    "cccccccccccccccc","c11111111111111c","c1cccccccccccc1c","c1c1111111111c1c",
+    "c1c1cccccccccc1c","c1c1c11111111c1c","c1c1c1cccccc1c1c","c1c1c1c1111c1c1c",
+    "c1c1c1cccccc1c1c","c1c1c11111111c1c","c1c1cccccccccc1c","c1c1111111111c1c",
+    "c1cccccccccccc1c","c11111111111111c","cccccccccccccccc","cccccccccccccccc"]),
+  grass: art([
+    "3333333333333333","3b3333333b333333","33333b33333333b3","3333333333333333",
+    "333b3333333b3333","3333333333333333","3b33333b33333333","3333333333333333",
+    "33333b3333333b33","3333333333333333","3b3333333333b333","3333333333333333",
+    "333333b333333333","3333333333333333","33b33333333b3333","3333333333333333"]),
+  heart: art([
+    "................","................","...88888..88888.","..8888888888888.",
+    "..8888888888888.","..8888888888888.","...88888888888..","....888888888...",
+    ".....8888888....","......88888.....",".......888......","........8.......",
+    "................","................","................","................"]),
+  goal: art([
+    "................",".....bbbbbb.....","....b999999b....","...b99999999b...",
+    "...b99bbbb999b..","...b99b..b999b..","...b99bbbb999b..","...b99999999b...",
+    "....b999999b....",".....bbbbbb.....","................","................",
+    "................","................","................","................"])
+};
+
+/* room helpers used by the templates */
+function borderRoom(tile){
+  const r = blankRoom();
+  for (let x = 0; x < COLS; x++){ r[x] = tile; r[(ROWS-1)*COLS + x] = tile; }
+  for (let y = 0; y < ROWS; y++){ r[y*COLS] = tile; r[y*COLS + COLS - 1] = tile; }
+  return r;
+}
+function mazeRoom(tile){
+  const r = borderRoom(tile);
+  for (let y = 2; y < ROWS - 2; y += 2)
+    for (let x = 2; x < COLS - 2; x++)
+      if ((x + y) % 5 && (x * 7 + y * 3) % 4) r[y*COLS+x] = tile;
+  // knock a few doorways through so it's walkable
+  for (let y = 2; y < ROWS - 2; y += 2){
+    r[y*COLS + 2 + ((y * 5) % (COLS - 5))] = 0;
+    r[y*COLS + 3 + ((y * 11) % (COLS - 6))] = 0;
+  }
+  return r;
+}
+
+/* =========================================================
+   TEMPLATES — whole projects, ready to run
+   ========================================================= */
+const TEMPLATES = [
+  {
+    em:"🌟", name:"Catch the Star",
+    desc:"Walk around and grab stars. Every catch scores a point and moves the star somewhere new.",
+    sprites:["face","brick","star"],
+    rooms:[() => borderRoom(2)],
+    code:`# CATCH THE STAR
+# sprite 1 = you, 2 = wall, 3 = star
+
+when start
+  room(1)
+  put(1, 150, 110)
+  put(3, 60, 60)
+  show(1)
+  show(3)
+  set(score, 0)
+end
+
+every frame
+  print("stars: " + score, 6, 6)
+
+  if touching(1, 3)
+    add(score, 1)
+    sound(1)
+    put(3, 20 + random(270), 20 + random(190))
+  end
+end
+
+when key left
+  move(1, -2, 0)
+end
+when key right
+  move(1, 2, 0)
+end
+when key up
+  move(1, 0, -2)
+end
+when key down
+  move(1, 0, 2)
+end
+
+# TRY THIS
+# · change the 2s above to 4 — you move twice as fast
+# · add a second star: make sprite 4 in the Paint tab, show(4)
+`
+  },
+  {
+    em:"🏓", name:"Pong (one player)",
+    desc:"A ball, a paddle, and one rule: don't let it past you. Your first real game loop.",
+    sprites:["paddle","ball","brick"],
+    rooms:[() => { const r = blankRoom();
+                   for (let x = 0; x < COLS; x++) r[x] = 3;
+                   for (let y = 0; y < ROWS; y++){ r[y*COLS] = 3; r[y*COLS+COLS-1] = 3; }
+                   return r; }],
+    code:`# PONG
+# sprite 1 = paddle, 2 = ball
+
+when start
+  room(1)
+  put(1, 140, 215)
+  put(2, 150, 40)
+  show(1)
+  show(2)
+  set(dx, 2)
+  set(dy, 2)
+  set(score, 0)
+  set(alive, 1)
+end
+
+every frame
+  print("score: " + score, 22, 22)
+
+  if alive == 0
+    print("GAME OVER - press Run again", 60, 110)
+  end
+
+  if alive == 1
+    move(2, dx, dy)
+
+    if x(2) < 16
+      set(dx, 2)
+      sound(3)
+    end
+    if x(2) > 288
+      set(dx, -2)
+      sound(3)
+    end
+    if y(2) < 16
+      set(dy, 2)
+      sound(3)
+    end
+
+    if touching(2, 1)
+      set(dy, -2)
+      add(score, 1)
+      sound(1)
+    end
+
+    if y(2) > 240
+      set(alive, 0)
+      sound(6)
+    end
+  end
+end
+
+when key left
+  move(1, -4, 0)
+end
+when key right
+  move(1, 4, 0)
+end
+
+# TRY THIS
+# · make the ball faster every 5 points
+# · make the paddle smaller in the Paint tab (sprite 1)
+`
+  },
+  {
+    em:"🧱", name:"Maze Runner",
+    desc:"Real walls you can't walk through, thanks to free(). Reach the flag to win.",
+    sprites:["face","wall","goal"],
+    rooms:[() => mazeRoom(2)],
+    code:`# MAZE RUNNER
+# free(1, dx, dy) is true when sprite 1 can move that way
+# without bumping into a room tile
+
+when start
+  room(1)
+  put(1, 16, 16)
+  put(3, 288, 208)
+  show(1)
+  show(3)
+  set(won, 0)
+  set(hint, 150)
+end
+
+every frame
+  # the hint counts down, then disappears
+  if hint > 0
+    print("get to the flag!", 96, 116)
+    add(hint, -1)
+  end
+  if won == 1
+    print("YOU WIN!", 128, 110)
+  end
+  if touching(1, 3)
+    set(won, 1)
+  end
+end
+
+when key left
+  if free(1, -2, 0)
+    move(1, -2, 0)
+  end
+end
+when key right
+  if free(1, 2, 0)
+    move(1, 2, 0)
+  end
+end
+when key up
+  if free(1, 0, -2)
+    move(1, 0, -2)
+  end
+end
+when key down
+  if free(1, 0, 2)
+    move(1, 0, 2)
+  end
+end
+
+# TRY THIS
+# · go to the Rooms tab and redraw the maze with the mouse
+# · add a key the player must touch before the flag opens
+`
+  },
+  {
+    em:"🚀", name:"Space Dodge",
+    desc:"Rocks fall, you don't get hit. Three lives, a rising score, and a proper game over.",
+    sprites:["ship","rock","heart"],
+    rooms:[() => blankRoom()],
+    code:`# SPACE DODGE
+# sprite 1 = ship, 2 = rock, 3 = heart
+
+when start
+  put(1, 150, 210)
+  put(2, 150, 0)
+  show(1)
+  show(2)
+  set(speed, 2)
+  set(score, 0)
+  set(lives, 3)
+end
+
+every frame
+  print("score: " + score, 6, 6)
+  print("lives: " + lives, 240, 6)
+
+  if lives < 1
+    print("GAME OVER", 124, 110)
+    print("score " + score, 128, 124)
+  end
+
+  if lives > 0
+    move(2, 0, speed)
+    add(score, 1)
+
+    if y(2) > 240
+      put(2, random(300), -16)
+    end
+
+    if touching(1, 2)
+      add(lives, -1)
+      sound(6)
+      put(2, random(300), -16)
+      add(speed, 1)
+    end
+  end
+end
+
+when key left
+  move(1, -3, 0)
+end
+when key right
+  move(1, 3, 0)
+end
+
+# TRY THIS
+# · show the hearts: put(3, 260, 20) then show(3)
+# · add a second rock (sprite 4) falling at a different speed
+`
+  },
+  {
+    em:"🪙", name:"Coin Grid",
+    desc:"Tiles are data too. Walk over coins painted into the room and settile() eats them.",
+    sprites:["face","grass","coin"],
+    rooms:[() => { const r = blankRoom();
+                   for (let i = 0; i < r.length; i++) r[i] = 2;
+                   for (let y = 1; y < ROWS - 1; y += 2)
+                     for (let x = 1; x < COLS - 1; x += 3) r[y*COLS+x] = 3;
+                   return r; }],
+    code:`# COIN GRID
+# tile(x, y) tells you which sprite is painted at a spot
+# settile(x, y, 0) rubs it out again
+
+when start
+  room(1)
+  put(1, 16, 16)
+  show(1)
+  set(coins, 0)
+end
+
+every frame
+  print("coins: " + coins, 6, 4)
+
+  if tile(x(1) + 8, y(1) + 8) == 3
+    settile(x(1) + 8, y(1) + 8, 2)
+    add(coins, 1)
+    sound(4)
+  end
+end
+
+when key left
+  move(1, -2, 0)
+end
+when key right
+  move(1, 2, 0)
+end
+when key up
+  move(1, 0, -2)
+end
+when key down
+  move(1, 0, 2)
+end
+
+# TRY THIS
+# · paint more coins in the Rooms tab (pick sprite 3, click the grid)
+# · win when coins reaches 20
+`
+  },
+  {
+    em:"✏️", name:"Empty Sandbox",
+    desc:"Three blank sprites, one blank room, one line of code. Build whatever you want.",
+    sprites:[null, null, null],
+    rooms:[() => blankRoom()],
+    code:`# a clean start!
+# 1. go to the Paint tab and draw sprite 1
+# 2. come back here and press Run
+
+when start
+  put(1, 150, 110)
+  show(1)
+end
+
+every frame
+  print("hello!", 4, 4)
+end
+`
+  }
+];
+
+function loadTemplate(i){
+  const t = TEMPLATES[i];
+  stop();
+  project = {
+    sprites: t.sprites.map(k => k ? ART[k].slice() : blankSprite()),
+    rooms:   t.rooms.map(f => f()),
+    code:    t.code
+  };
+  curSprite = 0; curRoom = 0; curTile = 1;
+  $("code").value = project.code;
+  drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
+  save(); closeGallery(); tab("code");
+  $("console").innerHTML = "";
+  log("loaded “" + t.name + "” — press ▶ Run.", "ok");
+  render();
+}
+
+function openGallery(){
+  const box = $("cards"); box.innerHTML = "";
+  TEMPLATES.forEach((t, i) => {
+    const d = document.createElement("div");
+    d.className = "card";
+    d.innerHTML = `<div class="em">${t.em}</div><b>${t.name}</b><span>${t.desc}</span>`;
+    const strip = document.createElement("div");
+    strip.className = "art";
+    t.sprites.forEach(k => {
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = SW;
+      if (k){
+        const c = cv.getContext("2d"), s = ART[k];
+        for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
+          const p = s[y*SW+x]; if (p < 0) continue;
+          c.fillStyle = PALETTE[p]; c.fillRect(x, y, 1, 1);
+        }
+      }
+      strip.appendChild(cv);
+    });
+    d.appendChild(strip);
+    d.onclick = () => loadTemplate(i);
+    box.appendChild(d);
+  });
+  $("overlay").classList.add("on");
+}
+function closeGallery(){ $("overlay").classList.remove("on"); }
+window.addEventListener("keydown", e => { if (e.key === "Escape") closeGallery(); });
+
+/* =========================================================
+   LEARN — ten steps, each one runnable
+   ========================================================= */
+const LESSONS = [
+  { t:"Put something on screen",
+    p:"Every sprite is a number. Sprite 1 already has a face drawn on it. show() makes it appear, put() decides where.",
+    c:`when start\n  put(1, 150, 110)\n  show(1)\nend` },
+
+  { t:"Move it",
+    p:"move() nudges a sprite. The first number is which sprite, then how far right, then how far down. Negative numbers go left and up.",
+    c:`when start\n  put(1, 20, 110)\n  show(1)\nend\n\nevery frame\n  move(1, 1, 0)\nend` },
+
+  { t:"Say something",
+    p:"print() draws text. The screen is 320 wide and 240 tall, and 0,0 is the top-left corner.",
+    c:`when start\n  put(1, 150, 140)\n  show(1)\nend\n\nevery frame\n  print("Hello World!", 100, 40)\nend` },
+
+  { t:"Take the controls",
+    p:"A \"when key\" block runs over and over while that key is held down. Try left, right, up, down, space, z and x.",
+    c:`when start\n  put(1, 150, 110)\n  show(1)\nend\n\nwhen key left\n  move(1, -2, 0)\nend\nwhen key right\n  move(1, 2, 0)\nend` },
+
+  { t:"Remember a number",
+    p:"set() makes a variable, add() changes it. Glue it onto text with a +.",
+    c:`when start\n  set(score, 0)\n  show(1)\n  put(1, 150, 110)\nend\n\nevery frame\n  add(score, 1)\n  print("score: " + score, 6, 6)\nend` },
+
+  { t:"Ask a question",
+    p:"if runs its block only when something is true. x(1) and y(1) give you a sprite's position.",
+    c:`when start\n  put(1, 0, 110)\n  show(1)\nend\n\nevery frame\n  move(1, 2, 0)\n  if x(1) > 304\n    put(1, 0, 110)\n  end\nend` },
+
+  { t:"Bump into things",
+    p:"touching(1, 3) is true when two sprites overlap. This is how you make catching, hitting and scoring work.",
+    c:`when start\n  put(1, 150, 110)\n  put(3, 60, 60)\n  show(1)\n  show(3)\n  set(got, 0)\nend\n\nevery frame\n  print("got: " + got, 6, 6)\n  if touching(1, 3)\n    add(got, 1)\n    sound(1)\n    put(3, random(300), random(220))\n  end\nend\n\nwhen key left\n  move(1, -2, 0)\nend\nwhen key right\n  move(1, 2, 0)\nend\nwhen key up\n  move(1, 0, -2)\nend\nwhen key down\n  move(1, 0, 2)\nend` },
+
+  { t:"Draw a world",
+    p:"Go to the Rooms tab, pick a sprite on the left and click the grid to stamp tiles. Then show it with room(1).",
+    c:`when start\n  put(1, 150, 110)\n  show(1)\nend\n\nevery frame\n  room(1)\nend` },
+
+  { t:"Walls that stop you",
+    p:"free(1, dx, dy) is true when sprite 1 could move that way without hitting a room tile. Only move when it's free.",
+    c:`when start\n  room(1)\n  put(1, 32, 32)\n  show(1)\nend\n\nwhen key left\n  if free(1, -2, 0)\n    move(1, -2, 0)\n  end\nend\nwhen key right\n  if free(1, 2, 0)\n    move(1, 2, 0)\n  end\nend\nwhen key up\n  if free(1, 0, -2)\n    move(1, 0, -2)\n  end\nend\nwhen key down\n  if free(1, 0, 2)\n    move(1, 0, 2)\n  end\nend` },
+
+  { t:"Do it again and again",
+    p:"repeat does something a number of times. wait() pauses for a while. Now go open a template and change everything in it.",
+    c:`when start\n  show(1)\n  put(1, 0, 110)\n  repeat 10\n    move(1, 30, 0)\n  end\nend\n\nevery frame\n  print("that was 10 moves of 30", 40, 40)\nend` }
+];
+
+function buildLessons(){
+  const box = $("lessons"); box.innerHTML = "";
+  LESSONS.forEach((l, i) => {
+    const d = document.createElement("div");
+    d.className = "lesson";
+    const h = document.createElement("h4");
+    h.innerHTML = `<i>${i + 1}.</i> ${l.t}`;
+    const p = document.createElement("p"); p.textContent = l.p;
+    const pre = document.createElement("pre"); pre.textContent = l.c;
+    const b = document.createElement("button"); b.textContent = "Try it ▶";
+    b.onclick = () => { $("code").value = l.c; save(); tab("code"); run(); };
+    d.append(h, p, pre, b);
+    box.appendChild(d);
+  });
+}
+
+/* =========================================================
    START UP  (a little default sprite so there's something to see)
    ========================================================= */
 function defaultArt(){
-  const face = sprite(1);
-  const P = (x, y, c) => face[y*SW+x] = c;
-  for (let y = 3; y < 13; y++) for (let x = 3; x < 13; x++) P(x, y, 9);
-  for (let y = 4; y < 12; y++) for (let x = 4; x < 12; x++) P(x, y, 10);
-  P(6,7,0); P(9,7,0);
-  for (let x = 6; x < 10; x++) P(x, 10, 0);
-
-  const brick = sprite(2);
-  for (let i = 0; i < SW*SH; i++) brick[i] = 4;
-  for (let x = 0; x < SW; x++){ brick[x] = 5; brick[7*SW+x] = 5; }
-  for (let y = 0; y < SH; y++){ brick[y*SW] = 5; brick[y*SW+8] = 5; }
-
-  const star = sprite(3);
-  for (let x = 6; x < 10; x++) for (let y = 6; y < 10; y++) star[y*SW+x] = 7;
-  star[5*SW+7] = star[5*SW+8] = star[10*SW+7] = star[10*SW+8] = 7;
-  star[7*SW+5] = star[8*SW+5] = star[7*SW+10] = star[8*SW+10] = 7;
-
-  const r = project.rooms[0];
-  for (let x = 0; x < COLS; x++){ r[(ROWS-1)*COLS + x] = 2; r[x] = 2; }
-  for (let y = 0; y < ROWS; y++){ r[y*COLS] = 2; r[y*COLS + COLS - 1] = 2; }
+  project.sprites[0] = ART.face.slice();
+  project.sprites[1] = ART.brick.slice();
+  project.sprites[2] = ART.star.slice();
+  project.rooms[0] = borderRoom(2);
 }
 
 load();
 if (project.sprites.every(s => s.every(p => p < 0))) defaultArt();
 $("code").value = project.code || "";
 $("code").addEventListener("input", save);
+buildLessons();
 drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
 render();
-log("press ▶ Run to start. Tab 2 paints sprites, tab 3 builds rooms.", "ok");
+log("press ▶ Run to start. New here? Open ✦ Templates, or the ★ Learn tab.", "ok");
+
+// first ever visit: show off the templates straight away
+if (!localStorage.getItem("numsprite-seen")){
+  try { localStorage.setItem("numsprite-seen", "1"); } catch(e){}
+  setTimeout(openGallery, 350);
+}
 </script>
 </body>
 </html>
