@@ -76,11 +76,11 @@
     background-size:10px 10px;background-position:0 0,5px 5px}
 
   /* ---- template gallery ---- */
-  #overlay,#lobby-ov{
+  #overlay,#lobby-ov,#png-ov,#lib-ov{
     position:fixed; inset:0; background:rgba(8,10,14,.82); z-index:50;
     display:none; align-items:center; justify-content:center; padding:24px;
   }
-  #overlay.on,#lobby-ov.on{display:flex}
+  #overlay.on,#lobby-ov.on,#png-ov.on,#lib-ov.on{display:flex}
   .modal{
     background:var(--panel); border:1px solid var(--line); border-radius:12px;
     max-width:900px; width:100%; max-height:100%; overflow:auto; padding:20px;
@@ -160,15 +160,20 @@
     <button id="m-easy"   onclick="setMode('easy')">Easy</button>
     <button id="m-normal" onclick="setMode('normal')" class="on">Normal</button>
     <button id="m-hard"   onclick="setMode('hard')">Hard</button>
+    <button id="m-ai"     onclick="setMode('ai')">AI</button>
   </div>
   <div class="spacer"></div>
+  <button onclick="openLib()" style="background:#5a4020;border-color:#8a6330">📚 My Games</button>
   <button onclick="openLobby()" style="background:#1f4f6b;border-color:#2d6f95">👥 Lobby</button>
   <button onclick="openGallery()" style="background:#4a3a80;border-color:#6a55b8">✦ Templates</button>
   <button onclick="run()" style="background:#2e7d32;border-color:#2e7d32">▶ Run</button>
   <button onclick="stop()">■ Stop</button>
+  <button id="ai-show" onclick="showAICode()" style="display:none;background:#4a3a80;border-color:#6a55b8">Show me the code</button>
   <button onclick="saveFile()">Save</button>
   <button onclick="document.getElementById('load').click()">Load</button>
   <input id="load" type="file" accept=".json" style="display:none" onchange="loadFile(this)">
+  <input id="pngfile" type="file" accept="image/*" style="display:none" onchange="importPng(this)">
+  <input id="simplefile" type="file" accept=".simple,.json" style="display:none" onchange="openSimple(this)">
 </header>
 
 <main>
@@ -182,6 +187,7 @@
     <div id="stage-wrap" class="col" style="flex:none">
       <canvas id="stage" width="320" height="240" style="width:480px;height:360px"></canvas>
       <div class="hint">click the stage, then use the arrow keys / z</div>
+      <div id="stage-info" class="hint" style="text-align:center;max-width:300px"></div>
     </div>
   </section>
 
@@ -193,6 +199,7 @@
         <button onclick="addSprite()">+ New</button>
         <button onclick="copySprite()">Copy</button>
         <button onclick="clearSprite()">Clear</button>
+        <button onclick="document.getElementById('pngfile').click()">🖼 PNG</button>
       </div>
       <div id="sprite-list" class="sprites"></div>
     </div>
@@ -283,6 +290,26 @@
     </p>
     <div id="cards" class="cards"></div>
     <div style="margin-top:16px;text-align:right"><button onclick="closeGallery()">Close</button></div>
+  </div>
+</div>
+
+<div id="png-ov" onclick="if(event.target===this) closePngMenu()">
+  <div class="modal" style="max-width:620px">
+    <h2>That image is too big for one sprite</h2>
+    <div id="png-body"></div>
+    <div style="margin-top:16px;text-align:right"><button onclick="closePngMenu()">Cancel</button></div>
+  </div>
+</div>
+
+<div id="lib-ov" onclick="if(event.target===this) closeLib()">
+  <div class="modal">
+    <h2>My Games</h2>
+    <p class="sub">
+      Games saved in this browser. Share one as a link (the whole game rides inside the URL)
+      or as a <b>.simple</b> file you can send to anyone.
+    </p>
+    <div id="lib-body"></div>
+    <div style="margin-top:16px;text-align:right"><button onclick="closeLib()">Close</button></div>
   </div>
 </div>
 
@@ -446,6 +473,7 @@ window.addEventListener("mouseup", () => painting = 0);
 paintCv.addEventListener("contextmenu", e => e.preventDefault());
 
 function drawSpriteList(){
+  drawStageInfo();
   const box = $("sprite-list"); box.innerHTML = "";
   project.sprites.forEach((_, i) => {
     const d = document.createElement("div");
@@ -483,6 +511,7 @@ function refreshPalette(){
 const roomCv = $("roomcv"), roomCtx = roomCv.getContext("2d");
 
 function drawRoom(){
+  drawStageInfo();
   roomCtx.fillStyle = "#0c0e13";
   roomCtx.fillRect(0, 0, VW, VH);
   const r = project.rooms[curRoom];
@@ -520,6 +549,17 @@ function drawTileList(){
     d.onclick = () => { curTile = i + 1; drawTileList(); };
     box.appendChild(d);
   });
+}
+
+/* beginners reasonably ask "where is the code for those walls?" — there isn't any.
+   Tiles live in the Rooms tab. This strip says so. */
+function drawStageInfo(){
+  const el = $("stage-info"); if (!el) return;
+  const tiles = project.rooms.reduce((sum, r) => sum + r.filter(Boolean).length, 0);
+  el.innerHTML =
+    `this project holds <b>${project.sprites.length} sprites</b> (Paint tab) and ` +
+    `<b>${project.rooms.length} room${project.rooms.length === 1 ? "" : "s"}</b> (Rooms tab)` +
+    (tiles ? `.<br>${tiles} tiles are already drawn in — that is why things appear on screen with no code for them. <code>room(1)</code> is what shows them.` : ".");
 }
 
 function drawRoomList(){
@@ -571,7 +611,10 @@ function parse(src){
       }
       i++;
       let m;
-      if (/^when\s+start$/i.test(text))            out.push({ k:"start",  body: block(true), n });
+      if (/^reset\s+if\s*$/i.test(text))          out.push({ k:"resetblock", body: block(true), n });
+      else if ((m = text.match(/^reset\s+if\s+(.+)$/i)))
+                                                   out.push({ k:"resetif", cond:m[1], n });
+      else if (/^when\s+start$/i.test(text))            out.push({ k:"start",  body: block(true), n });
       else if (/^every\s+frame$/i.test(text))      out.push({ k:"frame",  body: block(true), n });
       else if ((m = text.match(/^when\s+key\s+(\w+)$/i)))
                                                    out.push({ k:"key", key:m[1].toLowerCase(), body: block(true), n });
@@ -698,6 +741,7 @@ const R = {
   running:false, prog:null, actors:{}, vars:{}, keys:{},
   room:0, texts:[], frame:0, waitFrames:0, raf:0, startDone:false,
   title:null, buttons:[], clicks:[], titlesShown:{},   // title screens
+  player:0, roles:{}, lives:null, gameOver:false, resetting:false, homes:{},
   hard:null, mates:{}                                   // hard mode / lobby
 };
 
@@ -792,7 +836,7 @@ function stageClick(e){
     }
   }
 }
-stage.addEventListener("mousedown", stageClick);
+stage.addEventListener("mousedown", e => { R.clickedStage = true; stageClick(e); });
 
 /* was this button clicked? */
 function wasClicked(label, line){
@@ -846,6 +890,32 @@ function stepBehaviours(){
       if (landed) a.vy = 0;
       a.onGround = landed;
     }
+    if (a.ball){                                 // bounces off things, like a pong ball
+      if (!a.bvx && !a.bvy){ a.bvx = a.ball.speed; a.bvy = -a.ball.speed; }
+      let nx = a.x + a.bvx, ny = a.y + a.bvy;
+      if (nx < 0 || nx + SW > VW || hits(nx, a.y, a.ball.off, n)){ a.bvx = -a.bvx; nx = a.x; beep(3); }
+      if (ny < 0 || ny + SH > VH || hits(a.x, ny, a.ball.off, n)){ a.bvy = -a.bvy; ny = a.y; beep(3); }
+      a.x = nx; a.y = ny;
+    }
+    if (a.chase){                                // walks straight at its target
+      const T = R.actors[a.chase.target];
+      if (T && T.on){
+        const sp = a.chase.speed;
+        if (T.x > a.x + 1) a.x += sp; else if (T.x < a.x - 1) a.x -= sp;
+        if (T.y > a.y + 1) a.y += sp; else if (T.y < a.y - 1) a.y -= sp;
+      }
+    }
+    if (a.smart){                                // chases sideways, jumps over what's in the way
+      const T = R.actors[a.smart.target], g = a.smart.ground, sp = a.smart.speed;
+      if (T && T.on){
+        const dir = T.x > a.x ? 1 : (T.x < a.x ? -1 : 0);
+        const nx = a.x + dir * sp;
+        const wall = hits(nx, a.y, g, n) || nx < 0 || nx + SW > VW;
+        const pit  = !hits(a.x + dir * SW, a.y + SH + 2, g, n) && a.y + SH + 2 < VH;
+        if (!wall) a.x = nx;
+        if ((wall || pit || T.y < a.y - SH) && a.onGround){ a.vy = -8; a.onGround = false; }
+      }
+    }
     if (a.anim && a.anim.list.length){           // flip through a list of sprites
       a.anim.t++;
       if (a.anim.t >= a.anim.speed){
@@ -855,6 +925,65 @@ function stepBehaviours(){
     }
   }
 }
+
+/* the roles you can give a sprite in Easy mode: coin, death, spring */
+function stepRoles(){
+  const p = R.player;
+  if (!p) return;
+  const me = R.actors[p];
+  if (!me || !me.on) return;
+
+  for (const key of Object.keys(R.roles)){
+    const n = +key, role = R.roles[n];
+    let hit = false;
+
+    const B = R.actors[n];                       // the sprite itself
+    if (B && B.on && n !== p &&
+        me.x < B.x + SW && me.x + SW > B.x && me.y < B.y + SH && me.y + SH > B.y) hit = "sprite";
+
+    if (!hit && tileHitting(me, n)) hit = "tile"; // or any tile painted with it
+
+    if (!hit) continue;
+
+    if (role === "coin"){
+      if (hit === "sprite") B.on = false; else clearTileUnder(me, n);
+      R.vars.coins = (+R.vars.coins || 0) + 1;
+      beep(1);
+    } else if (role === "spring"){
+      me.vy = -12; me.onGround = false;
+      beep(4);
+    } else if (role === "death"){
+      beep(6);
+      if (R.lives === null){ resetGame(); }
+      else {
+        R.lives--;
+        if (R.lives <= 0){ R.gameOver = true; }
+        else sendHome(p);
+      }
+    }
+  }
+}
+function tileHitting(a, n){
+  const pts = [[a.x+3,a.y+3],[a.x+SW-4,a.y+3],[a.x+3,a.y+SH-4],[a.x+SW-4,a.y+SH-4],
+               [a.x+SW/2,a.y+SH/2]];
+  for (const [x,y] of pts) if (tileAtPixel(x,y) === n) return true;
+  return false;
+}
+function clearTileUnder(a, n){
+  const rm = liveRoom(R.room); if (!rm) return;
+  const pts = [[a.x+3,a.y+3],[a.x+SW-4,a.y+3],[a.x+3,a.y+SH-4],[a.x+SW-4,a.y+SH-4],
+               [a.x+SW/2,a.y+SH/2]];
+  for (const [x,y] of pts){
+    const cx = Math.floor(x/SW), cy = Math.floor(y/SH);
+    if (cx>=0 && cy>=0 && cx<COLS && cy<ROWS && rm[cy*COLS+cx] === n){ rm[cy*COLS+cx] = 0; return; }
+  }
+}
+function sendHome(n){
+  const h = R.homes[n], a = R.actors[n];
+  if (h && a){ a.x = h.x; a.y = h.y; a.vy = 0; a.vx = 0; a.mvy = 0; }
+}
+/* start the whole program again, as if Run had been pressed */
+function resetGame(){ R.resetting = true; }
 
 /* ---------- beeps ---------- */
 let audio = null;
@@ -882,16 +1011,22 @@ function log(msg, cls){
   c.scrollTop = c.scrollHeight;
 }
 
+let KEYBIND = {};      // bind("left","A") puts entries in here
 const KEYMAP = {
   ArrowLeft:"left", ArrowRight:"right", ArrowUp:"up", ArrowDown:"down",
   " ":"space", z:"z", x:"x", c:"c", Enter:"enter"
 };
+function keyNameOf(e){
+  const raw = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (KEYBIND[raw]) return KEYBIND[raw];
+  return KEYMAP[e.key] || KEYMAP[raw];
+}
 window.addEventListener("keydown", e => {
-  const k = KEYMAP[e.key] || KEYMAP[e.key.toLowerCase()];
+  const k = keyNameOf(e);
   if (k){ R.keys[k] = true; if (R.running && document.activeElement.tagName !== "TEXTAREA") e.preventDefault(); }
 });
 window.addEventListener("keyup", e => {
-  const k = KEYMAP[e.key] || KEYMAP[e.key.toLowerCase()];
+  const k = keyNameOf(e);
   if (k) R.keys[k] = false;
 });
 
@@ -903,6 +1038,11 @@ function exec(list){
   for (const st of list){
     if (st.k === "call")        runCall(st);
     else if (st.k === "if")   { if (evalExpr(st.cond, st.n)) exec(st.body); }
+    else if (st.k === "resetif"){ if (evalExpr(st.cond, st.n)) resetGame(); }
+    else if (st.k === "resetblock"){
+      for (const line of st.body)
+        if (line.k === "call" && evalExpr(line.text, line.n)) { resetGame(); break; }
+    }
     else if (st.k === "repeat"){
       const n = Math.max(0, Math.min(10000, Math.round(evalExpr(st.count, st.n))));
       for (let i = 0; i < n; i++) exec(st.body);
@@ -910,9 +1050,26 @@ function exec(list){
   }
 }
 
-const EASY_ONLY = ["gravity","jump","horizontal","vertical","animate"];
+const EASY_ONLY = ["gravity","jump","horizontal","vertical","animate","playerspeed","player_speed",
+                   "player","coin","death","lives","lifes","spring","boing","bounce","chase","smartchase"];
+/* the player is whoever first got a movement command — or player(1) said so */
+function claimPlayer(n, onlyIfUnset){
+  n = Math.round(n);
+  if (onlyIfUnset && R.player) return;
+  R.player = n;
+  const a = actor(n);
+  if (!R.homes[n]) R.homes[n] = { x:a.x, y:a.y };
+}
+function bindKey(name, real, line){
+  name = String(name).toLowerCase().trim();
+  if (!Object.values(KEYMAP).includes(name))
+    throw new Err("bind() doesn't know a key called \u201c" + name + "\u201d", line);
+  const r = String(real).trim();
+  KEYBIND[r.length === 1 ? r.toLowerCase() : r] = name;
+}
+
 function easyOnly(name, line){
-  if (project.mode !== "easy")
+  if (project.mode !== "easy" && project.mode !== "ai")
     throw new Err(name + "() is an Easy mode command — switch the mode picker at the top to Easy", line);
 }
 
@@ -957,17 +1114,19 @@ function runCall(st){
     /* ---- Easy only ---- */
     case "gravity": { easyOnly(name, st.n);
                       const [n, g] = A();
-                      actor(n).grav = { ground: g || 0 }; break; }
+                      actor(n).grav = { ground: g || 0 }; claimPlayer(n, true); break; }
     case "jump":    { easyOnly(name, st.n);
                       const [n, power] = A(); const a = actor(n);
                       if (a.onGround){ a.vy = -(power || 7); a.onGround = false; }
                       break; }
     case "horizontal": { easyOnly(name, st.n);
                          const [n, w, sp] = A();
-                         actor(n).hor = { wall: w || 0, speed: sp || 3 }; break; }
+                         actor(n).hor = { wall: w || 0, speed: Math.abs(sp) || R.speed };
+                         claimPlayer(n, true); break; }
     case "vertical":   { easyOnly(name, st.n);
                          const [n, w, sp] = A();
-                         actor(n).ver = { wall: w || 0, speed: sp || 3 }; break; }
+                         actor(n).ver = { wall: w || 0, speed: Math.abs(sp) || R.speed };
+                         claimPlayer(n, true); break; }
     case "animate": { easyOnly(name, st.n);
                       const [n, list, speed] = A();
                       const frames = String(list).split(",").map(v => parseInt(v.trim(), 10))
@@ -976,6 +1135,41 @@ function runCall(st){
                       frames.forEach(ensureSprite);
                       actor(n).anim = { list: frames, i:0, t:0, speed: Math.max(1, Math.round(speed || 8)) };
                       break; }
+
+    /* ---- Easy: who is the player, and how fast ---- */
+    case "player": { easyOnly(name, st.n); claimPlayer(A()[0]); break; }
+    case "playerspeed": case "player_speed": {
+      easyOnly(name, st.n);
+      const [v] = A(); R.speed = Math.abs(+v) || 3;
+      const p = R.player && R.actors[R.player];
+      if (p){ if (p.hor) p.hor.speed = R.speed; if (p.ver) p.ver.speed = R.speed; }
+      break; }
+
+    /* ---- Easy: give a sprite a job ---- */
+    case "coin":   { easyOnly(name, st.n); const [n] = A();
+                     ensureSprite(Math.round(n)); R.roles[Math.round(n)] = "coin"; break; }
+    case "death":  { easyOnly(name, st.n); const [n] = A();
+                     ensureSprite(Math.round(n)); R.roles[Math.round(n)] = "death"; break; }
+    case "spring": case "boing": { easyOnly(name, st.n); const [n] = A();
+                     ensureSprite(Math.round(n)); R.roles[Math.round(n)] = "spring"; break; }
+    case "lives":  case "lifes":  { easyOnly(name, st.n);
+                     R.lives = Math.max(0, Math.round(A()[0] || 0)); break; }
+    case "bounce": { easyOnly(name, st.n); const [n, off, sp] = A();
+                     const a = actor(n); a.ball = { off: off || 0, speed: Math.abs(sp) || 2 }; break; }
+    case "chase":  { easyOnly(name, st.n); const [n, t, sp] = A();
+                     actor(n).chase = { target: Math.round(t), speed: Math.abs(sp) || 1 }; break; }
+    case "smartchase": { easyOnly(name, st.n); const [n, t, g, sp] = A();
+                     const a = actor(n);
+                     a.grav  = { ground: Math.round(g || 0) };
+                     a.smart = { target: Math.round(t), ground: Math.round(g || 0), speed: Math.abs(sp) || 1 };
+                     break; }
+
+    /* ---- breaking the fourth wall ---- */
+    case "closegame": case "close_game": { throw new Stop(); }
+    case "importgame": case "import_game": { importGame(A()[0], st.n); break; }
+    case "changegame": case "change_game": { changeGame(A()[0], st.n); break; }
+    case "reset": { resetGame(); break; }
+    case "bind": { const [k, real] = A(); bindKey(k, real, st.n); break; }
 
     case "wait":  { throw new Wait(Math.max(1, Math.round(A()[0] || 1))); }
     case "stop":  { throw new Stop(); }
@@ -991,8 +1185,14 @@ function run(){
   project.code = $("code").value; save();
 
   R.hard = null;
+  $("ai-show").style.display = "none";
+  let source = project.code;
+  if (project.mode === "ai"){
+    try { source = compileAI(); }
+    catch (e){ return log("AI mode tripped over that description — " + (e.msg || e), "err"); }
+  }
   if (project.mode !== "hard"){
-    try { R.prog = parse(project.code); }
+    try { R.prog = parse(source); }
     catch (e){ return log("Oops — " + e, "err"); }
   }
 
@@ -1001,11 +1201,26 @@ function run(){
   R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false;
   R.title = null; R.buttons = []; R.clicks = []; R.titlesShown = {};
   R.shared = {}; R.mates = {};
+  R.player = 0; R.roles = {}; R.lives = null; R.gameOver = false;
+  R.resetting = false; R.homes = {}; R.speed = 3;
+  R.vars.coins = 0;                      // coin() counts into this one
+  KEYBIND = {};
   if (project.mode === "hard" && !runHard()){ R.running = false; return; }
 
   log("running… (" + MODES[project.mode].label + " mode)", "ok");
   stage.focus();
   loop();
+}
+
+/* start everything again without touching the sprites or rooms you drew */
+function doReset(){
+  R.actors = {}; R.vars = {}; R.texts = []; R.extra = [];
+  R.roomData = project.rooms.map(r => r.slice());
+  R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false;
+  R.player = 0; R.roles = {}; R.lives = null; R.gameOver = false;
+  R.resetting = false; R.homes = {}; R.speed = 3;
+  R.clicks = []; R.mates = {}; R.vars.coins = 0;
+  render();
 }
 
 function stop(){
@@ -1030,6 +1245,12 @@ function loop(){
   // a title screen freezes the program until a button is pressed
   if (R.title){ R.clicks = []; render(); return; }
 
+  if (R.gameOver){                       // out of lives — click to try again
+    if (R.clicks.length || R.clickedStage){ R.clickedStage = false; doReset(); return; }
+    R.texts = [{ t:"GAME OVER", x:124, y:104 }, { t:"click to try again", x:104, y:120 }];
+    render(); return;
+  }
+
   if (R.waitFrames > 0){ R.waitFrames--; render(); return; }
   R.texts = [];
 
@@ -1048,13 +1269,16 @@ function loop(){
   for (const b of R.prog){
     if (b.k === "frame"){ if (!safe(b.body, "every frame")) return; }
     else if (b.k === "key" && R.keys[b.key]){ if (!safe(b.body, "when key " + b.key)) return; }
-    else if (b.k === "call" || b.k === "if" || b.k === "repeat"){
+    else if (b.k === "call" || b.k === "if" || b.k === "repeat" ||
+             b.k === "resetif" || b.k === "resetblock"){
       // loose top-level lines run once, like "when start"
       if (R.frame === 0 && !safe([b], "your code")) return;
     }
   }
   stepBehaviours();
+  stepRoles();
   netTick();
+  if (R.resetting){ doReset(); return; }
   R.lastButtons = R.buttons.map(b => b.label);
   R.clicks = [];
   R.frame++;
@@ -1087,6 +1311,11 @@ function render(){
   for (const t of R.texts){
     sctx.fillStyle = "#000";  sctx.fillText(t.t, t.x + 1, t.y + 1);
     sctx.fillStyle = "#fff";  sctx.fillText(t.t, t.x, t.y);
+  }
+  if (R.lives !== null){                       // lives() draws its own counter
+    const txt = "lives " + R.lives;
+    sctx.fillStyle = "#000"; sctx.fillText(txt, VW - 47, 7);
+    sctx.fillStyle = "#ff6b6b"; sctx.fillText(txt, VW - 48, 6);
   }
 }
 
@@ -1124,6 +1353,9 @@ const MODES = {
   normal: { label:"Normal",
             blurb:"The Simple++ language: <b>show</b>, <b>move</b>, <b>print</b>, <b>when key</b>, " +
                   "<b>if</b>, <b>repeat</b>. You write the movement yourself." },
+  ai:     { label:"AI",
+            blurb:"Type what you want in <b>plain English</b>, one wish per line. Run turns it into " +
+                  "a real Easy-mode program and tells you what it understood." },
   hard:   { label:"Hard",
             blurb:"Plain <b>JavaScript</b>. Real loops, functions, arrays, objects — with the engine " +
                   "handed to you as an API. For people who already code." }
@@ -1147,6 +1379,7 @@ function setMode(m, quiet){
 }
 
 const STARTERS = {
+  get ai(){ return AI_STARTER; },      // defined further down, so read it lazily
   easy:`# EASY MODE — the engine does the hard parts
 # sprite 1 = you, sprite 2 = the ground
 
@@ -1526,6 +1759,9 @@ const TEMPLATES = [
     rooms:[() => borderRoom(2)],
     code:`# CATCH THE STAR
 # sprite 1 = you, 2 = wall, 3 = star
+#
+# The brick walls are NOT in this code — they are tiles drawn
+# in the Rooms tab. room(1) below is what puts them on screen.
 
 when start
   room(1)
@@ -1573,7 +1809,10 @@ end
                    for (let y = 0; y < ROWS; y++){ r[y*COLS] = 3; r[y*COLS+COLS-1] = 3; }
                    return r; }],
     code:`# PONG
-# sprite 1 = paddle, 2 = ball
+# sprite 1 = paddle, 2 = ball, 3 = the brick tiles
+#
+# The brick frame comes from the Rooms tab, not from code.
+# room(1) is the line that shows it.
 
 when start
   room(1)
@@ -1641,6 +1880,8 @@ end
     sprites:["face","wall","goal"],
     rooms:[() => mazeRoom(2)],
     code:`# MAZE RUNNER
+# The maze itself is drawn in the Rooms tab with sprite 2,
+# and room(1) puts it on screen. Go and redraw it!
 # free(1, dx, dy) is true when sprite 1 can move that way
 # without bumping into a room tile
 
@@ -1701,6 +1942,7 @@ end
     rooms:[() => blankRoom()],
     code:`# SPACE DODGE
 # sprite 1 = ship, 2 = rock, 3 = heart
+# This one uses no room at all — the background is empty on purpose.
 
 when start
   put(1, 150, 210)
@@ -1760,6 +2002,8 @@ end
                      for (let x = 1; x < COLS - 1; x += 3) r[y*COLS+x] = 3;
                    return r; }],
     code:`# COIN GRID
+# The grass and the coins are tiles in the Rooms tab, not code.
+# room(1) shows them; settile() below rubs a coin out again.
 # tile(x, y) tells you which sprite is painted at a spot
 # settile(x, y, 0) rubs it out again
 
@@ -1808,6 +2052,8 @@ end
                    for (let x = 5; x < 9; x++)  r[4*COLS+x] = 2;
                    return r; }],
     code:`# JUMP ABOUT — Easy mode
+# The platforms are tiles drawn in the Rooms tab with sprite 2.
+# room(1) shows them, and gravity(1, 2) makes them solid.
 # gravity() and horizontal() do the physics for you
 
 title("Jump About")
@@ -1845,6 +2091,83 @@ end
 # TRY THIS
 # · change jump(1, 8) to jump(1, 12) for a moon jump
 # · draw a second ground sprite and build a bigger level in the Rooms tab
+`
+  },
+  {
+    em:"🤖", name:"Just Ask For It", mode:"ai",
+    desc:"AI mode. A description of a game in plain English — press Run and read what it wrote.",
+    sprites:["face","brick","coin"],
+    rooms:[() => { const r = borderRoom(2);
+                   for (let x = 3; x < 9; x++)  r[10*COLS+x] = 2;
+                   for (let x = 12; x < 17; x++) r[7*COLS+x] = 2;
+                   return r; }],
+    code:`I want a platformer
+Sprite 1 is the player and sprite 2 is the ground
+Show room 1
+Sprite 3 is a coin
+Give me 3 lives
+Restart if I fall off the bottom
+A title screen called Coin Rush
+Add a button called Options
+
+# Every line above is a wish. Press Run: the console lists
+# everything it understood, then "Show me the code" hands you
+# the finished Easy-mode program to carry on with yourself.
+`
+  },
+  {
+    em:"🕹", name:"Coin Quest", mode:"easy",
+    desc:"Easy mode showing off the new jobs: coins, spikes, springs, lives and a chaser.",
+    sprites:["face","brick","coin","rock","star","ship"],
+    rooms:[() => { const r = borderRoom(2);
+                   for (let x = 2; x < 8; x++)  r[11*COLS+x] = 2;
+                   for (let x = 12; x < 18; x++) r[8*COLS+x] = 2;
+                   for (let x = 5; x < 11; x++) r[5*COLS+x] = 2;
+                   return r; }],
+    code:`# COIN QUEST — Easy mode
+# The platforms are tiles in the Rooms tab. room(1) shows them.
+
+title("Coin Quest")
+
+when start
+  room(1)
+  put(1, 30, 30)
+  show(1)
+  playerspeed(3)
+  gravity(1, 2)         # fall, land on sprite 2
+  horizontal(1, 2)      # arrow keys
+  lives(3)              # three lives, drawn in the corner
+
+  put(3, 100, 60)
+  show(3)
+  coin(3)               # touch it and it vanishes, +1 coin
+
+  put(4, 200, 208)
+  show(4)
+  death(4)              # touch it and you lose a life
+
+  put(5, 150, 208)
+  show(5)
+  spring(5)             # touch it and you fly
+
+  put(6, 280, 30)
+  show(6)
+  smartchase(6, 1, 2)   # it hunts you, jumping over the platforms
+end
+
+when key up
+  jump(1, 8)
+end
+
+reset if y(1) > 240
+
+every frame
+  print("coins: " + coins, 6, 6)
+end
+
+# TRY THIS
+# · playerspeed(6) to go quicker
+# · make sprite 3 a spring instead and see what happens
 `
   },
   {
@@ -2006,6 +2329,24 @@ const LESSONS = [
     c:`when start\n  show(1)\n  put(1, 0, 110)\n  repeat 10\n    move(1, 30, 0)\n  end\nend\n\nevery frame\n  print("that was 10 moves of 30", 40, 40)\nend` }
 ];
 
+const AI_LESSONS = [
+  { t:"Ask for a game",
+    p:"One wish per line, plain English. Press Try it, then read the console: it lists everything it understood.",
+    c:`I want a platformer\nSprite 1 is the player and sprite 2 is the ground\nShow room 1` },
+  { t:"Add the fun bits",
+    p:"Name a sprite number and say what it does. Coins vanish when touched, deaths cost a life.",
+    c:`I want a platformer\nSprite 1 is the player and sprite 2 is the ground\nShow room 1\nSprite 3 is a coin\nSprite 4 kills me\nGive me 3 lives` },
+  { t:"Give it a front door",
+    p:"Title screens and buttons come from ordinary sentences too.",
+    c:`A title screen called Coin Rush\nAdd a button called Options\nI want a platformer\nSprite 1 is the player, sprite 2 is the ground\nShow room 1\nSprite 3 is a coin` },
+  { t:"Something to run away from",
+    p:"In a platformer, \"chases\" gets the clever version that jumps over walls and pits by itself.",
+    c:`I want a platformer\nSprite 1 is the player, sprite 2 is the ground\nShow room 1\nSprite 4 chases me\nGive me 3 lives\nRestart if I fall off the bottom` },
+  { t:"Take the wheel",
+    p:"Now press “Show me the code”. You land in Easy mode holding the whole program, and every line of it is something you can now read and change. That was the point.",
+    c:`I want a top down game\nSprite 1 is the player\nPlayer speed 4\nSprite 3 is a coin\nUse WASD instead of the arrow keys\nSay "grab them all" at 6 30` }
+];
+
 const EASY_LESSONS = [
   { t:"Fall down",
     p:"gravity(1, 2) means: sprite 1 falls, and sprite 2 is solid ground — both the sprite itself and every room tile painted with it.",
@@ -2045,7 +2386,9 @@ const HARD_LESSONS = [
 function buildLessons(){
   const box = $("lessons"); box.innerHTML = "";
   const m = project.mode || "normal";
-  const set = m === "hard" ? HARD_LESSONS : (m === "easy" ? EASY_LESSONS : LESSONS);
+  const set = m === "hard" ? HARD_LESSONS
+            : m === "ai"   ? AI_LESSONS
+            : (m === "easy" ? EASY_LESSONS : LESSONS);
   $("learn-title").textContent = set.length + " little steps · " + MODES[m].label + " mode";
   set.forEach((l, i) => {
     const d = document.createElement("div");
@@ -2061,6 +2404,635 @@ function buildLessons(){
   });
 }
 
+
+
+
+
+/* =========================================================
+   AI MODE
+   You type what you want in ordinary English; this reads it
+   and writes the Easy-mode program for you.
+
+   It is a hand-written intent parser — every rule below is
+   plain code — so it runs offline, needs no API key, and
+   gives the same answer every time. It says what it did and
+   what it could not understand, and never guesses silently.
+   ========================================================= */
+
+/* small helpers for reading English */
+const NUMWORD = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10 };
+function num(t, dflt){
+  if (t === undefined || t === null) return dflt;
+  const w = String(t).trim().toLowerCase();
+  if (w in NUMWORD) return NUMWORD[w];
+  const v = parseFloat(w);
+  return isNaN(v) ? dflt : v;
+}
+function spriteIn(line, dflt){
+  const m = line.match(/sprite\s*#?\s*(\d+)/);
+  return m ? +m[1] : dflt;
+}
+function tidy(t){ return String(t || "").trim().replace(/^["'\u201c]+|["'\u201d.,!]+$/g, "").trim(); }
+function quoted(line){
+  const m = line.match(/"([^"]*)"|'([^']*)'|“([^”]*)”/);
+  return m ? (m[1] ?? m[2] ?? m[3]) : null;
+}
+
+/* every rule: a test, and what it adds to the plan */
+const AI_RULES = [
+  { id:"title",
+    test: l => /\b(title|start|menu|front)\s*(screen|page)?\b/.test(l) && !/option|button/.test(l),
+    apply: (l, P, raw) => {
+      P.title = tidy(quoted(raw) || raw.match(/(?:called|named|saying|says)\s+(.+)$/i)?.[1] || "My Game");
+      return "a title screen saying \u201c" + P.title + "\u201d";
+    } },
+
+  { id:"option",
+    test: l => /\b(option|extra|another)\b.*\bbutton\b|\bbutton\b.*\b(called|named)\b/.test(l),
+    apply: (l, P, raw) => {
+      const name = tidy(quoted(raw) || raw.match(/(?:called|named|saying)\s+(.+)$/i)?.[1] || "Options");
+      P.options.push(name);
+      if (!P.title) P.title = "My Game";
+      return "a button called \u201c" + name + "\u201d";
+    } },
+
+  { id:"player", perClause:true,
+    test: l => /\bplayer\b|\byou are\b|\bi am\b|\bmain character\b|\bhero\b/.test(l) &&
+               !/speed|fast|slow|dies|die|kill|hurt/.test(l),
+    apply: (l, P) => { P.player = spriteIn(l, P.player); return "sprite " + P.player + " is the player"; } },
+
+  { id:"ground", perClause:true,
+    test: l => /\b(ground|floor|wall|walls|solid|platform|platforms|block|blocks|scenery)\b/.test(l),
+    apply: (l, P) => {
+      const n = spriteIn(l, P.ground || 2);
+      P.ground = (n === P.player && !/sprite/.test(l)) ? 2 : n;
+      return "sprite " + P.ground + " is solid";
+    } },
+
+  { id:"platformer",
+    test: l => /\b(gravity|platformer|jump|jumping|falls?|falling|mario)\b/.test(l),
+    apply: (l, P) => {
+      P.gravity = true; P.sideways = true;
+      const j = l.match(/(?:jump|height)\D{0,12}(\d+)/);
+      if (j) P.jumpPower = +j[1];
+      return "gravity and jumping";
+    } },
+
+  { id:"topdown",
+    test: l => /\b(top.?down|all directions|any direction|up and down and|four directions|zelda|maze)\b/.test(l),
+    apply: (l, P) => { P.sideways = true; P.updown = true; return "movement in all four directions"; } },
+
+  { id:"move",
+    test: l => /\b(move|moves|walk|walks|control|controls|steer|arrow keys|wasd)\b/.test(l),
+    apply: (l, P) => {
+      P.sideways = true;
+      if (!P.gravity) P.updown = true;
+      if (/wasd/.test(l)) P.wasd = true;
+      const sp = l.match(/speed\D{0,10}(\d+)|(\d+)\s*(?:pixels|px)/);
+      if (sp) P.speed = +(sp[1] || sp[2]);
+      if (/\b(fast|quick|speedy)\b/.test(l)) P.speed = 5;
+      if (/\b(slow|slowly)\b/.test(l)) P.speed = 1;
+      return "arrow key movement" + (P.wasd ? " on WASD" : "");
+    } },
+
+  { id:"speed",
+    test: l => /\bspeed\b|\bfaster\b|\bslower\b/.test(l),
+    apply: (l, P) => {
+      const sp = l.match(/(\d+)/);
+      P.speed = sp ? +sp[1] : (/slow/.test(l) ? 1 : 5);
+      return "player speed " + P.speed;
+    } },
+
+  { id:"coin", perClause:true,
+    test: l => /\b(coin|coins|collect|collectable|collectible|pick ?up|treasure|star|point|points|gem)\b/.test(l),
+    apply: (l, P) => { const n = spriteIn(l, 3); P.coins.push(n); return "sprite " + n + " is a coin"; } },
+
+  { id:"death", perClause:true,
+    test: l => /\b(kill|kills|killed|deadly|death|die|dies|spike|spikes|lava|hurt|damage|enemy|enemies|dangerous)\b/.test(l),
+    apply: (l, P) => { const n = spriteIn(l, 4); if (!P.deaths.includes(n)) P.deaths.push(n);
+                       return "sprite " + n + " kills you"; } },
+
+  { id:"spring", perClause:true,
+    test: l => /\b(spring|springs|boing|bouncy|bounce pad|jump pad|trampoline)\b/.test(l) && !/bounces? off/.test(l),
+    apply: (l, P) => { const n = spriteIn(l, 5); P.springs.push(n); return "sprite " + n + " is a spring"; } },
+
+  { id:"lives",
+    test: l => /\b(life|lives|lifes|hearts?|health|tries|chances)\b/.test(l),
+    apply: (l, P) => {
+      const m = l.match(/(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/);
+      P.lives = num(m && m[1], 3);
+      return P.lives + " lives";
+    } },
+
+  { id:"chase", perClause:true,
+    test: l => /\b(chase|chases|follow|follows|hunt|hunts|after you)\b/.test(l),
+    apply: (l, P) => {
+      const all = [...l.matchAll(/sprite\s*#?\s*(\d+)/g)].map(m => +m[1]);
+      const who = all[0] ?? 4, whom = all[1] ?? P.player;
+      P.chasers.push({ who, whom, smart: P.gravity || /smart|jump/.test(l) });
+      return "sprite " + who + " chases sprite " + whom;
+    } },
+
+  { id:"bounce", perClause:true,
+    test: l => /\bbounce[sd]? (off|around|about)\b|\bpong\b|\bball\b/.test(l),
+    apply: (l, P) => {
+      const all = [...l.matchAll(/sprite\s*#?\s*(\d+)/g)].map(m => +m[1]);
+      const who = all[0] ?? 5, off = all[1] ?? P.ground ?? 2;
+      P.bounces.push({ who, off });
+      return "sprite " + who + " bounces off sprite " + off;
+    } },
+
+  { id:"animate", perClause:true,
+    test: l => /\b(animate|animated|animation|flip|cycle|frames)\b/.test(l),
+    apply: (l, P) => {
+      const all = [...l.matchAll(/\d+/g)].map(m => +m[0]);
+      const who = spriteIn(l, P.player);
+      const frames = [...l.matchAll(/sprites?\s*([\d,\s and]+)/g)].map(m => m[1])[0];
+      let list = frames ? frames.split(/[^\d]+/).filter(Boolean).map(Number) : all.slice(1);
+      if (list.length < 2) list = [who, who + 1];
+      P.anims.push({ who, list });
+      return "sprite " + who + " animates through " + list.join(", ");
+    } },
+
+  { id:"room",
+    test: l => /\b(room|level|background|map|world)\b/.test(l),
+    apply: (l, P) => {
+      const m = l.match(/(?:room|level|map)\s*#?\s*(\d+)/);
+      P.room = m ? +m[1] : 1;
+      return "room " + P.room + " in the background";
+    } },
+
+  { id:"resetfall",
+    test: l => /\b(fall|falls|fell)\b.*\b(off|out|bottom|hole|pit|screen)\b|\brestart\b|\breset\b/.test(l),
+    apply: (l, P) => { P.resetOnFall = true; return "the game restarts if you fall off the bottom"; } },
+
+  { id:"text",
+    test: l => /\b(say|says|display|write|print|message)\b/.test(l) || /"[^"]+"/.test(l),
+    apply: (l, P, raw) => {
+      const t = tidy(quoted(raw) || raw.match(/(?:say|says|display|write|print)\s+(.+)$/i)?.[1] || "Hello!");
+      const xy = [...l.matchAll(/\b(\d+)\b/g)].map(m => +m[1]);
+      P.texts.push({ t, x: xy.length >= 2 ? xy[xy.length-2] : 6, y: xy.length >= 2 ? xy[xy.length-1] : 6 });
+      return "the words \u201c" + t + "\u201d on screen";
+    } },
+
+  { id:"bind",
+    test: l => /\b(bind|instead of|use the|remap|rebind|key)\b.*\b(key|button|letter)\b|\bwasd\b/.test(l),
+    apply: (l, P) => {
+      if (/wasd/.test(l)){ P.wasd = true; return "WASD instead of the arrow keys"; }
+      const m = l.match(/\b(left|right|up|down|space|z|x|c|enter)\b[^a-z]*(?:to|=|as|with)?\s*"?([a-z0-9])"?/i);
+      if (m){ P.binds.push({ key:m[1].toLowerCase(), real:m[2] }); return m[1] + " moves to the " + m[2].toUpperCase() + " key"; }
+      return null;
+    } }
+];
+
+function aiPlan(text){
+  const P = { title:null, options:[], player:1, ground:0, gravity:false, sideways:false, updown:false,
+              speed:3, jumpPower:8, lives:null, coins:[], deaths:[], springs:[], chasers:[],
+              bounces:[], anims:[], texts:[], binds:[], room:0, resetOnFall:false, wasd:false };
+  const did = [], missed = [];
+
+  for (const rawLine of text.split("\n")){
+    const line = rawLine.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    let matched = false;
+
+    const whole = " " + line.toLowerCase() + " ";
+    for (const rule of AI_RULES){
+      if (rule.perClause || !rule.test(whole)) continue;
+      const said = rule.apply(whole, P, line);
+      if (said){ did.push(said); matched = true; }
+    }
+
+    // "sprite 1 is the player and sprite 2 is the ground" is two separate wishes
+    const clauses = line.split(/\s*[,;]\s*|\s+and\s+|\s+then\s+/i).filter(c => c.trim());
+    for (const clause of clauses){
+      const c = " " + clause.toLowerCase() + " ";
+      for (const rule of AI_RULES){
+        if (!rule.perClause || !rule.test(c)) continue;
+        const said = rule.apply(c, P, clause);
+        if (said){ did.push(said); matched = true; }
+      }
+    }
+    if (!matched) missed.push(line);
+  }
+  return { P, did: [...new Set(did)], missed };
+}
+
+function aiCode(P){
+  const L = [];
+  L.push("# written for you by AI mode, from your description.");
+  L.push("# this is ordinary Easy-mode code — switch to Easy to keep working on it.");
+  L.push("");
+  if (P.title){
+    L.push(`title("${P.title}")`);
+    P.options.forEach(o => L.push(`titleoption("${o}")`));
+    L.push("");
+  }
+  if (P.wasd){
+    L.push('bind("left", "A")'); L.push('bind("right", "D")');
+    L.push('bind("up", "W")');   L.push('bind("down", "S")');
+    L.push("");
+  }
+  P.binds.forEach(b => L.push(`bind("${b.key}", "${b.real}")`));
+  if (P.binds.length) L.push("");
+
+  L.push("when start");
+  if (P.room) L.push(`  room(${P.room})`);
+  L.push(`  put(${P.player}, 40, 40)`);
+  L.push(`  show(${P.player})`);
+  L.push(`  playerspeed(${P.speed})`);
+  if (P.coins.length) L.push("  set(coins, 0)");
+  if (P.gravity)  L.push(`  gravity(${P.player}, ${P.ground})`);
+  if (P.sideways) L.push(`  horizontal(${P.player}, ${P.ground})`);
+  if (P.updown && !P.gravity) L.push(`  vertical(${P.player}, ${P.ground})`);
+  if (P.lives !== null) L.push(`  lives(${P.lives})`);
+  P.coins.forEach(n   => L.push(`  coin(${n})`));
+  P.deaths.forEach(n  => L.push(`  death(${n})`));
+  P.springs.forEach(n => L.push(`  spring(${n})`));
+  P.anims.forEach(a   => L.push(`  animate(${a.who}, "${a.list.join(", ")}")`));
+  P.bounces.forEach(b => { L.push(`  put(${b.who}, 150, 60)`); L.push(`  show(${b.who})`);
+                           L.push(`  bounce(${b.who}, ${b.off})`); });
+  P.chasers.forEach(c => {
+    L.push(`  put(${c.who}, 260, 40)`);
+    L.push(`  show(${c.who})`);
+    L.push(c.smart ? `  smartchase(${c.who}, ${c.whom}, ${P.ground})`
+                   : `  chase(${c.who}, ${c.whom})`);
+  });
+  const seen = new Set([P.player, ...P.bounces.map(b=>b.who), ...P.chasers.map(c=>c.who)]);
+  [...P.coins, ...P.deaths, ...P.springs].forEach(n => {
+    if (seen.has(n)) return;
+    seen.add(n);
+    L.push(`  put(${n}, ${60 + seen.size * 40}, 120)`);
+    L.push(`  show(${n})`);
+  });
+  L.push("end");
+  L.push("");
+
+  if (P.gravity){
+    L.push("when key up");
+    L.push(`  jump(${P.player}, ${P.jumpPower})`);
+    L.push("end");
+    L.push("");
+  }
+  if (P.resetOnFall) L.push(`reset if y(${P.player}) > 240`, "");
+
+  L.push("every frame");
+  if (P.coins.length) L.push(`  print("coins: " + coins, 6, 6)`);
+  P.texts.forEach(t => L.push(`  print("${t.t}", ${t.x}, ${t.y})`));
+  if (!P.coins.length && !P.texts.length) L.push(`  print("made by AI mode", 6, 6)`);
+  L.push("end");
+  return L.join("\n");
+}
+
+const AI_STARTER = `I want a platformer.
+Sprite 1 is the player and sprite 2 is the ground.
+Give me 3 lives.
+Sprite 3 is a coin.
+Sprite 4 kills me.
+Show room 1.
+The game restarts if I fall off the bottom.
+Add a title screen called My First AI Game.
+`;
+
+/* what Run does in AI mode */
+function compileAI(){
+  const { P, did, missed } = aiPlan(project.code);
+  const code = aiCode(P);
+  R.aiCode = code;
+
+  log("AI mode read your description and wrote " + code.split("\n").length + " lines.", "ok");
+  did.forEach(d => log("  ✓ " + d));
+  missed.forEach(m => log("  ? I couldn't work out: " + m, "err"));
+  if (missed.length)
+    log("  try naming a sprite number, e.g. “sprite 3 is a coin”.", "err");
+  log("  press “Show me the code” to read it, or Easy mode to edit it.", "ok");
+  $("ai-show").style.display = "inline-block";
+  return code;
+}
+function showAICode(){
+  if (!R.aiCode) return;
+  if (!confirm("Switch to Easy mode and put the written-out code in the editor?\n\n" +
+               "Your description is kept in My Games only if you saved it.")) return;
+  stop();
+  project.mode = "easy";
+  setMode("easy", true);
+  $("code").value = R.aiCode;
+  save();
+  log("here is the code — it is yours now, change anything you like.", "ok");
+}
+
+/* =========================================================
+   IMPORT A PNG
+   the palette is 16 colours and sprites are 16x16, so an
+   imported picture gets squashed into both
+   ========================================================= */
+function nearestColour(r, g, b){
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < PALETTE.length; i++){
+    const h = PALETTE[i];
+    const pr = parseInt(h.slice(1,3),16), pg = parseInt(h.slice(3,5),16), pb = parseInt(h.slice(5,7),16);
+    // weighted so it matches how eyes see, not how numbers add up
+    const d = 2*(r-pr)**2 + 4*(g-pg)**2 + 3*(b-pb)**2;
+    if (d < bestD){ bestD = d; best = i; }
+  }
+  return best;
+}
+/* read one 16x16 block out of an image and quantise it */
+function blockToSprite(img, sx, sy, sw, sh){
+  const cv = document.createElement("canvas");
+  cv.width = SW; cv.height = SH;
+  const c = cv.getContext("2d");
+  c.imageSmoothingEnabled = false;
+  c.drawImage(img, sx, sy, sw, sh, 0, 0, SW, SH);
+  const d = c.getImageData(0, 0, SW, SH).data;
+  const out = blankSprite();
+  for (let i = 0; i < SW*SH; i++){
+    const a = d[i*4+3];
+    out[i] = a < 100 ? -1 : nearestColour(d[i*4], d[i*4+1], d[i*4+2]);
+  }
+  return out;
+}
+
+let pendingImage = null;
+function importPng(input){
+  const f = input.files[0]; if (!f) return;
+  const img = new Image();
+  img.onload = () => {
+    pendingImage = img;
+    if (img.width <= SW && img.height <= SH){ applyPngResize(); }
+    else { openPngMenu(); }
+  };
+  img.onerror = () => log("that image wouldn't open", "err");
+  img.src = URL.createObjectURL(f);
+  input.value = "";
+}
+
+function openPngMenu(){
+  const img = pendingImage;
+  const cols = Math.ceil(img.width / SW), rows = Math.ceil(img.height / SH);
+  $("png-body").innerHTML = `
+    <p class="sub">
+      That picture is <b>${img.width} × ${img.height}</b>, and a sprite is only 16 × 16.
+      Pick what to do with it. Either way the colours get swapped for the nearest
+      of the sixteen in the palette.
+    </p>
+    <div class="cards">
+      <div class="card" onclick="applyPngResize()">
+        <div class="em">🔍</div><b>Squash it to fit</b>
+        <span>Shrink the whole picture down into one 16 × 16 sprite. Small details will be lost.</span>
+      </div>
+      <div class="card" onclick="applyPngSlice()">
+        <div class="em">🧩</div><b>Spread it over ${cols * rows} sprites</b>
+        <span>Cut it into a ${cols} × ${rows} grid of 16 × 16 sprites, kept at full detail.
+        Sprite numbers ${project.sprites.length + 1} to ${project.sprites.length + cols*rows},
+        left to right, top to bottom — paint them into a room to see the picture.</span>
+      </div>
+    </div>`;
+  $("png-ov").classList.add("on");
+}
+function closePngMenu(){ $("png-ov").classList.remove("on"); }
+
+function applyPngResize(){
+  const img = pendingImage; if (!img) return;
+  project.sprites[curSprite] = blockToSprite(img, 0, 0, img.width, img.height);
+  closePngMenu(); afterPng("squashed the picture into sprite " + (curSprite + 1));
+}
+function applyPngSlice(){
+  const img = pendingImage; if (!img) return;
+  const cols = Math.ceil(img.width / SW), rows = Math.ceil(img.height / SH);
+  const first = project.sprites.length + 1;
+  for (let y = 0; y < rows; y++)
+    for (let x = 0; x < cols; x++)
+      project.sprites.push(blockToSprite(img, x*SW, y*SH, SW, SH));
+  curSprite = first - 1;
+  closePngMenu();
+  afterPng("cut the picture into sprites " + first + " to " + project.sprites.length +
+           " (" + cols + " across, " + rows + " down)");
+}
+function afterPng(msg){
+  pendingImage = null;
+  drawPaint(); drawSpriteList(); drawTileList(); save();
+  log(msg, "ok");
+  tab("paint");
+}
+
+/* =========================================================
+   MY GAMES — a library in this browser, .simple files,
+   and share links that carry a whole game in the URL
+   ========================================================= */
+const LIB_KEY = "simplepp-library";
+
+function libRead(){
+  try { return JSON.parse(localStorage.getItem(LIB_KEY)) || {}; } catch(e){ return {}; }
+}
+function libWrite(all){
+  try { localStorage.setItem(LIB_KEY, JSON.stringify(all)); return true; }
+  catch(e){ log("no room left in this browser's storage", "err"); return false; }
+}
+function gameNow(name, author){
+  save();
+  return {
+    name, author: author || "",
+    mode: project.mode, code: project.code,
+    sprites: project.sprites, rooms: project.rooms,
+    saved: Date.now()
+  };
+}
+function libSave(name, author){
+  const all = libRead();
+  all[name] = gameNow(name, author);
+  return libWrite(all);
+}
+function libLoad(g){
+  stop();
+  project = { mode:g.mode || "normal", code:g.code || "",
+              sprites:(g.sprites||[]).map(a => a.slice()),
+              rooms:(g.rooms||[]).map(a => a.slice()) };
+  if (!project.sprites.length) project.sprites = [blankSprite()];
+  if (!project.rooms.length)   project.rooms   = [blankRoom()];
+  curSprite = 0; curRoom = 0; curTile = 1;
+  setMode(project.mode, true);
+  $("code").value = project.code;
+  drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
+  save(); render();
+}
+
+/* ---------- .simple files ---------- */
+function saveSimple(){
+  const name = (prompt("Name this game:", project.name || "My Game") || "My Game").trim();
+  const author = prompt("Author name? (leave empty to stay anonymous)", project.author || "") || "";
+  project.name = name; project.author = author; save();
+  const blob = new Blob([JSON.stringify(gameNow(name, author))], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name.replace(/[^\w\- ]+/g, "") + ".simple";
+  a.click();
+  log("saved " + a.download, "ok");
+}
+function openSimple(input){
+  const f = input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const g = JSON.parse(r.result);
+      if (!g.sprites || !g.rooms) throw 0;
+      libLoad(g);
+      project.name = g.name || f.name; project.author = g.author || "";
+      log("opened “" + (g.name || f.name) + "”" + (g.author ? " by " + g.author : ""), "ok");
+    } catch(e){ log("that isn't a Simple++ game file", "err"); }
+  };
+  r.readAsText(f); input.value = "";
+}
+
+/* ---------- share links ----------
+   sprites squash well with run-length coding: they are mostly one colour  */
+function packSprite(s){
+  let out = "", run = 1;
+  for (let i = 1; i <= s.length; i++){
+    if (i < s.length && s[i] === s[i-1] && run < 35){ run++; continue; }
+    out += (s[i-1] < 0 ? "z" : s[i-1].toString(16)) + run.toString(36);
+    run = 1;
+  }
+  return out;
+}
+function unpackSprite(str){
+  const out = [];
+  for (let i = 0; i < str.length; i += 2){
+    const c = str[i] === "z" ? -1 : parseInt(str[i], 16);
+    const n = parseInt(str[i+1], 36);
+    for (let k = 0; k < n; k++) out.push(c);
+  }
+  while (out.length < SW*SH) out.push(-1);
+  return out.slice(0, SW*SH);
+}
+function packGame(g){
+  const packed = {
+    n: g.name, a: g.author, m: g.mode, c: g.code,
+    s: g.sprites.map(packSprite),
+    r: g.rooms.map(r => r.join(","))
+  };
+  return btoa(unescape(encodeURIComponent(JSON.stringify(packed))))
+         .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function unpackGame(txt){
+  const b = txt.replace(/-/g, "+").replace(/_/g, "/");
+  const p = JSON.parse(decodeURIComponent(escape(atob(b))));
+  return {
+    name: p.n, author: p.a, mode: p.m, code: p.c,
+    sprites: p.s.map(unpackSprite),
+    rooms: p.r.map(r => r.split(",").map(Number))
+  };
+}
+function shareLink(){
+  const name = (prompt("Name this game:", project.name || "My Game") || "My Game").trim();
+  const author = prompt("Author name? (leave empty to stay anonymous)", project.author || "") || "";
+  project.name = name; project.author = author; save();
+  const link = location.href.split("#")[0] + "#game=" + packGame(gameNow(name, author));
+  navigator.clipboard?.writeText(link);
+  const kb = Math.round(link.length / 1024);
+  alert("Link copied!\n\nAnyone who opens it gets your whole game — sprites, rooms and code.\n" +
+        "It is " + (kb < 1 ? "under 1" : kb) + " KB long, so it travels in a chat message.\n\n" +
+        "The game rides inside the link itself. Nothing was uploaded anywhere, because a single\n" +
+        "HTML file has no server behind it to upload to.");
+}
+function loadFromHash(){
+  const m = location.hash.match(/^#game=(.+)$/);
+  if (!m) return false;
+  try {
+    const g = unpackGame(m[1]);
+    libLoad(g);
+    project.name = g.name; project.author = g.author;
+    log("opened “" + (g.name || "a shared game") + "”" +
+        (g.author ? " by " + g.author : " (anonymous)") + " from a link", "ok");
+    return true;
+  } catch(e){ log("that share link is damaged", "err"); return false; }
+}
+
+/* ---------- fourth wall: pull another saved game into this one ---------- */
+function importGame(name, line){
+  const all = libRead();
+  const g = all[String(name)];
+  if (!g) throw new Err("no game called “" + name + "” is in My Games", line);
+  R.imported = R.imported || {};
+  R.imported[String(name)] = g;
+  log("imported “" + name + "”");
+}
+function changeGame(name, line){
+  const g = (R.imported || {})[String(name)];
+  if (!g) throw new Err("import “" + name + "” first with importgame(\"" + name + "\")", line);
+  const keep = R.imported;
+  libLoad(g);
+  log("→ changed game to “" + name + "”", "ok");
+  run();
+  R.imported = keep;
+  throw new Stop();      // this program is over; the other one is running now
+}
+
+/* ---------- the My Games window ---------- */
+let libQuery = "";
+function openLib(){ $("lib-ov").classList.add("on"); drawLib(); }
+function closeLib(){ $("lib-ov").classList.remove("on"); }
+
+function drawLib(){
+  const all = libRead();
+  const names = Object.keys(all)
+    .filter(n => !libQuery || (n + " " + (all[n].author || "")).toLowerCase().includes(libQuery.toLowerCase()))
+    .sort((a,b) => (all[b].saved||0) - (all[a].saved||0));
+
+  const box = $("lib-body");
+  box.innerHTML = `
+    <div class="row" style="margin-bottom:12px">
+      <button onclick="libSaveHere()">💾 Save this game here</button>
+      <button onclick="shareLink()">🔗 Share link</button>
+      <button onclick="saveSimple()">⬇ Save .simple file</button>
+      <button onclick="document.getElementById('simplefile').click()">⬆ Open .simple file</button>
+    </div>
+    <input id="lib-search" type="text" placeholder="search your games by name or author"
+           value="${libQuery.replace(/"/g,"&quot;")}" style="margin-bottom:10px">
+    <div id="lib-list" class="cards"></div>`;
+  $("lib-search").oninput = e => { libQuery = e.target.value; drawLib(); $("lib-search").focus(); };
+
+  const list = $("lib-list");
+  if (!names.length){
+    list.innerHTML = `<div class="hint">${Object.keys(all).length ? "nothing matches that search."
+      : "nothing saved yet. Press “Save this game here” and it stays in this browser."}</div>`;
+  }
+  names.forEach(n => {
+    const g = all[n];
+    const d = document.createElement("div");
+    d.className = "card";
+    d.innerHTML = `<b>${escapeHtml(n)}</b>
+      <span>${g.author ? "by " + escapeHtml(g.author) : "anonymous"} · ${MODES[g.mode || "normal"].label} mode
+      · ${(g.sprites||[]).length} sprites · ${(g.rooms||[]).length} rooms</span>`;
+    const strip = document.createElement("div"); strip.className = "art";
+    (g.sprites || []).slice(0, 5).forEach(sp => {
+      const cv = document.createElement("canvas"); cv.width = cv.height = SW;
+      const c = cv.getContext("2d");
+      for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
+        const px = sp[y*SW+x]; if (px < 0) continue;
+        c.fillStyle = PALETTE[px]; c.fillRect(x, y, 1, 1);
+      }
+      strip.appendChild(cv);
+    });
+    d.appendChild(strip);
+    const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "10px";
+    const open = document.createElement("button"); open.textContent = "Open";
+    open.onclick = () => { libLoad(g); project.name = n; project.author = g.author; closeLib(); tab("code"); log("opened “" + n + "”", "ok"); };
+    const del = document.createElement("button"); del.textContent = "Delete";
+    del.onclick = () => { if (confirm("Delete “" + n + "” from this browser?")){ const a2 = libRead(); delete a2[n]; libWrite(a2); drawLib(); } };
+    row.append(open, del);
+    d.appendChild(row);
+    list.appendChild(d);
+  });
+}
+function libSaveHere(){
+  const name = (prompt("Save as:", project.name || "My Game") || "").trim();
+  if (!name) return;
+  const author = prompt("Author name? (leave empty to stay anonymous)", project.author || "") || "";
+  project.name = name; project.author = author;
+  if (libSave(name, author)){ log("saved “" + name + "” to My Games", "ok"); drawLib(); }
+}
+function escapeHtml(t){ return String(t).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
 /* =========================================================
    HELP — different for each mode
@@ -2154,6 +3126,48 @@ the screen stop you.
                           sprite 1 flips through those sprites forever
 <code>animate(1, "1, 2", 20)</code>  a third number = slower (frames per picture)
 
+<code>playerspeed(4)</code>       how fast the player moves
+                          (<code>player_speed()</code> is the same)
+<code>player(1)</code>           says which sprite is the player, if the
+                          engine guessed wrong
+<code>coin(3)</code>             sprite 3 vanishes when you touch it and
+                          adds 1 to the <code>coins</code> variable — as a sprite
+                          and as any tile painted with it
+<code>death(4)</code>            sprite 4 kills you. With <code>lives()</code> you lose one
+                          and go back to the start; without it the
+                          game restarts
+<code>lives(3)</code>            gives you 3 lives, drawn in the corner.
+                          Leave it out and you have infinite ones.
+                          (<code>lifes()</code> works too)
+<code>spring(5)</code>           sprite 5 flings you upwards
+                          (<code>boing()</code> is the same)
+<code>bounce(1, 2)</code>        sprite 1 flies about on its own and bounces
+                          off sprite 2 and off the screen edges
+<code>chase(1, 2)</code>         sprite 1 walks straight at sprite 2
+<code>smartchase(1, 2, 3)</code>  sprite 1 chases sprite 2 in a platformer:
+                          it falls, and jumps over walls and pits.
+                          Sprite 3 is the ground.
+
+<code>reset if y(1) > 240</code>   start the game over when that becomes true
+
+<code>reset if</code>              the block version — any true line resets
+  y(1) > 240
+  x(1) < 0
+<code>end</code>
+
+Breaking the fourth wall:
+
+<code>closegame()</code>         stop the game (<code>close_game()</code> too)
+<code>importgame("My Other Game")</code>
+                        fetch a game you saved in 📚 My Games
+                        (<code>import_game()</code> too)
+<code>changegame("My Other Game")</code>
+                        become that game right now — its sprites,
+                        rooms and code all take over
+                        (<code>change_game()</code> too)
+
+<code>bind("left", "A")</code>     the A key now does what left did
+
 A whole platformer, in Easy mode:
 
 <code>when start</code>
@@ -2168,6 +3182,42 @@ A whole platformer, in Easy mode:
   jump(1, 8)
 <code>end</code>
 
+`;
+
+const HELP_AI = `
+<b style="color:var(--accent2)">AI mode reads plain English.</b> One wish per line. Press Run and it
+writes a real Easy-mode program, then tells you every single thing it understood — and
+anything it didn't, so nothing happens behind your back.
+
+Try lines like these:
+
+  I want a platformer
+  Sprite 1 is the player, sprite 2 is the ground
+  Give me 3 lives
+  Sprite 3 is a coin
+  Sprite 4 kills me
+  Sprite 5 is a spring
+  Sprite 6 chases me
+  Show room 1
+  Player speed 4
+  Use WASD instead of the arrow keys
+  Restart if I fall off the bottom
+  A title screen called Space Dash
+  Add a button called Options
+  Say "collect them all!" at 6 30
+  Animate sprite 1 with sprites 1, 2, 3
+
+Then press <b>Show me the code</b>. It hands you the finished program in Easy
+mode, and from then on it is yours — that is the whole point. AI mode is a
+starting pistol, not a wall.
+
+<b>How it works, honestly:</b> this is not a chatbot and nothing leaves your
+computer. It is a parser I wrote by hand: about twenty rules that look for
+words like "coin", "gravity", "lives" or "chases", pull out the sprite numbers,
+and assemble the program. That is why it works offline on GitHub Pages, needs
+no key, costs nothing, and gives the same answer twice. It also means it only
+knows the things on the list above — when it doesn't understand a line it says
+so rather than quietly ignoring it.
 `;
 
 const HELP_HARD = `
@@ -2204,6 +3254,7 @@ function buildHelp(){
   const m = project.mode || "normal";
   const head = `<h3>${MODES[m].label} mode — every command</h3>`;
   const body = m === "hard" ? HELP_HARD
+             : m === "ai"   ? HELP_AI
              : (m === "easy" ? HELP_EASY_EXTRA + HELP_CORE : HELP_CORE);
   $("helpbox").innerHTML = head +
     `<div class="hint" style="max-width:820px;font-size:13px"><pre style="white-space:pre-wrap">${body}</pre></div>`;
@@ -2213,6 +3264,19 @@ function buildHelp(){
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.4.0", t:"AI mode, sharing, and jobs for sprites",
+    lines:[
+      "<b>AI mode.</b> Type what you want in plain English, one wish per line; Run writes the Easy-mode program, lists everything it understood, and says which lines it couldn't. <b>Show me the code</b> then hands the finished program to you in Easy mode. It is a hand-written intent parser, not a chatbot — offline, no key, same answer every time, and it never guesses silently.",
+      "<b>Easy mode now runs every Normal program too</b>, so nothing is lost by choosing it.",
+      "<b>Jobs for sprites:</b> <code>coin(3)</code>, <code>death(4)</code>, <code>spring(5)</code> / <code>boing(5)</code>, <code>lives(3)</code> / <code>lifes(3)</code>, <code>bounce(1, 2)</code>, <code>chase(1, 2)</code>, <code>smartchase(1, 2, 3)</code>, <code>playerspeed(4)</code> / <code>player_speed(4)</code>, and <code>player(1)</code> when the engine guesses wrong. Coins and deaths work as sprites <i>and</i> as room tiles.",
+      "<b><code>reset if</code></b>, as a one-liner or as a block — the game starts over when it comes true.",
+      "<b>Fourth wall:</b> <code>closegame()</code>, <code>importgame(\"My Other Game\")</code> and <code>changegame(\"My Other Game\")</code>, which swaps in that game's sprites, rooms and code while you play.",
+      "<b><code>bind(\"left\", \"A\")</code></b> remaps any key.",
+      "<b>Import a PNG</b> as a sprite (🖼 button in Paint). Colours snap to the sixteen in the palette; anything bigger than 16×16 asks whether to squash it into one sprite or spread it over a grid of them.",
+      "<b>My Games</b> (📚): save games in this browser, search them by name or author, share as a link that carries the whole game inside the URL, or as a <code>.simple</code> file. Author name per game, or stay anonymous.",
+      "The stage now says how many sprites and room tiles a project holds — because tiles drawn in the Rooms tab appear with no code behind them, which is confusing the first time it happens.",
+      "Templates say in a comment which parts come from the Rooms tab, and two new ones: <b>Just Ask For It</b> (AI) and <b>Coin Quest</b> (Easy)."
+    ] },
   { v:"0.3.0", t:"Simple++",
     lines:[
       "<b>Renamed to Simple++.</b> Old saved projects still load.",
@@ -2270,11 +3334,14 @@ $("code").addEventListener("input", save);
 buildLessons(); buildReleases(); buildHelp();
 setMode(project.mode || "normal", true);
 drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
+drawStageInfo();
 render();
 log("press ▶ Run to start. New here? Open ✦ Templates, or the ★ Learn tab.", "ok");
 
+const cameFromLink = loadFromHash();
+
 // first ever visit: show off the templates straight away
-if (!localStorage.getItem("simplepp-seen")){
+if (!cameFromLink && !localStorage.getItem("simplepp-seen")){
   try { localStorage.setItem("simplepp-seen", "1"); } catch(e){}
   setTimeout(openGallery, 350);
 }
