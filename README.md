@@ -48,6 +48,7 @@ animate(1, "1, 2, 3, 2")   flip through those sprites forever
 ```
 I want a platformer
 Sprite 1 is the player and sprite 2 is the ground
+Make sprite 1 have collision with sprite 2
 Give me 3 lives
 Sprite 3 is a coin
 Restart if I fall off the bottom
@@ -57,8 +58,11 @@ A title screen called Coin Rush
 Run writes the Easy-mode program, lists everything it understood, and names any
 line it couldn't. **Show me the code** hands you the finished program in Easy
 mode to carry on with. It is a hand-written intent parser, not a chatbot — it
-runs offline with no API key, always gives the same answer, and says so when a
-line falls outside its vocabulary instead of ignoring it.
+runs offline with no API key, always gives the same answer, and when a line
+falls outside its vocabulary it says so and suggests the nearest phrasing it
+does know. It reads round the wording: "can't walk through", "bumps into" and
+"is blocked by" all mean collision, and *gold*, *gems* and *treasure* all mean
+coin.
 
 **Hard** — plain JavaScript. The engine arrives as `S`, and you register
 `onStart()`, `onFrame()` and `onKey()` callbacks:

@@ -3,6 +3,27 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.4.1 — A smarter AI mode
+
+### Added
+- **Collision.** `make sprite 1 have collision with sprite 2` now works, along
+  with "can't walk through", "cannot pass through", "bumps into", "is blocked
+  by", "stands on", and `sprite 2 blocks sprite 1` — which names the pair the
+  other way round and is read accordingly. If the description gives the player
+  no way to move, arrow-key movement is added too, since collision with nothing
+  to bump into does nothing.
+- **A normalising pass** runs before any rule: contractions are opened out and
+  near-synonyms folded together, so *gold*, *gems*, *fruit* and *treasure* all
+  reach `coin`, *baddie* and *monster* reach enemy, *my guy* and *hero* reach
+  player, and *hp* reaches lives.
+- Two more wishes: `put sprite 3 at 100 50` and `hide sprite 5`.
+- **Suggestions.** A line it can't place now comes back with the closest
+  phrasing it does know: *did you mean something like: sprite 3 is a coin*.
+
+### Fixed
+- `bind left to the A key` bound the T of "the" instead of A.
+- `make left be "Q"` was read as text to print on screen rather than a binding.
+
 ## 0.4.0 — AI mode, sharing, and jobs for sprites
 
 ### Added
