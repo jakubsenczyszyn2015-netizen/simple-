@@ -3,6 +3,45 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.5.0 — Many walls, doors, and a much faster screen
+
+### Fixed
+- **A second collision replaced the first instead of adding to it.** Movement
+  behaviours stored one wall sprite, so `horizontal(1, 2)` followed by
+  `horizontal(1, 5)` left only sprite 5 solid. Walls are a list now.
+- **Rooms full of blocks ran slowly.** Drawing a 16×16 sprite meant 256
+  `fillRect` calls, so a full room cost 76,800 of them every frame. Sprites are
+  now painted once onto their own canvas, and the tile map is painted once and
+  reused until a tile, the room or the artwork actually changes. A completely
+  full room went from **24 fps to a steady 60**, and the drawing step from
+  **39 ms per frame to about 0.01 ms**.
+
+### Added
+- `solid(2)` / `wall(2)` — marks a sprite solid for everything that moves.
+  Call it once per wall sprite; there is no limit.
+- `horizontal(1, 2, 5)`, `vertical(1, 2, 5)`, `gravity(1, 2, 5)` and
+  `bounce(1, 2, 5)` accept any number of walls. Speed now comes from
+  `playerspeed()` rather than a third argument.
+- `door(5)` — touching sprite 5 moves to the next room; `door(5, 3)` goes to
+  room 3 exactly. `nextroom()` and `next_room()` are the same command. A door is
+  never solid, or there would be no way to walk into it — and if you declare it
+  both, AI mode says so rather than leaving you with a door that does nothing.
+
+### AI mode
+- Reads a **list of walls in one sentence**: "sprite 1 has collision with
+  sprite 2 and sprite 5" now marks both, where before the "and" split it into
+  separate wishes and the second was lost.
+- Understands **doors and exits**: "sprite 5 is a door to the next room",
+  "sprite 7 is an exit to room 3".
+- **Survives typos** one letter out — *colision*, *gravty*, *platfomer*.
+- Follows **"it"** back to the sprite you last named: "sprite 4 kills me. it
+  chases me too".
+- **Takes things back**: "no gravity", "remove the title screen", "without lives".
+- **Difficulty**: "make it hard" speeds up chasers and cuts you to one life;
+  "make it easy" does the opposite.
+- Answers **"hi"** and **"help"** instead of reporting them as gibberish.
+- Ends every run with a **one-line summary** of the game it built.
+
 ## 0.4.1 — A smarter AI mode
 
 ### Added

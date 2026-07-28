@@ -48,7 +48,8 @@ animate(1, "1, 2, 3, 2")   flip through those sprites forever
 ```
 I want a platformer
 Sprite 1 is the player and sprite 2 is the ground
-Make sprite 1 have collision with sprite 2
+Make sprite 1 have collision with sprite 2 and sprite 5
+Sprite 5 is a door to the next room
 Give me 3 lives
 Sprite 3 is a coin
 Restart if I fall off the bottom
@@ -87,6 +88,8 @@ bounce(1, 2)           sprite 1 flies about and bounces off sprite 2
 chase(1, 2)            sprite 1 walks at sprite 2
 smartchase(1, 2, 3)    a chaser that jumps pits and walls (3 is the ground)
 reset if y(1) > 240    start over when that becomes true
+solid(2)               sprite 2 is a wall for everything (call it per wall)
+door(5)                touch it to go to the next room; door(5, 3) for room 3
 bind("left", "A")      remap any key
 ```
 
