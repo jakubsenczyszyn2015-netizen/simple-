@@ -98,7 +98,20 @@ camera(1)              the view follows sprite 1 (camx/camy for one axis)
 resize(1, 10)          ten pixels bigger; size(1, 32) sets it outright
 dialogue("Hi!")        a black box along the bottom with those words
 3dplatformer(1, 2, 3)  experimental: your room, seen from the inside
+addcoin(80, 60)        one coin there; only that one disappears
+changeroomby(1)        go one room along; room_changed asks if it just did
+fliphorizontal(1)      flip it over (flipvertical too)
+fancytitle("Go!")      drops in and bounces; fanciertitle spins as it lands
+exittitle()            leave the title screen from code (entertitle comes back)
+speak("Hello")         says it out loud
+button("Play", 10, 200)  a button; "when button("Play") clicked ... end"
+whenclick(1)           true on the frame you click sprite 1
+move("Hello!", 10, 0)  moves writing, not just sprites
+chatbot("Hi!")         a dialogue box you can type answers into
+fps(30)                how many times a second the game moves
 ```
+
+`if ... else ... end` and `else if` work in Normal mode and up.
 
 `every frame unless <condition> ... end` pauses itself while the condition is
 true and carries on when it stops.
@@ -117,8 +130,9 @@ icon that opens straight into the game without any of that.
 
 ## Sprites from PNGs
 
-The 🖼 button in the Paint tab imports an image. Colours snap to the nearest of
-the sixteen in the palette. Anything larger than 16×16 asks whether to squash it
+The 🖼 button in the Paint tab imports an image. With **Limited colours** ticked
+the colours snap to the nearest in the palette; untick it and the picture keeps
+its own, which get added to the palette. Anything larger than 16×16 asks whether to squash it
 into one sprite or spread it across a grid of sprites.
 
 ## Sharing, My Games, and the gallery
@@ -131,7 +145,8 @@ leave the author blank to stay anonymous), then:
   and whoever opens it has your sprites, rooms and code.
 - **Save .simple** writes the same thing as a file.
 
-🌍 **Gallery** is one list of games that everybody sees, in `games/`.
+🌍 **Gallery** is one list of games that everybody sees: the ones in `games/`
+plus every game posted as an issue. It keeps itself up to date while it's open.
 
 ### How that works without a database
 
@@ -140,7 +155,12 @@ GitHub Pages has no database. It serves files and nothing else. So the gallery
 `.simple` file beside it, and the page fetches them when you open the tab.
 
 **Publish to gallery** opens a GitHub issue already filled in with your whole
-game. Once it's added to `games/`, everyone who opens the site can play it.
+game — and that is the publishing step, because the gallery reads submitted
+issues directly. It also lists anything in `games/`.
+
+The list refreshes every five seconds while open. The network behind it is
+asked about once a minute, because GitHub allows sixty calls an hour from one
+address and a five-second poll would use that up in five minutes.
 Reading is instant and global; publishing goes through a human step. That is
 the honest ceiling of static hosting — instant uploads, accounts and comments
 all need a server, and this project doesn't pretend to have one.

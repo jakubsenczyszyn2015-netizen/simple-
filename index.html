@@ -48,7 +48,7 @@
   #stage-wrap{background:#0c0e13;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px}
   #stage-frame{display:flex;align-items:center;justify-content:center}
   #stage-frame:fullscreen{
-    width:100vw; height:100vh; background:#000; cursor:none;
+    width:100vw; height:100vh; background:#000;
   }
   #stage-frame:fullscreen canvas{border:0; border-radius:0}
   #stage-frame:-webkit-full-screen{width:100vw;height:100vh;background:#000}
@@ -142,12 +142,25 @@
 
   /* an exported game shows the game and nothing else */
   body.play-only header, body.play-only #modeline, body.play-only #console,
-  body.play-only #stage-info, body.play-only .pane, body.play-only #v-code > .col:first-child{
+  body.play-only #stage-info, body.play-only .pane, body.play-only #v-code > .col:first-child,
+  body.play-only #fs-btn, body.play-only #visit-bar, body.play-only .hint,
+  body.play-only #stage-wrap .row{
     display:none !important;
   }
-  body.play-only main{background:#000}
+  body.play-only, body.play-only main, body.play-only #v-code,
+  body.play-only #stage-wrap, body.play-only #stage-frame{
+    background:#000; margin:0; padding:0;
+  }
   body.play-only #v-code{justify-content:center;align-items:center}
-  body.play-only #stage-wrap{background:#000;flex:1;justify-content:center}
+  body.play-only #stage-wrap{flex:1;justify-content:center;gap:0}
+  body.play-only #stage-frame{flex:1;width:100vw}
+  body.play-only canvas{border:0;border-radius:0}
+
+  #visit-bar{
+    background:#4a3a80; color:#fff; padding:7px 14px; font-size:13px;
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  }
+  #visit-bar button{padding:3px 9px;font-size:12px}
 
   label{color:var(--dim);font-size:12px}
   input[type=text],input[type=number]{
@@ -211,7 +224,24 @@
       <div class="row" style="justify-content:center">
         <button id="fs-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
       </div>
+      <div class="row" style="justify-content:center;gap:8px;width:100%;max-width:300px">
+        <label style="flex:1">Speed (frames per second)
+          <input id="fps" type="range" min="5" max="120" step="1" value="60"
+                 oninput="setFps(this.value)" style="width:100%">
+        </label>
+      </div>
+      <div id="fps-label" class="hint"></div>
       <div class="hint">click the stage, then use the arrow keys / z · <b>F</b> for fullscreen</div>
+      <div id="chat-bar" style="display:none;flex-direction:column;gap:6px;width:100%;max-width:480px">
+        <div id="chat-log" style="height:88px;overflow:auto;background:#0c0e13;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;line-height:1.5"></div>
+        <div class="row" style="flex-wrap:nowrap">
+          <input id="chat-input" type="text" placeholder="type an answer and press enter"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();chatSend();}">
+          <button onclick="chatSend()">Send</button>
+          <button onclick="closeChat()">✕</button>
+        </div>
+      </div>
+      <div id="coords" class="hint" style="font-variant-numeric:tabular-nums"></div>
       <div id="stage-info" class="hint" style="text-align:center;max-width:300px"></div>
     </div>
   </section>
@@ -226,6 +256,10 @@
         <button onclick="clearSprite()">Clear</button>
         <button onclick="document.getElementById('pngfile').click()">🖼 PNG</button>
       </div>
+      <label class="row" style="gap:5px;margin-bottom:10px;flex-wrap:nowrap">
+        <input id="png-limited" type="checkbox" checked style="width:auto">
+        <span>Limited colours</span>
+      </label>
       <div id="sprite-list" class="sprites"></div>
     </div>
 
@@ -473,6 +507,7 @@ end
 };
 
 let curSprite = 0, curColor = 8, curRoom = 0, curTile = 1;
+let visiting = false;      // true while looking at a game someone sent you
 
 /* ---------- tiny helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -518,7 +553,7 @@ function spriteCanvas(n){
     for (let x = 0; x < SW; x++){
       const p = s[y * SW + x];
       if (p < 0) continue;
-      c.fillStyle = PALETTE[p];
+      c.fillStyle = PALETTE[p] || "#ff00ff";   // a colour we lost shows up loud, not black
       c.fillRect(x, y, 1, 1);
     }
   }
@@ -874,7 +909,36 @@ function parse(src){
                    .filter(l => l.text.length);
   let i = 0;
 
-  function block(stopAtEnd){
+  /* an if can have an else: read up to "else", then up to "end" */
+  function blockWithElse(){
+    const body = [], other = [];
+    let into = body;
+    while (i < lines.length){
+      const { text, n } = lines[i];
+      if (/^end$/i.test(text)){ i++; return { body, other }; }
+      if (/^else$/i.test(text)){ i++; into = other; continue; }
+      if (/^else\s+if\s+(.+)$/i.test(text)){
+        const cond = text.match(/^else\s+if\s+(.+)$/i)[1];
+        i++;
+        const inner = blockWithElse();
+        other.push({ k:"if", cond, body: inner.body, other: inner.other, n });
+        return { body, other };
+      }
+      const one = block1();
+      if (one) into.push(one);
+    }
+    throw new Err("an if was never closed with 'end'", lines.length ? lines[lines.length-1].n : 1);
+  }
+
+  /* read exactly one statement or block */
+  function block1(){
+    const before = i;
+    const got = block(false, true);
+    if (i === before) i++;
+    return got[0];
+  }
+
+  function block(stopAtEnd, single){
     const out = [];
     while (i < lines.length){
       const { text, n } = lines[i];
@@ -895,9 +959,14 @@ function parse(src){
                                                    out.push({ k:"key", key:m[1].toLowerCase(), body: block(true), n });
       else if ((m = text.match(/^repeat\s+(.+)$/i)))
                                                    out.push({ k:"repeat", count:m[1], body: block(true), n });
-      else if ((m = text.match(/^if\s+(.+?)\s*$/i)))
-                                                   out.push({ k:"if", cond:m[1], body: block(true), n });
+      else if ((m = text.match(/^when\s+button\s*\((.+)\)\s*clicked$/i)))
+                                                   out.push({ k:"button", label:m[1], body: block(true), n });
+      else if ((m = text.match(/^if\s+(.+?)\s*$/i))){
+        const b = blockWithElse();
+        out.push({ k:"if", cond:m[1], body: b.body, other: b.other, n });
+      }
       else                                         out.push({ k:"call", text, n });
+      if (single) return out;
     }
     if (stopAtEnd) throw new Err("a block was never closed with 'end'", lines.length ? lines[lines.length-1].n : 1);
     return out;
@@ -988,6 +1057,14 @@ function evalExpr(src, line){
       case "touching": return touching(args[0], args[1]);
       case "random": return Math.floor(Math.random() * (args[0] || 1));
       case "clickbutton": case "click_button": return wasClicked(args[0], line);
+      case "clicked": case "buttonclicked": case "button_clicked":
+        return R.uiClicks.includes(String(args[0]));
+      case "whenclick": case "when_click": case "clickedsprite":
+        return R.spriteClicks.includes(Math.round(args[0]));
+      case "room_changed": case "roomchanged":
+        return args.length ? R.roomChanged === Math.round(args[0]) : R.roomChanged > 0;
+      case "mousex": return R.mouse.x;
+      case "mousey": return R.mouse.y;
       case "tile": return tileAtPixel(args[0], args[1]);
       case "free": return isFree(args[0], args[1] || 0, args[2] || 0);
       case "key": return !!R.keys[String(args[0]).toLowerCase()];
@@ -997,6 +1074,8 @@ function evalExpr(src, line){
   if (/^\w+$/.test(s)){
     if (s.toLowerCase() === "true")  return true;
     if (s.toLowerCase() === "false") return false;
+    if (s === "room_changed" || s === "roomchanged") return R.roomChanged > 0;
+    if (s === "coins" && !("coins" in R.vars)) return 0;
     if (s in R.vars) return R.vars[s];
     throw new Err("'" + s + "' is not a variable yet — make it with set(" + s + ", 0)", line);
   }
@@ -1016,6 +1095,9 @@ const R = {
   player:0, roles:{}, lives:null, gameOver:false, resetting:false, homes:{},
   solids:[], doorTo:{}, doorCool:0,
   cam:{x:VW/2, y:VH/2, fx:0, fy:0}, dialogue:null, three:null,
+  fps:60, fpsReal:0, acc:0, lastT:undefined,
+  textMoves:{}, uiButtons:{}, uiClicks:[], spriteClicks:[], flips:{},
+  roomChanged:0, coinSpots:[], chat:null, mouse:{x:0,y:0},
   hard:null
 };
 
@@ -1029,9 +1111,23 @@ function actor(n){
   return R.actors[n];
 }
 function touching(a, b){
-  const A = actor(a), B = actor(b);
-  if (!A.on || !B.on) return false;
-  return A.x < B.x + B.w && A.x + A.w > B.x && A.y < B.y + B.h && A.y + A.h > B.y;
+  const A = actor(a);
+  if (!A.on) return false;
+  const B = actor(b);
+  if (B.on &&
+      A.x < B.x + B.w && A.x + A.w > B.x && A.y < B.y + B.h && A.y + A.h > B.y) return true;
+  // ...and the same sprite painted into the room counts as touching too
+  return touchingTile(A, Math.round(b));
+}
+function touchingTile(A, n){
+  const rm = liveRoom(R.room);
+  if (!rm || !n) return false;
+  const x0 = Math.floor(A.x / SW), x1 = Math.floor((A.x + A.w - 1) / SW);
+  const y0 = Math.floor(A.y / SH), y1 = Math.floor((A.y + A.h - 1) / SH);
+  for (let y = Math.max(0, y0); y <= Math.min(ROWS - 1, y1); y++)
+    for (let x = Math.max(0, x0); x <= Math.min(COLS - 1, x1); x++)
+      if (rm[y * COLS + x] === n) return true;
+  return false;
 }
 
 /* which tile sits at a screen position? 0 = nothing there */
@@ -1083,10 +1179,21 @@ function hits(nx, ny, g, self, box){
   return false;
 }
 
-/* ---------- title screens (Easy + Normal) ---------- */
-function showTitle(name){
+function goRoom(n){
+  n = Math.round(n) || 0;
+  if (n === R.room) return;
+  R.room = n;
+  R.roomChanged = n;          // stays true for the rest of this frame and all of the next,
+  R.roomChangedAge = 0;       // so an "if room_changed" anywhere in your code sees it
+  ROOM_EPOCH++;
+}
+
+/* ---------- title screens ---------- */
+function showTitle(name, style){
   R.title = String(name);
+  R.lastTitle = R.title;
   R.buttons = [{ label:"Play", play:true }];
+  R.titleAnim = { style: style || "plain", t: 0 };
 }
 function addTitleButton(label){
   if (!R.title) return;
@@ -1108,10 +1215,39 @@ function buttonRects(){
   R.buttons.forEach((b, i) => out.push({ b, x, y: 128 + i * 30, w, h }));
   return out;
 }
-function stageClick(e){
+function stagePoint(e){
   const r = stage.getBoundingClientRect();
-  const mx = (e.clientX - r.left) / r.width  * VW;
-  const my = (e.clientY - r.top ) / r.height * VH;
+  return { x: (e.clientX - r.left) / r.width  * VW,
+           y: (e.clientY - r.top ) / r.height * VH };
+}
+stage.addEventListener("mousemove", e => {
+  const p = stagePoint(e);
+  R.mouse = { x: Math.round(p.x), y: Math.round(p.y) };
+  const el = $("coords");
+  if (el) el.textContent = "x " + R.mouse.x + "   y " + R.mouse.y;
+});
+
+function stageClick(e){
+  const p = stagePoint(e);
+  const mx = p.x, my = p.y;
+
+  // a button drawn by button("...", x, y)
+  for (const label of Object.keys(R.uiButtons)){
+    const b = R.uiButtons[label];
+    const w = Math.max(30, label.length * 5 + 10);
+    if (mx >= b.x && mx <= b.x + w && my >= b.y - 2 && my <= b.y + 12){
+      R.uiClicks.push(label); beep(2); return;
+    }
+  }
+  // a sprite, wherever the camera has put it
+  const ox = VW / 2 - R.cam.x, oy = VH / 2 - R.cam.y;
+  for (const key of Object.keys(R.actors)){
+    const a = R.actors[key];
+    if (!a.on) continue;
+    if (mx >= a.x + ox && mx <= a.x + ox + a.w && my >= a.y + oy && my <= a.y + oy + a.h)
+      R.spriteClicks.push(+key);
+  }
+
   for (const q of buttonRects()){
     if (mx >= q.x && mx <= q.x + q.w && my >= q.y && my <= q.y + q.h){
       R.clicks.push(q.b.label);
@@ -1230,7 +1366,26 @@ function stepCamera(){
   const fx = R.cam.fx && R.actors[R.cam.fx], fy = R.cam.fy && R.actors[R.cam.fy];
   if (fx) R.cam.x = fx.x + fx.w / 2;
   if (fy) R.cam.y = fy.y + fy.h / 2;
-  if (R.dialogue && --R.dialogue.frames <= 0) R.dialogue = null;
+  if (R.dialogue){
+    const d = R.dialogue;
+    if (d.shown < d.t.length){
+      d.tick++;
+      if (d.tick >= 2){ d.tick = 0; d.shown += 1; if (d.shown % 3 === 0) beep(4); }
+    } else if (--d.frames <= 0) R.dialogue = null;
+  }
+}
+
+function stepCoinSpots(){
+  const p = R.player && R.actors[R.player];
+  if (!p || !p.on) return;
+  for (const c of R.coinSpots){
+    if (c.gone) continue;
+    if (p.x < c.x + SW && p.x + p.w > c.x && p.y < c.y + SH && p.y + p.h > c.y){
+      c.gone = true;                       // only this one disappears
+      R.vars.coins = (+R.vars.coins || 0) + 1;
+      beep(1);
+    }
+  }
 }
 
 function stepRoles(){
@@ -1356,7 +1511,10 @@ class Wait { constructor(f){ this.f = f; } }
 function exec(list){
   for (const st of list){
     if (st.k === "call")        runCall(st);
-    else if (st.k === "if")   { if (evalExpr(st.cond, st.n)) exec(st.body); }
+    else if (st.k === "if"){
+      if (evalExpr(st.cond, st.n)) exec(st.body);
+      else if (st.other && st.other.length) exec(st.other);
+    }
     else if (st.k === "resetif"){ if (evalExpr(st.cond, st.n)) resetGame(); }
     else if (st.k === "resetblock"){
       for (const line of st.body)
@@ -1371,7 +1529,7 @@ function exec(list){
 
 const EASY_ONLY = ["gravity","jump","horizontal","vertical","animate","playerspeed","player_speed",
                    "player","coin","death","lives","lifes","spring","boing","bounce","chase","smartchase",
-                   "solid","wall","door","nextroom","next_room","camx","camy","camera","resize","size",
+                   "solid","wall","door","nextroom","next_room","camx","camy","camera",
                    "3dplatformer","threedplatformer"];
 /* the player is whoever first got a movement command — or player(1) said so */
 function claimPlayer(n, onlyIfUnset){
@@ -1404,10 +1562,22 @@ function runCall(st){
   switch (name){
     case "show":  { const [n] = A(); ensureSprite(Math.round(n)); actor(n).on = true;  break; }
     case "hide":  { const [n] = A(); actor(n).on = false; break; }
-    case "move":  { const [n,dx,dy] = A(); const a = actor(n); a.x += dx||0; a.y += dy||0; break; }
+    case "move":  { const [n,dx,dy] = A();
+                    if (typeof n === "string"){          // move("Hello!", 10, 0) shifts that writing
+                      const m = R.textMoves[n] || { dx:0, dy:0 };
+                      m.dx += dx||0; m.dy += dy||0;
+                      R.textMoves[n] = m;
+                      const btn = R.uiButtons[n];
+                      if (btn){ btn.x += dx||0; btn.y += dy||0; }
+                      break;
+                    }
+                    const a = actor(n); a.x += dx||0; a.y += dy||0; break; }
     case "put":   { const [n,x,y]  = A(); const a = actor(n); a.x = x||0; a.y = y||0; break; }
-    case "print": { const [t,x,y]  = A(); R.texts.push({ t:String(t), x:x||0, y:y||0 }); break; }
-    case "room":  { const [n] = A(); R.room = Math.round(n); break; }
+    case "print": { const [t,x,y]  = A();
+                    const key = String(t);
+                    const m = R.textMoves[key] || { dx:0, dy:0 };
+                    R.texts.push({ t:key, x:(x||0) + m.dx, y:(y||0) + m.dy }); break; }
+    case "room":  { const [n] = A(); goRoom(Math.round(n)); break; }
     case "set":   { R.vars[raw[0]] = raw.length > 1 ? evalExpr(raw[1], st.n) : 0; break; }
     case "add":   { const v = raw[0];
                     if (!(v in R.vars)) R.vars[v] = 0;
@@ -1497,19 +1667,89 @@ function runCall(st){
                      a.smart = { target: Math.round(t), ground: Math.round(g || 0), speed: Math.abs(sp) || 1 };
                      break; }
 
+    /* ---- how fast the game ticks ---- */
+    case "fps": case "framerate": case "frame_rate": {
+      R.fps = Math.max(1, Math.min(240, Math.round(A()[0]) || 60));
+      setFps(R.fps, true);
+      break; }
+
+    /* ---- rooms ---- */
+    case "changeroomby": case "change_room_by": {
+      const by = Math.round(A()[0]) || 0;
+      const rooms = project.rooms.length;
+      let to = R.room + by;
+      while (to > rooms) to -= rooms;
+      while (to < 1) to += rooms;
+      goRoom(to);
+      break; }
+
+    /* ---- one coin at a time ---- */
+    case "addcoin": case "add_coin": {
+      easyOnly(name, st.n);
+      const [x, y, which] = A();
+      R.coinSpots.push({ x:x||0, y:y||0, n: Math.round(which) || 3, gone:false });
+      ensureSprite(Math.round(which) || 3);
+      break; }
+
+    /* ---- flipping ---- */
+    case "fliphorizontal": case "flip_horizontal": case "fliph": {
+      const n = Math.round(A()[0]);
+      R.flips[n] = R.flips[n] || { x:false, y:false };
+      R.flips[n].x = !R.flips[n].x; break; }
+    case "flipvertical": case "flip_vertical": case "flipv": {
+      const n = Math.round(A()[0]);
+      R.flips[n] = R.flips[n] || { x:false, y:false };
+      R.flips[n].y = !R.flips[n].y; break; }
+
+    /* ---- title screens, coming and going ---- */
+    case "fancytitle": case "fancy_title": {
+      showTitle(A()[0], "drop"); collectTitleButtons(R.prog); throw new Wait(0); }
+    case "fanciertitle": case "fancier_title": {
+      showTitle(A()[0], "spin"); collectTitleButtons(R.prog); throw new Wait(0); }
+    case "exittitle": case "exit_title": case "exittitlescreen": {
+      if (R.title){ R.titlesShown[R.title] = true; R.title = null; R.buttons = []; }
+      break; }
+    case "entertitle": case "enter_title": {
+      const t = A()[0];
+      showTitle(t === undefined ? (R.lastTitle || "Game") : t);
+      collectTitleButtons(R.prog);
+      throw new Wait(0); }
+
+    /* ---- talking out loud ---- */
+    case "speak": {
+      const words = String(A()[0]);
+      try {
+        const u = new SpeechSynthesisUtterance(words);
+        u.rate = 1; u.pitch = 1;
+        speechSynthesis.cancel(); speechSynthesis.speak(u);
+      } catch(e){ log("this browser has no voice built in", "err"); }
+      break; }
+
+    /* ---- a button on the screen ---- */
+    case "button": {
+      const [label, x, y] = A();
+      R.uiButtons[String(label)] = { x: x || 0, y: y || 0 };
+      break; }
+
+    /* ---- ask the player something ---- */
+    case "chatbot": {
+      easyOnly(name, st.n);
+      openChat(A()[0]);
+      break; }
+
     /* ---- camera ---- */
     case "camx": { easyOnly(name, st.n); R.cam.fx = Math.round(A()[0]); break; }
     case "camy": { easyOnly(name, st.n); R.cam.fy = Math.round(A()[0]); break; }
     case "camera": { easyOnly(name, st.n); const n = Math.round(A()[0]);
                      R.cam.fx = n; R.cam.fy = n; break; }
 
-    /* ---- size ---- */
-    case "resize": { easyOnly(name, st.n); const [n, by] = A();
+    /* ---- size (any mode) ---- */
+    case "resize": { const [n, by] = A();
                      const a = actor(n);
                      a.w = Math.max(2, Math.min(320, a.w + (by || 0)));
                      a.h = Math.max(2, Math.min(320, a.h + (by || 0)));
                      break; }
-    case "size": { easyOnly(name, st.n); const [n, to] = A();
+    case "size": { const [n, to] = A();
                    const a = actor(n);
                    a.w = a.h = Math.max(2, Math.min(320, to || SW));
                    break; }
@@ -1517,7 +1757,9 @@ function runCall(st){
     /* ---- talking ---- */
     case "dialogue": case "say": {
       const [t] = A();
-      R.dialogue = { t: String(t), frames: 150 };
+      const words = String(t);
+      // typed out letter by letter, the way game dialogue does it
+      R.dialogue = { t: words, shown: 0, frames: 90 + words.length * 2, tick: 0 };
       break; }
 
     /* ---- the experimental 3D platformer ---- */
@@ -1583,6 +1825,9 @@ function startWith(source){
   R.resetting = false; R.homes = {}; R.speed = 3;
   R.solids = []; R.doorTo = {}; R.doorCool = 0;
   R.cam = { x:VW/2, y:VH/2, fx:0, fy:0 }; R.dialogue = null; R.three = null;
+  R.fps = project.fps || 60; R.acc = 0; R.lastT = undefined;
+  R.textMoves = {}; R.uiButtons = {}; R.uiClicks = []; R.spriteClicks = [];
+  R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
   R.vars.coins = 0;                      // coin() counts into this one
   KEYBIND = {};
   if (project.mode === "hard" && !runHard()){ R.running = false; return; }
@@ -1601,8 +1846,12 @@ function doReset(){
   R.resetting = false; R.homes = {}; R.speed = 3;
   R.solids = []; R.doorTo = {}; R.doorCool = 0;
   R.cam = { x:VW/2, y:VH/2, fx:0, fy:0 }; R.dialogue = null; R.three = null;
+  R.textMoves = {}; R.uiButtons = {}; R.uiClicks = []; R.spriteClicks = [];
+  R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
   R.clicks = []; R.vars.coins = 0;
+  R.acc = 0; R.lastT = undefined;
   render();
+  if (R.running){ cancelAnimationFrame(R.raf); R.raf = requestAnimationFrame(loop); }
 }
 
 function stop(){
@@ -1620,33 +1869,64 @@ function safe(body, what){
   }
 }
 
-function loop(){
+/* The browser hands us a frame ~60 times a second. The slider decides how
+   many of those actually move the game on, so a game can run slow and
+   chunky or as fast as the screen allows, without the code changing. */
+function loop(now){
   if (!R.running) return;
   R.raf = requestAnimationFrame(loop);
 
+  const target = 1000 / Math.max(1, R.fps || 60);
+  if (R.lastT === undefined) R.lastT = now || 0;
+  let dt = (now || 0) - R.lastT;
+  if (dt < 0 || dt > 1000) dt = target;          // tab was hidden, or the clock jumped
+  R.lastT = now || 0;
+  R.acc = (R.acc || 0) + dt;
+
+  let steps = 0;
+  while (R.acc >= target && steps < 5){          // never spiral trying to catch up
+    R.acc -= target;
+    steps++;
+    if (!step()) return;                          // stopped, or reset itself
+  }
+  if (steps) countFps();
+}
+
+/* how many game steps actually happened in the last second */
+function countFps(){
+  const t = performance.now();
+  R.fpsWindow = (R.fpsWindow || []).filter(v => t - v < 1000);
+  R.fpsWindow.push(t);
+  R.fpsReal = R.fpsWindow.length;
+  const el = $("fps-label");
+  if (el && R.frame % 10 === 0)
+    el.textContent = "aiming for " + R.fps + " · actually " + R.fpsReal;
+}
+
+function step(){
   // a title screen freezes the program until a button is pressed
-  if (R.title){ R.clicks = []; render(); return; }
+  if (R.title){ R.clicks = []; render(); return true; }
 
   if (R.gameOver){                       // out of lives — click to try again
-    if (R.clicks.length || R.clickedStage){ R.clickedStage = false; doReset(); return; }
+    if (R.clicks.length || R.clickedStage){ R.clickedStage = false; doReset(); return false; }
     R.texts = [{ t:"GAME OVER", x:124, y:104 }, { t:"click to try again", x:104, y:120 }];
-    render(); return;
+    render(); return true;
   }
 
-  if (R.waitFrames > 0){ R.waitFrames--; render(); return; }
+  if (R.waitFrames > 0){ R.waitFrames--; render(); return true; }
   R.texts = [];
 
   R.extra = [];
 
   if (R.hard){
-    if (!hardLoop()) return;
+    if (!hardLoop()) return false;
     stepBehaviours(); stepCamera();
-    R.frame++; render(); return;
+    R.frame++; render(); return true;
   }
 
   if (!R.startDone){
     R.startDone = true;
-    for (const b of R.prog) if (b.k === "start") if (!safe(b.body, "when start")) return;
+    for (const b of R.prog) if (b.k === "start") if (!safe(b.body, "when start")) return false;
   }
   for (const b of R.prog){
     if (b.k === "frame"){
@@ -1654,27 +1934,35 @@ function loop(){
       if (b.unless){
         let paused = false;
         try { paused = !!evalExpr(b.unless, b.n); }
-        catch(e){ log("Oops in every frame unless — " + e, "err"); stop(); return; }
+        catch(e){ log("Oops in every frame unless — " + e, "err"); stop(); return false; }
         if (paused) continue;
       }
-      if (!safe(b.body, "every frame")) return;
+      if (!safe(b.body, "every frame")) return false;
     }
-    else if (b.k === "key" && R.keys[b.key]){ if (!safe(b.body, "when key " + b.key)) return; }
+    else if (b.k === "key" && R.keys[b.key]){ if (!safe(b.body, "when key " + b.key)) return false; }
+    else if (b.k === "button"){
+      let label = "";
+      try { label = String(evalExpr(b.label, b.n)); } catch(e){ label = b.label.replace(/"/g, ""); }
+      if (R.uiClicks.includes(label) && !safe(b.body, "when button clicked")) return false;
+    }
     else if (b.k === "call" || b.k === "if" || b.k === "repeat" ||
              b.k === "resetif" || b.k === "resetblock"){
       // loose top-level lines run once, like "when start"
-      if (R.frame === 0 && !safe([b], "your code")) return;
+      if (R.frame === 0 && !safe([b], "your code")) return false;
     }
   }
   stepBehaviours();
   stepRoles();
+  stepCoinSpots();
   stepCamera();
   if (R.three) step3D();
-  if (R.resetting){ doReset(); return; }
+  if (R.resetting){ doReset(); return false; }
   R.lastButtons = R.buttons.map(b => b.label);
-  R.clicks = [];
+  R.clicks = []; R.uiClicks = []; R.spriteClicks = [];
+  if (R.roomChanged){ if (R.roomChangedAge++ >= 1) R.roomChanged = 0; }
   R.frame++;
   render();
+  return true;
 }
 
 function render(){
@@ -1691,13 +1979,26 @@ function render(){
   if (bg) sctx.drawImage(bg, ox, oy);
 
   for (const e of (R.extra || [])) blit(sctx, e.n, Math.round(e.x) + ox, Math.round(e.y) + oy);
+  for (const c of R.coinSpots){          // coins placed one at a time
+    if (!c.gone) blit(sctx, c.n, Math.round(c.x) + ox, Math.round(c.y) + oy);
+  }
   for (const n of Object.keys(R.actors)){
     const a = R.actors[n];
     if (!a.on) continue;
     const which = a.anim ? a.anim.list[a.anim.i] : +n;
     const cv = spriteCanvas(which);
-    if (cv) sctx.drawImage(cv, Math.round(a.x) + ox, Math.round(a.y) + oy,
-                               Math.round(a.w), Math.round(a.h));
+    if (!cv) continue;
+    const f = R.flips[+n];
+    const x = Math.round(a.x) + ox, y = Math.round(a.y) + oy;
+    if (f && (f.x || f.y)){
+      sctx.save();
+      sctx.translate(x + (f.x ? a.w : 0), y + (f.y ? a.h : 0));
+      sctx.scale(f.x ? -1 : 1, f.y ? -1 : 1);
+      sctx.drawImage(cv, 0, 0, Math.round(a.w), Math.round(a.h));
+      sctx.restore();
+    } else {
+      sctx.drawImage(cv, x, y, Math.round(a.w), Math.round(a.h));
+    }
   }
   drawHUD();
 }
@@ -1716,6 +2017,14 @@ function drawHUD(){
     sctx.fillStyle = "#000"; sctx.fillText(txt, VW - 47, 7);
     sctx.fillStyle = "#ff6b6b"; sctx.fillText(txt, VW - 48, 6);
   }
+  for (const label of Object.keys(R.uiButtons)){       // button("...", x, y)
+    const b = R.uiButtons[label];
+    const w = Math.max(30, label.length * 5 + 10);
+    sctx.fillStyle = "#232734"; sctx.fillRect(b.x, b.y - 2, w, 14);
+    sctx.strokeStyle = "#5ac8fa"; sctx.lineWidth = 1;
+    sctx.strokeRect(b.x + .5, b.y - 1.5, w - 1, 13);
+    sctx.fillStyle = "#e8ecf5"; sctx.fillText(label, b.x + 5, b.y + 2);
+  }
   if (R.dialogue) drawDialogue();
 }
 
@@ -1729,7 +2038,7 @@ function drawDialogue(){
 
   sctx.font = "8px ui-monospace,monospace";
   sctx.fillStyle = "#fff";
-  const words = R.dialogue.t.split(" ");
+  const words = R.dialogue.t.slice(0, R.dialogue.shown).split(" ");
   const maxW = VW - 26;
   let line = "", y = top + 8;
   for (const w of words){
@@ -1743,149 +2052,287 @@ function drawDialogue(){
 }
 
 /* =========================================================
-   3D PLATFORMER (experimental)
-   The room grid you painted becomes a maze seen from the inside.
-   Every solid tile is a wall, textured with the ground sprite;
-   coins float in it as flat pictures that always face you.
+   CHATBOT
+   A dialogue box you can answer. It replies from a small set of
+   rules; if a real model is connected in AI mode, it asks that
+   instead so the answers are properly its own.
+   ========================================================= */
+function openChat(greeting){
+  R.chat = { history: [] };
+  const box = $("chat-bar");
+  box.style.display = "flex";
+  $("chat-log").innerHTML = "";
+  chatSay("them", String(greeting === undefined ? "Hello! Ask me anything." : greeting));
+  $("chat-input").value = "";
+  setTimeout(() => $("chat-input").focus(), 30);
+}
+function closeChat(){
+  R.chat = null;
+  const box = $("chat-bar");
+  if (box) box.style.display = "none";
+}
+function chatSay(who, words){
+  const line = document.createElement("div");
+  line.textContent = (who === "you" ? "you: " : "» ") + words;
+  line.style.color = who === "you" ? "var(--dim)" : "var(--fg)";
+  $("chat-log").appendChild(line);
+  $("chat-log").scrollTop = $("chat-log").scrollHeight;
+  if (R.chat) R.chat.history.push({ who, words });
+}
+
+const CHAT_RULES = [
+  [/\b(hello|hi|hey|yo)\b/i,            ["Hello! What are you making?", "Hey. Ready when you are.", "Hi there."]],
+  [/\b(how are you|you ok|how r u)\b/i, ["Running at sixty frames a second, thanks.", "Made of about four thousand lines. Fine."]],
+  [/\bname\b/i,                          ["I have not got one. You could give me one.", "Call me whatever you like."]],
+  [/\b(help|stuck|how do i)\b/i,        ["Try the ★ Learn tab — ten short steps.", "The ? Help tab lists every command."]],
+  [/\b(coin|score|point)\b/i,           ["coin(3) makes sprite 3 collectable.", "addcoin(80, 60) drops one exactly there."]],
+  [/\b(jump|gravity|platformer)\b/i,    ["gravity(1, 2) then jump(1, 8) in a when key up block.", "A platformer is three lines in Easy mode."]],
+  [/\b(bye|goodbye|stop|quit)\b/i,      ["See you.", "Bye!"]],
+  [/\b(yes|yeah|yep)\b/i,               ["Good.", "Right then."]],
+  [/\b(no|nope|nah)\b/i,                ["Fair enough.", "All right."]],
+  [/\?\s*$/,                             ["Good question. I only know a little.", "Not sure — try it and see what happens."]]
+];
+function chatReply(said){
+  for (const [re, answers] of CHAT_RULES)
+    if (re.test(said)) return answers[Math.floor(Math.random() * answers.length)];
+  const fallbacks = [
+    "Tell me more.", "Interesting. What else?", "I did not follow that, but go on.",
+    "Say that another way?", "Hm. And then?"
+  ];
+  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+}
+async function chatSend(){
+  const said = ($("chat-input").value || "").trim();
+  if (!said) return;
+  $("chat-input").value = "";
+  chatSay("you", said);
+  if (/\b(bye|goodbye|quit)\b/i.test(said)){ chatSay("them", "Bye!"); setTimeout(closeChat, 700); return; }
+
+  if (aiKey()){                       // a real model is connected — let it answer
+    try {
+      const reply = await askChatModel(said);
+      chatSay("them", reply);
+      return;
+    } catch(e){ /* fall through to the built-in answers */ }
+  }
+  chatSay("them", chatReply(said));
+}
+
+/* =========================================================
+   3D PLATFORMER  (rebuilt)
+   Your room, exactly as you painted it, seen from inside.
+   One column of screen per ray; each wall column is sampled
+   from the real pixels of whichever sprite you painted there,
+   so a wall of bricks looks like bricks and a wall of grass
+   looks like grass. Every non-empty tile that is not the coin
+   sprite is a wall — nothing is invented and nothing is moved.
    ========================================================= */
 function start3D(player, ground, coin){
   ensureSprite(ground); ensureSprite(coin);
   R.three = {
     player, ground, coin,
-    px: 1.5, py: 1.5, dir: 0,          // where you are on the tile grid, and which way you face
-    walk: 0.055, turn: 0.045,
-    got: new Set()
+    px: 1.5, py: 1.5, dir: 0, vz: 0, z: 0,
+    walk: 0.06, turn: 0.05,
+    got: new Set(),
+    cols: null
   };
   R.player = player;
-  // stand in the first empty tile so you never start inside a wall
   const rm = liveRoom(R.room) || [];
-  for (let i = 0; i < rm.length; i++)
-    if (!rm[i]){ R.three.px = (i % COLS) + 0.5; R.three.py = Math.floor(i / COLS) + 0.5; break; }
+  // stand in the middle of the first empty tile, so you never begin inside a wall
+  for (let i = 0; i < rm.length; i++){
+    if (!rm[i] || rm[i] === coin){
+      R.three.px = (i % COLS) + 0.5;
+      R.three.py = Math.floor(i / COLS) + 0.5;
+      break;
+    }
+  }
 }
-function solid3D(cx, cy){
+
+/* what is painted at this tile: 0 for nothing, otherwise the sprite number */
+function tile3D(cx, cy){
   const rm = liveRoom(R.room);
-  if (!rm) return false;
-  if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) return true;   // the world has edges
-  return !!rm[cy * COLS + cx];
+  if (!rm) return 0;
+  if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) return -1;   // outside the room is solid
+  return rm[cy * COLS + cx] || 0;
 }
+function wall3D(cx, cy){
+  const t = tile3D(cx, cy);
+  if (t === -1) return -1;
+  return (t && t !== R.three.coin) ? t : 0;      // coins are not walls
+}
+
+/* the pixels of a sprite, kept ready so the walls can be textured */
+const texCache = new Map();
+function texture(n){
+  const hit = texCache.get(n);
+  if (hit && hit.epoch === SPRITE_EPOCH) return hit.data;
+  const cv = spriteCanvas(n);
+  if (!cv) return null;
+  const data = cv.getContext("2d").getImageData(0, 0, SW, SH).data;
+  texCache.set(n, { epoch: SPRITE_EPOCH, data });
+  return data;
+}
+
 function step3D(){
   const t = R.three;
   if (R.keys.left)  t.dir -= t.turn;
   if (R.keys.right) t.dir += t.turn;
+
   let mv = 0;
   if (R.keys.up)   mv += t.walk;
   if (R.keys.down) mv -= t.walk;
   if (mv){
-    const nx = t.px + Math.cos(t.dir) * mv, ny = t.py + Math.sin(t.dir) * mv;
-    if (!solid3D(Math.floor(nx), Math.floor(t.py))) t.px = nx;    // slide along walls
-    if (!solid3D(Math.floor(t.px), Math.floor(ny))) t.py = ny;
+    const nx = t.px + Math.cos(t.dir) * mv;
+    const ny = t.py + Math.sin(t.dir) * mv;
+    const pad = 0.18;                              // keep your nose out of the wall
+    if (!wall3D(Math.floor(nx + Math.sign(mv) * pad * Math.cos(t.dir)), Math.floor(t.py))) t.px = nx;
+    if (!wall3D(Math.floor(t.px), Math.floor(ny + Math.sign(mv) * pad * Math.sin(t.dir)))) t.py = ny;
   }
-  // coins are the tiles painted with the coin sprite
-  const rm = liveRoom(R.room);
-  if (rm){
-    const cx = Math.floor(t.px), cy = Math.floor(t.py);
-    const key = cy * COLS + cx;
-    if (rm[key] === t.coin && !t.got.has(key)){
-      t.got.add(key);
-      R.vars.coins = (+R.vars.coins || 0) + 1;
-      beep(1);
-    }
+
+  // a little hop, so it is a platformer and not only a maze
+  if ((R.keys.space || R.keys.z) && t.z === 0) t.vz = 0.11;
+  if (t.vz || t.z > 0){
+    t.z += t.vz;
+    t.vz -= 0.012;
+    if (t.z <= 0){ t.z = 0; t.vz = 0; }
+  }
+
+  const cx = Math.floor(t.px), cy = Math.floor(t.py);
+  const key = cy * COLS + cx;
+  if (tile3D(cx, cy) === t.coin && !t.got.has(key)){
+    t.got.add(key);
+    R.vars.coins = (+R.vars.coins || 0) + 1;
+    beep(1);
   }
 }
+
 function render3D(){
   const t = R.three;
-  const tex = spriteCanvas(t.ground);
-  const texData = tex ? tex.getContext("2d").getImageData(0, 0, SW, SH).data : null;
+  const horizon = VH / 2 + t.z * VH;
 
-  sctx.fillStyle = "#1d2b53"; sctx.fillRect(0, 0, VW, VH / 2);        // sky
-  sctx.fillStyle = "#5f574f"; sctx.fillRect(0, VH / 2, VW, VH / 2);   // ground
+  sctx.fillStyle = "#0e1430"; sctx.fillRect(0, 0, VW, horizon);           // sky
+  sctx.fillStyle = "#2a2620"; sctx.fillRect(0, horizon, VW, VH - horizon); // floor
 
-  const fov = 0.85, step = 2;             // 2px columns: plenty at this size, twice the speed
-  const zbuf = new Array(VW).fill(99);
+  const fov = 0.9;
+  const zbuf = new Array(VW).fill(1e9);
+  const dirX = Math.cos(t.dir), dirY = Math.sin(t.dir);
+  const planeX = -dirY * fov,   planeY = dirX * fov;
 
-  for (let sx = 0; sx < VW; sx += step){
+  for (let sx = 0; sx < VW; sx++){
     const camx = (2 * sx) / VW - 1;
-    const ang = t.dir + Math.atan(camx * fov);
-    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const rx = dirX + planeX * camx, ry = dirY + planeY * camx;
 
-    // step tile by tile until something solid is in the way
     let mx = Math.floor(t.px), my = Math.floor(t.py);
-    const ddx = Math.abs(1 / (dx || 1e-6)), ddy = Math.abs(1 / (dy || 1e-6));
-    let sxs = dx < 0 ? -1 : 1, sys = dy < 0 ? -1 : 1;
-    let sdx = dx < 0 ? (t.px - mx) * ddx : (mx + 1 - t.px) * ddx;
-    let sdy = dy < 0 ? (t.py - my) * ddy : (my + 1 - t.py) * ddy;
-    let side = 0, guard = 0;
-    while (guard++ < 64){
-      if (sdx < sdy){ sdx += ddx; mx += sxs; side = 0; }
-      else          { sdy += ddy; my += sys; side = 1; }
-      if (solid3D(mx, my)) break;
+    const ddx = Math.abs(1 / (rx || 1e-9)), ddy = Math.abs(1 / (ry || 1e-9));
+    const stepX = rx < 0 ? -1 : 1, stepY = ry < 0 ? -1 : 1;
+    let sdx = rx < 0 ? (t.px - mx) * ddx : (mx + 1 - t.px) * ddx;
+    let sdy = ry < 0 ? (t.py - my) * ddy : (my + 1 - t.py) * ddy;
+
+    let side = 0, tileHere = 0, guard = 0;
+    while (guard++ < 128){
+      if (sdx < sdy){ sdx += ddx; mx += stepX; side = 0; }
+      else          { sdy += ddy; my += stepY; side = 1; }
+      tileHere = wall3D(mx, my);
+      if (tileHere) break;
     }
-    const dist = side === 0 ? (mx - t.px + (1 - sxs) / 2) / (dx || 1e-6)
-                            : (my - t.py + (1 - sys) / 2) / (dy || 1e-6);
-    const d = Math.max(0.08, Math.abs(dist));
-    for (let k = 0; k < step; k++) zbuf[sx + k] = d;
+    const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
+    const d = Math.max(0.05, dist);
+    zbuf[sx] = d;
 
-    const hgt = Math.min(VH * 4, VH / d);
-    const top = (VH - hgt) / 2;
+    const hgt = VH / d;
+    const top = horizon - hgt / 2;
 
-    // which column of the texture this ray landed on
-    let wallX = side === 0 ? t.py + dist * dy : t.px + dist * dx;
+    let wallX = side === 0 ? t.py + d * ry : t.px + d * rx;
     wallX -= Math.floor(wallX);
+    if ((side === 0 && rx > 0) || (side === 1 && ry < 0)) wallX = 1 - wallX;
     const tx = Math.min(SW - 1, Math.max(0, Math.floor(wallX * SW)));
 
-    if (texData){
-      const rows = 8;                       // a few bands is enough at this resolution
-      for (let r = 0; r < rows; r++){
-        const ty = Math.floor((r / rows) * SH);
-        const i = (ty * SW + tx) * 4;
-        const shade = (side === 1 ? 0.62 : 1) * Math.max(0.25, Math.min(1, 2.6 / d));
-        if (texData[i+3] < 40){ continue; }
-        sctx.fillStyle = `rgb(${texData[i]*shade|0},${texData[i+1]*shade|0},${texData[i+2]*shade|0})`;
-        sctx.fillRect(sx, top + (hgt * r) / rows, step, hgt / rows + 1);
-      }
-    } else {
-      sctx.fillStyle = side === 1 ? "#444" : "#777";
-      sctx.fillRect(sx, top, step, hgt);
+    const data = texture(tileHere > 0 ? tileHere : t.ground);
+    const shade = (side === 1 ? 0.66 : 1) * Math.max(0.22, Math.min(1, 3 / d));
+
+    if (!data){
+      sctx.fillStyle = side ? "#3a3a3a" : "#606060";
+      sctx.fillRect(sx, top, 1, hgt);
+      continue;
+    }
+    // walk down the sprite's own column of pixels, one strip each
+    const strip = hgt / SH;
+    for (let ty = 0; ty < SH; ty++){
+      const i = (ty * SW + tx) * 4;
+      if (data[i + 3] < 40) continue;
+      sctx.fillStyle = "rgb(" + ((data[i]*shade)|0) + "," + ((data[i+1]*shade)|0) + "," + ((data[i+2]*shade)|0) + ")";
+      sctx.fillRect(sx, top + ty * strip, 1, strip + 1);
     }
   }
 
-  // coins, drawn as flat pictures that always face you
+  // the coins you painted, standing where you put them
   const rm = liveRoom(R.room);
   if (rm){
     const seen = [];
     for (let i = 0; i < rm.length; i++){
       if (rm[i] !== t.coin || t.got.has(i)) continue;
       const wx = (i % COLS) + 0.5 - t.px, wy = Math.floor(i / COLS) + 0.5 - t.py;
-      seen.push({ i, wx, wy, d: wx*wx + wy*wy });
+      seen.push({ wx, wy, d: wx*wx + wy*wy });
     }
     seen.sort((a, b) => b.d - a.d);
+    const inv = 1 / (planeX * dirY - dirX * planeY);
     for (const sp of seen){
-      const ca = Math.cos(-t.dir), sa = Math.sin(-t.dir);
-      const rx = sp.wx * ca - sp.wy * sa;      // forward
-      const ry = sp.wx * sa + sp.wy * ca;      // sideways
-      if (rx <= 0.15) continue;
-      const size = Math.min(VH, VH / rx * 0.7);
-      const sx = VW / 2 + (ry / rx) * (VW / 2) / 0.85 - size / 2;
-      if (sx + size < 0 || sx > VW) continue;
-      if (zbuf[Math.max(0, Math.min(VW - 1, Math.round(sx + size / 2)))] < rx) continue;
-      blitBox(t.coin, sx, VH / 2 - size / 2 + size * 0.2, size, size);
+      const tx2 = inv * (dirY * sp.wx - dirX * sp.wy);
+      const ty2 = inv * (-planeY * sp.wx + planeX * sp.wy);
+      if (ty2 <= 0.2) continue;
+      const screenX = (VW / 2) * (1 + tx2 / ty2);
+      const size = Math.abs(VH / ty2) * 0.55;
+      const left = Math.round(screenX - size / 2);
+      const cv = spriteCanvas(t.coin);
+      if (!cv) continue;
+      // hide the parts of it that are behind a wall
+      for (let col = 0; col < size; col++){
+        const px = left + col;
+        if (px < 0 || px >= VW || zbuf[px] < ty2) continue;
+        sctx.drawImage(cv, Math.floor(col / size * SW), 0, 1, SH,
+                       px, horizon - size / 2 + size * 0.15, 1, size);
+      }
     }
   }
-}
-function blitBox(n, x, y, w, h){
-  const cv = spriteCanvas(n);
-  if (cv) sctx.drawImage(cv, x, y, w, h);
 }
 
 function drawTitle(){
   sctx.fillStyle = "#0b0e18";
   sctx.fillRect(0, 0, VW, VH);
 
+  const anim = R.titleAnim || { style:"plain", t:0 };
+  anim.t++;
   sctx.textAlign = "center";
   sctx.font = "bold 26px ui-monospace,monospace";
-  sctx.fillStyle = "#0b1017"; sctx.fillText(R.title, VW/2 + 2, 60);
-  sctx.fillStyle = "#ffd166"; sctx.fillText(R.title, VW/2, 58);
 
+  let y = 58, squash = 1;
+  if (anim.style === "drop"){
+    // falls in from above and bounces once before settling
+    const t = Math.min(1, anim.t / 45);
+    const e = 1 - Math.pow(1 - t, 3);
+    y = -40 + (58 + 40) * e;
+    const after = anim.t - 45;
+    if (after > 0 && after < 26) y -= Math.sin((after / 26) * Math.PI) * 16;   // the bounce
+  } else if (anim.style === "spin"){
+    // drops in while spinning on its middle, slowing to face the front
+    const t = Math.min(1, anim.t / 40);
+    y = -40 + (58 + 40) * (1 - Math.pow(1 - t, 3));
+    const spinFor = 110;
+    if (anim.t < spinFor){
+      const left = 1 - anim.t / spinFor;
+      squash = Math.cos(anim.t * 0.22 * left * left + 0.0001);
+      if (Math.abs(squash) < 0.06) squash = squash < 0 ? -0.06 : 0.06;
+    } else squash = 1;                        // always ends facing you
+  }
+
+  sctx.save();
+  sctx.translate(VW / 2, 0);
+  sctx.scale(squash, 1);
+  sctx.fillStyle = "#0b1017"; sctx.fillText(R.title, 2 / (squash || 1), y + 2);
+  sctx.fillStyle = "#ffd166"; sctx.fillText(R.title, 0, y);
+  sctx.restore();
+
+  if ((R.titleAnim || {}).style !== "plain" && (R.titleAnim || {}).t < 40){ sctx.textAlign = "left"; return; }
   sctx.font = "10px ui-monospace,monospace";
   for (const q of buttonRects()){
     sctx.fillStyle = "#232734";
@@ -1928,7 +2375,7 @@ function setMode(m, quiet){
   const ai = m === "ai";
   $("ai-remember-wrap").style.display = ai ? "flex" : "none";
   $("ai-key-btn").style.display = ai ? "inline-block" : "none";
-  if (ai) $("ai-key-btn").textContent = aiKey() ? "⚡ Real AI: on" : "⚡ Real AI";
+  if (ai) $("ai-key-btn").textContent = aiKey() ? "⚡ " + aiConf().label : "⚡ Real AI";
   buildHelp(); buildLessons();
   if (changed && !quiet){
     stop();
@@ -2092,8 +2539,15 @@ function exportHtml(){
   save();
   const game = gameNow(name || "My Game", author);
 
-  // the page is self-contained, so its own markup is the player
-  const source = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+  // the page is self-contained, so its own markup is the player — but it has to
+  // be serialised in a clean state, or whatever window was open comes along too
+  const clone = document.documentElement.cloneNode(true);
+  clone.querySelectorAll("#overlay, #png-ov, #lib-ov, #export-ov").forEach(el => el.classList.remove("on"));
+  clone.querySelectorAll("#visit-bar").forEach(el => el.remove());
+  const con = clone.querySelector("#console"); if (con) con.innerHTML = "";
+  const ta = clone.querySelector("#code"); if (ta) ta.textContent = "";
+  clone.querySelector("body").className = "";
+  const source = "<!DOCTYPE html>\n" + clone.outerHTML;
   const inject = "<script>window.SIMPLE_GAME=" + JSON.stringify(game).replace(/</g, "\\u003c") + ";<\/script>";
   const out = source.replace("</head>", inject + "\n</head>");
 
@@ -2113,7 +2567,20 @@ function bootStandalone(g){
   document.body.classList.add("play-only");
   libLoad(g);
   document.title = (g.name || "A Simple++ game") + (g.author ? " — " + g.author : "");
+  fitStage();
+  window.addEventListener("resize", fitStage);
   setTimeout(() => { run(); stage.focus(); }, 60);
+}
+
+/* how many times a second the game moves on */
+function setFps(v, fromCode){
+  const n = Math.max(1, Math.min(240, Math.round(+v) || 60));
+  R.fps = n;
+  if (!fromCode){ project.fps = n; save(); }
+  $("fps").value = Math.min(120, n);
+  $("fps-label").textContent = R.running
+    ? "aiming for " + n + " · actually " + (R.fpsReal || n)
+    : n + " frames per second" + (n === 60 ? " (normal)" : n < 30 ? " (chunky)" : "");
 }
 
 /* =========================================================
@@ -2138,8 +2605,9 @@ function toggleFullscreen(){
 }
 function fitStage(){
   const big = fullscreenOn();
+  const standalone = document.body.classList.contains("play-only");
   $("fs-btn").textContent = big ? "⛶ Leave fullscreen" : "⛶ Fullscreen";
-  if (!big){
+  if (!big && !standalone){
     stage.style.width = "480px";
     stage.style.height = "360px";
     return;
@@ -2169,6 +2637,7 @@ window.addEventListener("keydown", e => {
 function save(){
   SPRITE_EPOCH++; ROOM_EPOCH++;          // art or tiles may have changed
   project.code = $("code").value;
+  if (visiting) return;                  // a game opened from a link never overwrites yours
   try { localStorage.setItem("simplepp", JSON.stringify(project)); } catch(e){}
 }
 function load(){
@@ -3530,22 +3999,103 @@ Add a title screen called My First AI Game.
    anything at all goes wrong.
    ========================================================= */
 const AI_KEY_STORE = "simplepp-aikey";
+const AI_PROVIDER_STORE = "simplepp-aiprovider";
+
+/* Anything that speaks either the Anthropic or the OpenAI shape works —
+   which is nearly everything, because Groq, OpenRouter, Together, Mistral,
+   DeepSeek and local servers all copy OpenAI's. */
+const AI_PROVIDERS = {
+  claude:     { label:"Claude (Anthropic)", url:"https://api.anthropic.com/v1/messages",
+                shape:"anthropic", model:"claude-sonnet-5" },
+  openai:     { label:"ChatGPT (OpenAI)",   url:"https://api.openai.com/v1/chat/completions",
+                shape:"openai", model:"gpt-4o-mini" },
+  groq:       { label:"Groq",               url:"https://api.groq.com/openai/v1/chat/completions",
+                shape:"openai", model:"llama-3.3-70b-versatile" },
+  openrouter: { label:"OpenRouter",         url:"https://openrouter.ai/api/v1/chat/completions",
+                shape:"openai", model:"anthropic/claude-3.5-sonnet" },
+  other:      { label:"Something else (OpenAI-shaped)", url:"", shape:"openai", model:"" }
+};
+
 function aiKey(){ try { return localStorage.getItem(AI_KEY_STORE) || ""; } catch(e){ return ""; } }
+function aiProvider(){
+  try { return JSON.parse(localStorage.getItem(AI_PROVIDER_STORE)) || null; } catch(e){ return null; }
+}
+function aiConf(){
+  const p = aiProvider() || { id:"claude" };
+  const base = AI_PROVIDERS[p.id] || AI_PROVIDERS.claude;
+  return { id:p.id, shape:base.shape,
+           url:  p.url   || base.url,
+           model:p.model || base.model,
+           label:base.label };
+}
+
 function setAIKey(){
-  const now = aiKey();
-  const msg = now
-    ? "A key is set. Paste a new one to replace it, or clear the box and press OK to switch back to the built-in reader."
-    : "AI mode works fine without this.\n\nIf you have an Anthropic API key, paste it here and Claude will " +
-      "write your game instead of the built-in reader. The key stays in this browser and goes " +
-      "only to Anthropic. Leave it empty to keep using the built-in one.";
-  const v = prompt(msg, now);
-  if (v === null) return;
+  const names = Object.keys(AI_PROVIDERS);
+  const menu = names.map((k, i) => (i + 1) + ") " + AI_PROVIDERS[k].label).join("\n");
+  const now = aiProvider() || { id:"claude" };
+  const pickTxt = prompt("Which one is your key for?\n\n" + menu +
+                         "\n\nType a number. Leave empty to cancel.",
+                         String(names.indexOf(now.id) + 1 || 1));
+  if (pickTxt === null || !pickTxt.trim()) return;
+  const id = names[(parseInt(pickTxt, 10) || 1) - 1] || "claude";
+
+  const key = prompt("Paste your " + AI_PROVIDERS[id].label + " API key.\n\n" +
+                     "It is kept in this browser and sent only to that provider. " +
+                     "Clear the box to go back to the built-in reader.", aiKey());
+  if (key === null) return;
+
+  let url = AI_PROVIDERS[id].url, model = AI_PROVIDERS[id].model;
+  if (id === "other" || !url){
+    url = prompt("Address of the API (the /chat/completions one):", url || "") || "";
+    model = prompt("Model name:", model || "") || "";
+  } else {
+    model = prompt("Model name (or keep this one):", model) || model;
+  }
+
   try {
-    if (v.trim()) localStorage.setItem(AI_KEY_STORE, v.trim());
-    else localStorage.removeItem(AI_KEY_STORE);
+    if (key.trim()){
+      localStorage.setItem(AI_KEY_STORE, key.trim());
+      localStorage.setItem(AI_PROVIDER_STORE, JSON.stringify({ id, url, model }));
+    } else {
+      localStorage.removeItem(AI_KEY_STORE);
+      localStorage.removeItem(AI_PROVIDER_STORE);
+    }
   } catch(e){}
-  $("ai-key-btn").textContent = aiKey() ? "⚡ Real AI: on" : "⚡ Real AI";
-  log(aiKey() ? "a real model will write your games now" : "back to the built-in reader", "ok");
+  $("ai-key-btn").textContent = aiKey() ? "⚡ " + aiConf().label : "⚡ Real AI";
+  log(aiKey() ? aiConf().label + " will write your games now (" + aiConf().model + ")"
+              : "back to the built-in reader", "ok");
+}
+
+/* one call, whichever shape the provider speaks */
+async function callModel(system, messages, maxTokens){
+  const c = aiConf(), key = aiKey();
+  if (!key) throw new Error("no key");
+
+  const anthropic = c.shape === "anthropic";
+  const headers = { "content-type": "application/json" };
+  if (anthropic){
+    headers["x-api-key"] = key;
+    headers["anthropic-version"] = "2023-06-01";
+    headers["anthropic-dangerous-direct-browser-access"] = "true";
+  } else {
+    headers["authorization"] = "Bearer " + key;
+  }
+
+  const body = anthropic
+    ? { model: c.model, max_tokens: maxTokens, system, messages }
+    : { model: c.model, max_tokens: maxTokens,
+        messages: [{ role:"system", content: system }, ...messages] };
+
+  const res = await fetch(c.url, { method:"POST", headers, body: JSON.stringify(body) });
+  if (!res.ok){
+    const t = await res.text().catch(() => "");
+    throw new Error(res.status + (t.slice(0, 140) ? " " + t.slice(0, 140) : ""));
+  }
+  const data = await res.json();
+  const out = anthropic
+    ? (data.content || []).map(x => x.text || "").join("")
+    : "";
+  return (out || (((data.choices || [])[0] || {}).message || {}).content || "").trim();
 }
 
 /* what the model is told about the language */
@@ -3586,40 +4136,30 @@ going to read this and change it.`;
 }
 
 async function askRealAI(description){
-  const key = aiKey();
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-5",
-      max_tokens: 2000,
-      system: aiSystemPrompt(),
-      messages: [
-        ...(aiChat.length ? aiChat : []),
-        { role: "user", content: description }
-      ]
-    })
-  });
-  if (!res.ok){
-    const t = await res.text().catch(() => "");
-    throw new Error(res.status + (t.slice(0, 120) ? " " + t.slice(0, 120) : ""));
-  }
-  const data = await res.json();
-  let code = (data.content || []).map(c => c.text || "").join("").trim();
+  let code = await callModel(aiSystemPrompt(),
+                             [...aiChat, { role:"user", content: description }], 2000);
   code = code.replace(/^```[a-z]*\n?/i, "").replace(/```$/, "").trim();
   if (!code) throw new Error("the model sent nothing back");
 
-  // remember this exchange, so the next line carries on from it
-  aiChat.push({ role: "user", content: description });
-  aiChat.push({ role: "assistant", content: code });
+  aiChat.push({ role:"user", content: description });
+  aiChat.push({ role:"assistant", content: code });
   if (aiChat.length > 8) aiChat = aiChat.slice(-8);
   return code;
 }
+
+/* the chatbot block, when a real model is connected */
+async function askChatModel(said){
+  const history = (R.chat.history || []).slice(-8).map(h => ({
+    role: h.who === "you" ? "user" : "assistant", content: h.words
+  }));
+  const reply = await callModel(
+    "You are a character inside a child's video game, talking through a small " +
+    "dialogue box. Reply in one or two short sentences, friendly and plain. " +
+    "Never use markdown.",
+    history.concat({ role:"user", content: said }), 200);
+  return reply || chatReply(said);
+}
+
 let aiChat = [];
 
 /* Everything AI mode understands, in the words it expects to see.
@@ -3723,6 +4263,7 @@ function nearestColour(r, g, b){
   return best;
 }
 /* read one 16x16 block out of an image and quantise it */
+let pngLimited = true;      // the "Limited colours" tick
 function blockToSprite(img, sx, sy, sw, sh){
   const cv = document.createElement("canvas");
   cv.width = SW; cv.height = SH;
@@ -3733,14 +4274,26 @@ function blockToSprite(img, sx, sy, sw, sh){
   const out = blankSprite();
   for (let i = 0; i < SW*SH; i++){
     const a = d[i*4+3];
-    out[i] = a < 100 ? -1 : nearestColour(d[i*4], d[i*4+1], d[i*4+2]);
+    if (a < 100){ out[i] = -1; continue; }
+    if (pngLimited){
+      out[i] = nearestColour(d[i*4], d[i*4+1], d[i*4+2]);
+    } else {
+      // keep the picture's own colours by adding each one to the palette
+      const hex = "#" + [d[i*4], d[i*4+1], d[i*4+2]]
+                          .map(v => v.toString(16).padStart(2, "0")).join("");
+      let k = PALETTE.indexOf(hex);
+      if (k < 0){ PALETTE.push(hex); k = PALETTE.length - 1; }
+      out[i] = k;
+    }
   }
+  if (!pngLimited){ project.palette = PALETTE.slice(); buildPalette(); }
   return out;
 }
 
 let pendingImage = null;
 function importPng(input){
   const f = input.files[0]; if (!f) return;
+  pngLimited = $("png-limited") ? $("png-limited").checked : true;
   const img = new Image();
   img.onload = () => {
     pendingImage = img;
@@ -3821,6 +4374,8 @@ function gameNow(name, author){
     name, author: author || "",
     mode: project.mode, code: project.code,
     sprites: project.sprites, rooms: project.rooms,
+    palette: PALETTE.slice(),      // without this, colours you added came back black
+    fps: project.fps || 60, zoom: project.zoom || 512,
     saved: Date.now()
   };
 }
@@ -3833,14 +4388,18 @@ function libLoad(g){
   stop();
   project = { mode:g.mode || "normal", code:g.code || "",
               sprites:(g.sprites||[]).map(a => a.slice()),
-              rooms:(g.rooms||[]).map(a => a.slice()) };
+              rooms:(g.rooms||[]).map(a => a.slice()),
+              palette:(g.palette && g.palette.length) ? g.palette.slice() : null,
+              fps: g.fps || 60, zoom: g.zoom || 512 };
+  if (!project.palette) delete project.palette;
   if (!project.sprites.length) project.sprites = [blankSprite()];
   if (!project.rooms.length)   project.rooms   = [blankRoom()];
   curSprite = 0; curRoom = 0; curTile = 1;
   PALETTE = (project.palette && project.palette.length) ? project.palette.slice() : BASE_PALETTE.slice();
   if (curColor >= PALETTE.length) curColor = 8;
-  buildPalette(); SPRITE_EPOCH++;
+  buildPalette(); SPRITE_EPOCH++; ROOM_EPOCH++;
   setMode(project.mode, true);
+  setFps(project.fps || 60); setPaintZoom(project.zoom || 512);
   $("code").value = project.code;
   drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
   save(); render();
@@ -3929,12 +4488,48 @@ function loadFromHash(){
   if (!m) return false;
   try {
     const g = unpackGame(m[1]);
+    // keep whatever you were working on: a link is a visit, not a takeover
+    try { localStorage.setItem("simplepp-mine", localStorage.getItem("simplepp") || ""); } catch(e){}
+    visiting = true;
     libLoad(g);
+    showVisitBar(g);
     project.name = g.name; project.author = g.author;
     log("opened “" + (g.name || "a shared game") + "”" +
         (g.author ? " by " + g.author : " (anonymous)") + " from a link", "ok");
     return true;
   } catch(e){ log("that share link is damaged", "err"); return false; }
+}
+
+/* ---------- visiting someone else's game ---------- */
+function showVisitBar(g){
+  let bar = $("visit-bar");
+  if (!bar){
+    bar = document.createElement("div");
+    bar.id = "visit-bar";
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+  bar.innerHTML =
+    `you are looking at <b>${escapeHtml(g.name || "a shared game")}</b>` +
+    (g.author ? " by <b>" + escapeHtml(g.author) + "</b>" : "") +
+    ` — your own project is safe. `;
+  const keep = document.createElement("button");
+  keep.textContent = "Keep this one";
+  keep.onclick = () => { visiting = false; save(); bar.remove();
+                         log("this game is yours now — it will be saved as you work", "ok"); };
+  const back = document.createElement("button");
+  back.textContent = "Back to my game";
+  back.onclick = backToMine;
+  bar.append(keep, " ", back);
+}
+function backToMine(){
+  let mine = null;
+  try { mine = JSON.parse(localStorage.getItem("simplepp-mine") || "null"); } catch(e){}
+  visiting = false;
+  location.hash = "";
+  if (mine){
+    try { localStorage.setItem("simplepp", JSON.stringify(mine)); } catch(e){}
+  }
+  location.reload();
 }
 
 /* ---------- fourth wall: pull another saved game into this one ---------- */
@@ -4061,66 +4656,114 @@ function libSaveHere(){
    visitor fetches. Publishing opens a pre-filled GitHub issue containing your
    game, and merging it puts you in the list for everybody. */
 const GALLERY_REPO = "jakubsenczyszyn2015-netizen/simple-";
-let galleryData = null, galleryState = "idle";
+let galleryData = null, galleryState = "idle", galleryTimer = null, galleryLastFetch = 0;
 
-async function loadGallery(){
-  if (galleryState === "loading" || galleryData) { drawWorldList(); return; }
-  galleryState = "loading";
-  $("world-note").innerHTML = "loading the gallery…";
-  try {
-    const res = await fetch("games/index.json", { cache: "no-cache" });
-    if (!res.ok) throw new Error("no index");
-    galleryData = await res.json();
-    galleryState = "ready";
-  } catch(e){
-    galleryState = "failed";
-    galleryData = null;
+/* Games arrive two ways: the games/ folder in the repo, and any issue
+   labelled game-submission — the issue body carries the packed game, so
+   posting one is publishing it. */
+function gameFromIssue(issue){
+  const body = issue.body || "";
+  let packed = null;
+  const fence = body.match(/```\s*\n([A-Za-z0-9_\-]{200,})\s*\n```/);
+  if (fence) packed = fence[1].trim();
+  if (!packed){
+    const link = body.match(/#game=([A-Za-z0-9_\-]+)/);
+    if (link) packed = link[1];
   }
+  if (!packed) return null;
+
+  const nameLine = body.match(/\*\*Game:\*\*\s*(.+)/);
+  const authLine = body.match(/\*\*Author:\*\*\s*(.+)/);
+  return {
+    name: (nameLine ? nameLine[1] : issue.title.replace(/^Game:\s*/i, "")).trim(),
+    author: (authLine ? authLine[1].trim() : (issue.user && issue.user.login) || ""),
+    about: "posted as issue #" + issue.number,
+    packed, issue: issue.number
+  };
+}
+
+async function fetchGallery(){
+  const found = [];
+  try {
+    const res = await fetch("games/index.json", { cache:"no-cache" });
+    if (res.ok){ const j = await res.json(); (j.games || []).forEach(g => found.push(g)); }
+  } catch(e){}
+  try {
+    const res = await fetch("https://api.github.com/repos/" + GALLERY_REPO +
+                            "/issues?labels=game-submission&state=all&per_page=100",
+                            { headers: { accept:"application/vnd.github+json" } });
+    if (res.ok){
+      const issues = await res.json();
+      if (Array.isArray(issues))
+        issues.forEach(it => { const g = gameFromIssue(it); if (g) found.push(g); });
+    }
+  } catch(e){}
+  return found;
+}
+
+/* keeps itself up to date while the window is open, quietly */
+function loadGallery(){
   drawWorldList();
+  if (!galleryTimer){
+    galleryTimer = setInterval(() => {
+      if (!$("lib-ov").classList.contains("on")) return;
+      if ($("lib-world").style.display === "none") return;
+      pollGallery();
+    }, 5000);
+  }
+  pollGallery(true);
+}
+async function pollGallery(force){
+  // the list refreshes on a five second beat; the network is asked less often
+  // than that, because GitHub allows only sixty calls an hour from one address
+  const now = Date.now();
+  if (!force && now - galleryLastFetch < 60000) return;
+  galleryLastFetch = now;
+  const games = await fetchGallery();
+  if (!games.length && galleryData) return;          // a failed call never empties the list
+  const before = JSON.stringify((galleryData || []).map(g => g.name + g.author));
+  galleryData = games;
+  galleryState = "ready";
+  if (JSON.stringify(games.map(g => g.name + g.author)) !== before) drawWorldList();
 }
 
 function drawWorldList(){
   const note = $("world-note"), list = $("world-list");
   note.innerHTML =
-    "Everyone who opens this page sees the same list. It is a file in the project " +
-    "(<code>games/index.json</code>), because GitHub Pages serves files and has no database — " +
-    "<b>Publish to gallery</b> opens a ready-filled GitHub issue with your game inside it, " +
-    "and once it is added everyone gets it.";
+    "Everything here is what everybody sees: the games in the project's <code>games/</code> " +
+    "folder, plus every game posted as an issue. <b>Publish to gallery</b> posts yours.";
   list.innerHTML = "";
 
-  if (galleryState === "loading"){ list.innerHTML = '<div class="hint">loading…</div>'; return; }
-  if (!galleryData){
-    list.innerHTML = '<div class="hint">The gallery file isn\'t reachable from here. ' +
-      'It loads when the page is served over the web (GitHub Pages), not when opened straight ' +
-      'off your disk as a file.</div>';
-    return;
-  }
-  const q = ($("world-search").value || "").toLowerCase();
-  const games = (galleryData.games || []).filter(g =>
-    !q || (g.name + " " + (g.author || "") + " " + (g.about || "")).toLowerCase().includes(q));
+  if (!galleryData){ list.innerHTML = '<div class="hint">nothing to show yet.</div>'; return; }
 
+  const q = ($("world-search").value || "").toLowerCase();
+  const games = galleryData.filter(g =>
+    !q || ((g.name || "") + " " + (g.author || "") + " " + (g.about || "")).toLowerCase().includes(q));
   if (!games.length){ list.innerHTML = '<div class="hint">nothing matches that search.</div>'; return; }
 
   games.forEach(g => {
     const card = gameCard({ author: g.author, mode: g.mode }, g.name, [
       ["Open", async () => {
         try {
-          const res = await fetch("games/" + g.file, { cache: "no-cache" });
-          const data = await res.json();
+          const data = g.packed ? unpackGame(g.packed)
+                                : await (await fetch("games/" + g.file, { cache:"no-cache" })).json();
+          try { localStorage.setItem("simplepp-mine", localStorage.getItem("simplepp") || ""); } catch(e){}
+          visiting = true;
           libLoad(data);
           project.name = data.name || g.name; project.author = data.author || g.author || "";
+          showVisitBar({ name: project.name, author: project.author });
           closeLib(); tab("code");
           log("opened \u201c" + project.name + "\u201d" +
               (project.author ? " by " + project.author : "") + " from the gallery", "ok");
-        } catch(e){ alert("That game wouldn't download."); }
+        } catch(e){ alert("That game wouldn't open."); }
       }]
     ]);
     if (g.about){
-      const p = document.createElement("div");
-      p.className = "hint"; p.style.marginTop = "6px"; p.textContent = g.about;
-      card.insertBefore(p, card.lastChild);
+      const note2 = document.createElement("div");
+      note2.className = "hint"; note2.style.marginTop = "6px"; note2.textContent = g.about;
+      card.insertBefore(note2, card.lastChild);
     }
-    $("world-list").appendChild(card);
+    list.appendChild(card);
   });
 }
 
@@ -4209,9 +4852,15 @@ Blocks (a block ends with <code>end</code>):
   move(1, 4, 0)
 <code>end</code>
 
-<code>if touching(1, 2)</code>      true when sprite 1 overlaps sprite 2
-  hide(2)
-<code>end</code>
+<code>if touching(1, 2)</code>      true when sprite 1 overlaps sprite 2 — the
+  hide(2)                     sprite itself, or any room tile painted
+<code>end</code>                        with it
+
+<code>if x(1) > 100</code>          and if it is not true, do the other thing
+  print("right", 4, 4)
+<code>else</code>
+  print("left", 4, 4)
+<code>end</code>                        <code>else if</code> works too
 
 Things you can ask about:
 
@@ -4222,8 +4871,28 @@ Things you can ask about:
 <code>tile(80, 64)</code>        which sprite is painted at that spot
 <code>random(10)</code>          a surprise number from 0 to 9
 <code>key(space)</code>          is a key held down right now?
+<code>whenclick(1)</code>        did you just click sprite 1? (<code>when_click()</code> too)
+<code>clicked("Play")</code>     did you just click that button?
+<code>room_changed</code>        did the room just change? <code>room_changed(2)</code> asks
+                        whether it changed to room 2
+<code>mousex()  mousey()</code>  where the mouse is on the screen
 
 Title screens:
+
+<code>fancytitle("My Game")</code>  the title drops in from the top and bounces
+<code>fanciertitle("My Game")</code> it drops in spinning, and settles facing you
+<code>exittitle()</code>         leave the title screen from code
+<code>entertitle()</code>        bring it back
+<code>speak("Hello")</code>      says it out loud, if the browser can talk
+<code>button("Play", 10, 200)</code>  puts a button on the screen
+
+<code>when button("Play") clicked</code>
+  print("off we go", 10, 20)
+<code>end</code>
+
+<code>move("Hello World!", 10, 0)</code>
+                          moves any writing that says that, and any
+                          button with that name
 
 <code>title("My Game")</code>      big title with a Play button — the program
                           waits here until Play is clicked.
@@ -4292,7 +4961,8 @@ the screen stop you.
 
 <code>camera(1)</code>           the view follows sprite 1 everywhere
 <code>camx(1)</code>  <code>camy(1)</code>     ...or only sideways / only up and down
-<code>resize(1, 10)</code>       sprite 1 gets 10 pixels bigger (a minus makes
+<code>resize(1, 10)</code>       (works in Normal mode too)
+                          sprite 1 gets 10 pixels bigger (a minus makes
                           it smaller). <code>size(1, 32)</code> sets it exactly.
 <code>dialogue("Hi!")</code>     a black box along the bottom with those words.
                           (<code>say("Hi!")</code> is the same)
@@ -4301,6 +4971,15 @@ the screen stop you.
                           maze seen from the inside: sprite 2's picture
                           covers the walls, sprite 3's tiles become coins,
                           arrows walk and turn.
+
+<code>changeroomby(1)</code>     go one room along (a minus goes back)
+<code>addcoin(80, 60)</code>     drop a single coin there — only that one
+                          disappears when you touch it
+<code>fliphorizontal(1)</code>   flip sprite 1 left-to-right (<code>fliph()</code> too)
+<code>flipvertical(1)</code>     flip it top-to-bottom (<code>flipv()</code> too)
+<code>chatbot("Hi!")</code>      a dialogue box you can type answers into.
+                          With a key set under ⚡ in AI mode, a real
+                          model answers; otherwise it answers itself.
 
 <code>reset if y(1) > 240</code>   start the game over when that becomes true
 
@@ -4453,6 +5132,22 @@ function buildHelp(){
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.8.0", t:"Live gallery, twenty new blocks, four bug fixes",
+    lines:[
+      "<b>Fixed: a saved game came back black.</b> The palette was never written into the file, so any colour you had added yourself was missing when it loaded. Games now carry their palette, their speed and their canvas size.",
+      "<b>Fixed: opening a link wiped the game you were working on.</b> A game from a link or the gallery is now a visit — your own project is kept safe, and a bar at the top lets you keep the new one or go back to yours.",
+      "<b>Fixed: exports contained whatever window was open.</b> The page is now serialised in a clean state. The exported game also fills the whole browser window and has no fullscreen button, because it is already the whole page.",
+      "<b>Fixed:</b> fullscreen hid the mouse pointer.",
+      "<b>🌍 Gallery is live.</b> It shows the games in <code>games/</code> and every game posted as an issue, and refreshes itself while it is open without saying so.",
+      "<b>New blocks:</b> <code>else</code> and <code>else if</code>; <code>changeroomby(1)</code> and <code>room_changed</code>; <code>addcoin(80, 60)</code>; <code>fancytitle()</code> and <code>fanciertitle()</code>; <code>exittitle()</code> / <code>entertitle()</code>; <code>fliphorizontal()</code> / <code>flipvertical()</code>; <code>speak()</code>; <code>button()</code> with <code>when button(\"x\") clicked</code>; <code>whenclick(1)</code>; <code>move(\"some words\", 10, 0)</code>; and <code>chatbot()</code>.",
+      "<b>Dialogue types itself out</b> letter by letter, the way game dialogue does.",
+      "<b>The 3D platformer is rebuilt.</b> One ray per screen column, each wall column sampled from the real pixels of whichever sprite you painted there — so it is your room exactly, brick for brick. Coins stand where you painted them and hide behind walls properly. Space hops.",
+      "<b><code>touching()</code> now answers for room tiles too</b>, and <b><code>resize()</code> works in Normal mode</b>.",
+      "<b>Paint:</b> a <b>Limited colours</b> tick on PNG import — leave it off and the picture keeps its own colours.",
+      "<b>An FPS slider</b> under the stage, plus a live count of what you are really getting, and an <code>fps(30)</code> command.",
+      "<b>The mouse position is shown</b> under the stage, so you can read off coordinates for <code>put()</code> and <code>move()</code>.",
+      "<b>The ⚡ real-AI key now works with anything:</b> Claude, ChatGPT, Groq, OpenRouter, or any other OpenAI-shaped address you type in yourself."
+    ] },
   { v:"0.7.0", t:"Camera, 3D, export, paint tools",
     lines:[
       "<b>Camera:</b> <code>camera(1)</code> follows a sprite everywhere, <code>camx(1)</code> and <code>camy(1)</code> follow it one way only. Writing on screen stays put.",
@@ -4566,6 +5261,7 @@ $("code").value = project.code || "";
 $("code").addEventListener("input", save);
 PALETTE = (project.palette && project.palette.length) ? project.palette.slice() : BASE_PALETTE.slice();
 buildPalette(); buildTools(); setPaintZoom(project.zoom || 512);
+setFps(project.fps || 60);
 buildLessons(); buildReleases(); buildHelp();
 setMode(project.mode || "normal", true);
 drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();

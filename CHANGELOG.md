@@ -3,6 +3,79 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.8.0 — Live gallery, twenty new blocks, four bug fixes
+
+### Fixed
+- **A saved game came back black.** `gameNow()` never wrote the palette into
+  the file, so a project using colours you had added yourself loaded with only
+  the original sixteen and every custom index fell off the end. Games now carry
+  their palette, their frame rate and their canvas size, and a colour that ever
+  does go missing shows up bright pink instead of black.
+- **Opening a link overwrote the game you were working on.** Autosave wrote the
+  visiting game straight over yours. A game arriving from a link or the gallery
+  is now a *visit*: your own project is stashed untouched, autosave is off, and
+  a bar offers **Keep this one** or **Back to my game**.
+- **Exports contained whatever window happened to be open.** The page was
+  serialised live, so an open menu was baked into the file. It is now cloned and
+  cleaned first.
+- **Fullscreen hid the mouse pointer.**
+
+### Changed
+- **Exported games fill the whole browser window** and have no fullscreen
+  button — the page already is the game.
+- **`touching()` answers for room tiles too**, not just sprites.
+- **`resize()` and `size()` work in Normal mode**, not only Easy.
+
+### Added — the gallery is live
+- **🌍 Gallery** now lists the games in `games/` *and* every game posted as an
+  issue on the repository, reading the packed game straight out of the issue
+  body. Publishing really is just posting.
+- It refreshes itself every five seconds while open, silently — no spinner, no
+  "refreshing" message. The network itself is asked at most once a minute,
+  because GitHub allows sixty calls an hour from one address and a five-second
+  poll would burn that in five minutes. The list you see is always current
+  within that.
+
+### Added — blocks
+- **`else`** and **`else if`**.
+- `changeroomby(1)` and `room_changed` — usable bare, or `room_changed(2)` to
+  ask about one room. The flag stays readable for a whole frame afterwards, so
+  it does not matter where in your code you check it.
+- `addcoin(80, 60)` — a single coin at that spot; only the one you touch goes.
+- `fancytitle("My Game")` drops the title in from the top and bounces it once.
+  `fanciertitle("My Game")` drops it in spinning on its middle, slowing down and
+  always settling face-on.
+- `exittitle()` and `entertitle()`.
+- `fliphorizontal(1)` and `flipvertical(1)` (`fliph`/`flipv` too).
+- `speak("Hello")` — reads it out, where the browser has a voice.
+- `button("Play", 10, 200)` puts a button on the screen; `when button("Play")
+  clicked ... end` runs when it is pressed, and `clicked("Play")` asks in an if.
+- `whenclick(1)` / `when_click(1)` — true on the frame you click that sprite.
+- `move("Hello World!", 10, 0)` shifts writing, not only sprites.
+- `chatbot("Hi!")` — a dialogue box with a text field. It answers from its own
+  small set of replies, or from a real model if you have connected one.
+- `fps(30)` sets the frame rate from code.
+- `mousex()` and `mousey()`.
+
+### Added — everything else
+- **Dialogue types itself out**, letter by letter, with a soft tick.
+- **The 3D platformer is rebuilt.** One ray per screen column instead of one per
+  two, and every wall column is sampled from the actual pixels of whichever
+  sprite you painted on that tile — so it is your room exactly, brick for brick,
+  rather than a flat colour. Coins stand where you painted them and are hidden
+  properly by walls in front of them. Space hops. About 3–4 ms a frame.
+- **An FPS slider** under the stage, with a live count of what you are actually
+  getting.
+- **A mouse position readout** under the stage, for reading off coordinates.
+- **PNG import has a "Limited colours" tick.** Leave it off and the image keeps
+  its own colours, which are added to the palette.
+- **The ⚡ real-AI key works with any provider:** Claude, ChatGPT, Groq,
+  OpenRouter, or any other OpenAI-shaped endpoint you type in. The chatbot block
+  uses it too.
+
+### Still to do
+- Sprites bigger than 16×16, and a select/move tool in the paint editor.
+
 ## 0.7.0 — Camera, 3D, export, paint tools
 
 ### Fixed
