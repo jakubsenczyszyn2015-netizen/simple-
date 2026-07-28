@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NumSprite — a tiny text engine for beginners</title>
+<title>Simple++ — a tiny text engine for beginners</title>
 <style>
   :root{
     --bg:#14161c; --panel:#1c1f28; --panel2:#232734; --line:#333a4a;
@@ -18,7 +18,7 @@
   }
   header{
     display:flex; align-items:center; gap:8px; padding:8px 12px;
-    background:var(--panel); border-bottom:1px solid var(--line); flex:none;
+    background:var(--panel); border-bottom:1px solid var(--line); flex:none; flex-wrap:wrap;
   }
   header h1{font-size:15px;margin:0 12px 0 0;letter-spacing:.5px}
   header h1 span{color:var(--accent)}
@@ -76,11 +76,11 @@
     background-size:10px 10px;background-position:0 0,5px 5px}
 
   /* ---- template gallery ---- */
-  #overlay{
+  #overlay,#lobby-ov{
     position:fixed; inset:0; background:rgba(8,10,14,.82); z-index:50;
     display:none; align-items:center; justify-content:center; padding:24px;
   }
-  #overlay.on{display:flex}
+  #overlay.on,#lobby-ov.on{display:flex}
   .modal{
     background:var(--panel); border:1px solid var(--line); border-radius:12px;
     max-width:900px; width:100%; max-height:100%; overflow:auto; padding:20px;
@@ -100,8 +100,7 @@
   .card .art canvas{width:26px;height:26px;background:#0c0e13;border:0;border-radius:3px}
 
   /* ---- learn ---- */
-  #v-learn{overflow:auto;display:block}
-  #v-learn.on{display:block}
+  #v-learn.on,#v-changes.on{display:block;overflow:auto}
   .lesson{
     background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--accent);
     border-radius:8px; padding:14px 16px; margin:0 0 12px; max-width:820px;
@@ -114,6 +113,25 @@
     padding:10px 12px;margin:0 0 10px;font-size:13px;overflow-x:auto;color:var(--accent2)
   }
   .lesson .done{color:#6bd66b}
+
+  .modepick{flex:none;display:flex;gap:0;margin-left:14px;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .modepick button{border:0;border-radius:0;padding:5px 13px;background:transparent;font-size:13px}
+  .modepick button.on{background:var(--accent2);color:#1b1405;font-weight:700}
+  #modeline{
+    padding:6px 14px;background:#191d26;border-bottom:1px solid var(--line);
+    color:var(--dim);font-size:12px;flex:none
+  }
+  #modeline b{color:var(--accent2)}
+  .code-field{font-size:22px;letter-spacing:6px;text-align:center;color:var(--accent2)}
+
+  /* ---- changelog ---- */
+
+  .rel{max-width:820px;margin:0 0 18px}
+  .rel h4{margin:0 0 2px;font-size:15px}
+  .rel h4 em{color:var(--dim);font-style:normal;font-size:12px;font-weight:400;margin-left:8px}
+  .rel ul{margin:6px 0 0;padding-left:20px;color:var(--dim);font-size:13px;line-height:1.7}
+  .rel ul b{color:var(--fg);font-weight:400}
+  .rel code{color:var(--accent2)}
 
   label{color:var(--dim);font-size:12px}
   input[type=text],input[type=number]{
@@ -129,15 +147,22 @@
 <body>
 
 <header>
-  <h1>Num<span>Sprite</span></h1>
+  <h1>Simple<span>++</span></h1>
   <div class="tabs">
     <button id="t-code" class="on" onclick="tab('code')">1 · Code</button>
     <button id="t-paint" onclick="tab('paint')">2 · Paint</button>
     <button id="t-rooms" onclick="tab('rooms')">3 · Rooms</button>
     <button id="t-learn" onclick="tab('learn')">★ · Learn</button>
     <button id="t-help" onclick="tab('help')">? · Help</button>
+    <button id="t-changes" onclick="tab('changes')">≡ · Changelog</button>
+  </div>
+  <div class="modepick" title="How much the language does for you">
+    <button id="m-easy"   onclick="setMode('easy')">Easy</button>
+    <button id="m-normal" onclick="setMode('normal')" class="on">Normal</button>
+    <button id="m-hard"   onclick="setMode('hard')">Hard</button>
   </div>
   <div class="spacer"></div>
+  <button onclick="openLobby()" style="background:#1f4f6b;border-color:#2d6f95">👥 Lobby</button>
   <button onclick="openGallery()" style="background:#4a3a80;border-color:#6a55b8">✦ Templates</button>
   <button onclick="run()" style="background:#2e7d32;border-color:#2e7d32">▶ Run</button>
   <button onclick="stop()">■ Stop</button>
@@ -150,6 +175,7 @@
   <!-- ================= CODE ================= -->
   <section id="v-code" class="view on">
     <div class="col" style="flex:1">
+      <div id="modeline"></div>
       <textarea id="code" spellcheck="false"></textarea>
       <div id="console"></div>
     </div>
@@ -217,7 +243,7 @@
   <!-- ================= LEARN ================= -->
   <section id="v-learn" class="view">
     <div style="padding:18px">
-      <h2 style="margin:0 0 4px;font-size:18px">Ten little steps</h2>
+      <h2 id="learn-title" style="margin:0 0 4px;font-size:18px">Little steps</h2>
       <p style="margin:0 0 16px;color:var(--dim);font-size:13px">
         Press <b>Try it</b> on a step: the code jumps into the editor and runs.
         Change a number, run it again, see what happens. That's the whole job.
@@ -226,72 +252,22 @@
     </div>
   </section>
 
+  <!-- ================= CHANGELOG ================= -->
+  <section id="v-changes" class="view">
+    <div style="padding:18px">
+      <h2 style="margin:0 0 4px;font-size:18px">Changelog</h2>
+      <p style="margin:0 0 18px;color:var(--dim);font-size:13px">
+        What changed, newest first. The same list lives in <code style="color:var(--accent2)">CHANGELOG.md</code>
+        next to this file.
+      </p>
+      <div id="releases"></div>
+    </div>
+  </section>
+
   <!-- ================= HELP ================= -->
   <section id="v-help" class="view">
     <div class="pane" style="flex:1">
-      <h3>Every command</h3>
-      <div class="hint" style="max-width:760px;font-size:13px">
-<pre style="white-space:pre-wrap">
-<code>show(1)</code>              show sprite 1
-<code>hide(1)</code>              hide sprite 1
-<code>move(1, 10, 0)</code>       move sprite 1 by 10 pixels right, 0 down
-<code>put(1, 100, 50)</code>      put sprite 1 exactly at x=100 y=50
-<code>print("Hi", 0, 0)</code>    draw text at x=0 y=0
-<code>room(2)</code>             show room 2 behind everything
-<code>set(score, 0)</code>       make a variable
-<code>add(score, 1)</code>       add to a variable
-<code>wait(30)</code>            wait 30 frames (about half a second)
-<code>sound(1)</code>            make a beep — try 1 to 6
-<code>settile(80, 64, 0)</code>  change the room tile at that spot (0 = rub it out)
-<code>stop()</code>              stop the program
-
-Blocks (a block ends with <code>end</code>):
-
-<code>when start</code>            runs one time at the beginning
-  show(1)
-<code>end</code>
-
-<code>when key left</code>         runs while the left arrow is held
-  move(1, -2, 0)                keys: left right up down space z x
-<code>end</code>
-
-<code>every frame</code>           runs 60 times a second
-  print("score: ", 4, 4)
-<code>end</code>
-
-<code>repeat 5</code>              do something 5 times
-  move(1, 4, 0)
-<code>end</code>
-
-<code>if touching(1, 2)</code>      true when sprite 1 overlaps sprite 2
-  hide(2)
-<code>end</code>
-
-<code>if x(1) > 300</code>          x(1) and y(1) are a sprite's position
-  put(1, 0, y(1))
-<code>end</code>
-
-<code>if free(1, -2, 0)</code>      true when sprite 1 can move that way
-  move(1, -2, 0)              without bumping into a room tile
-<code>end</code>
-
-Things you can ask about:
-
-<code>x(1)  y(1)</code>           where a sprite is
-<code>visible(1)</code>          is it shown?
-<code>touching(1, 2)</code>      are two sprites overlapping?
-<code>free(1, dx, dy)</code>     can it move there? (walls)
-<code>tile(80, 64)</code>        which sprite is painted at that spot
-<code>random(10)</code>          a surprise number from 0 to 9
-<code>key(space)</code>          is a key held down right now?
-
-Notes
-· The screen is 320 x 240 pixels. x grows right, y grows down.
-· Sprites are 16 x 16. Sprite numbers start at 1 and never run out.
-· Anything after <code>#</code> is a comment.
-· Variables can be used anywhere a number can: <code>move(1, speed, 0)</code>
-</pre>
-      </div>
+      <div id="helpbox"></div>
     </div>
   </section>
 </main>
@@ -310,9 +286,18 @@ Notes
   </div>
 </div>
 
+<div id="lobby-ov" onclick="if(event.target===this) closeLobby()">
+  <div class="modal" style="max-width:520px">
+    <h2>Lobby</h2>
+    <p class="sub" id="lobby-note"></p>
+    <div id="lobby-body"></div>
+    <div style="margin-top:16px;text-align:right"><button onclick="closeLobby()">Close</button></div>
+  </div>
+</div>
+
 <script>
 /* =========================================================
-   NumSprite — sprites are numbers, rooms are grids of numbers
+   Simple++ — sprites are numbers, rooms are grids of numbers
    ========================================================= */
 
 const SW = 16, SH = 16;                 // sprite size
@@ -331,6 +316,7 @@ const blankSprite = () => new Array(SW * SH).fill(-1);   // -1 = transparent
 const blankRoom   = () => new Array(COLS * ROWS).fill(0); // 0 = empty
 
 let project = {
+  mode: "normal",
   sprites: [blankSprite(), blankSprite(), blankSprite()], // index 0 -> sprite 1
   rooms:   [blankRoom()],
   code: `# welcome! press Run.
@@ -374,7 +360,7 @@ function ensureSprite(n){
    TABS
    ========================================================= */
 function tab(name){
-  for (const t of ["code","paint","rooms","learn","help"]){
+  for (const t of ["code","paint","rooms","learn","help","changes"]){
     $("v-"+t).classList.toggle("on", t === name);
     $("t-"+t).classList.toggle("on", t === name);
   }
@@ -683,6 +669,10 @@ function evalExpr(src, line){
       case "visible": return actor(args[0]).on;
       case "touching": return touching(args[0], args[1]);
       case "random": return Math.floor(Math.random() * (args[0] || 1));
+      case "clickbutton": case "click_button": return wasClicked(args[0], line);
+      case "mate": return matePos(args[0], args[1]);
+      case "me": return R.lobby ? R.lobby.me : 1;
+      case "players": return R.lobby ? R.lobby.players : 1;
       case "tile": return tileAtPixel(args[0], args[1]);
       case "free": return isFree(args[0], args[1] || 0, args[2] || 0);
       case "key": return !!R.keys[String(args[0]).toLowerCase()];
@@ -706,12 +696,18 @@ sctx.imageSmoothingEnabled = false;
 
 const R = {
   running:false, prog:null, actors:{}, vars:{}, keys:{},
-  room:0, texts:[], frame:0, waitFrames:0, raf:0, startDone:false
+  room:0, texts:[], frame:0, waitFrames:0, raf:0, startDone:false,
+  title:null, buttons:[], clicks:[], titlesShown:{},   // title screens
+  hard:null, mates:{}                                   // hard mode / lobby
 };
 
 function actor(n){
   n = Math.round(n);
-  if (!R.actors[n]) R.actors[n] = { x: 0, y: 0, on: false };
+  if (!R.actors[n]) R.actors[n] = {
+    x:0, y:0, on:false,
+    grav:null, hor:null, ver:null, anim:null,
+    vy:0, vx:0, mvy:0, onGround:false
+  };
   return R.actors[n];
 }
 function touching(a, b){
@@ -739,6 +735,125 @@ function isFree(n, dx, dy){
   if (x < 0 || y < 0 || x + SW > VW || y + SH > VH) return false;
   return !tileAtPixel(x + 1,      y + 1     ) && !tileAtPixel(x + SW - 2, y + 1     ) &&
          !tileAtPixel(x + 1,      y + SH - 2) && !tileAtPixel(x + SW - 2, y + SH - 2);
+}
+
+/* is the 16x16 box at nx,ny blocked by sprite g?
+   g counts both as painted room tiles and as the sprite itself */
+function hits(nx, ny, g, self){
+  g = Math.round(g || 0);
+  if (!g) return false;
+  const rm = liveRoom(R.room);
+  if (rm){
+    const pts = [[nx+2,ny+1],[nx+SW-3,ny+1],[nx+2,ny+SH-1],[nx+SW-3,ny+SH-1],
+                 [nx+SW/2,ny+SH-1],[nx+SW/2,ny+1]];
+    for (const [px,py] of pts) if (tileAtPixel(px, py) === g) return true;
+  }
+  const B = R.actors[g];
+  if (B && B.on && g !== self)
+    if (nx < B.x + SW && nx + SW > B.x && ny < B.y + SH && ny + SH > B.y) return true;
+  return false;
+}
+
+/* ---------- title screens (Easy + Normal) ---------- */
+function showTitle(name){
+  R.title = String(name);
+  R.buttons = [{ label:"Play", play:true }];
+}
+function addTitleButton(label){
+  if (!R.title) return;
+  label = String(label);
+  if (!R.buttons.some(b => b.label === label)) R.buttons.push({ label });
+}
+/* buttons declared anywhere in the program, so order doesn't matter */
+function collectTitleButtons(list){
+  for (const st of list){
+    if (st.body) collectTitleButtons(st.body);
+    if (st.k !== "call") continue;
+    const m = st.text.match(/^(titleoption|title_option)\s*\((.*)\)\s*$/i);
+    if (m) try { addTitleButton(evalExpr(m[2], st.n)); } catch(e){}
+  }
+}
+function buttonRects(){
+  const out = [];
+  const w = 130, h = 22, x = (VW - w) / 2;
+  R.buttons.forEach((b, i) => out.push({ b, x, y: 128 + i * 30, w, h }));
+  return out;
+}
+function stageClick(e){
+  const r = stage.getBoundingClientRect();
+  const mx = (e.clientX - r.left) / r.width  * VW;
+  const my = (e.clientY - r.top ) / r.height * VH;
+  for (const q of buttonRects()){
+    if (mx >= q.x && mx <= q.x + q.w && my >= q.y && my <= q.y + q.h){
+      R.clicks.push(q.b.label);
+      if (q.b.play){ R.titlesShown[R.title] = true; R.title = null; R.buttons = []; R.startDone = false; }
+      beep(2);
+      return;
+    }
+  }
+}
+stage.addEventListener("mousedown", stageClick);
+
+/* was this button clicked? */
+function wasClicked(label, line){
+  label = String(label);
+  if (!R.buttons.some(b => b.label === label) && !R.lastButtons?.includes(label))
+    throw new Err("there is no button called \u201c" + label + "\u201d — add one with titleoption(\"" + label + "\")", line || 0);
+  return R.clicks.includes(label);
+}
+
+/* ---------- the Easy behaviours, stepped once per frame ---------- */
+const GRAV = 0.4, JUMPFALL = 9;
+function stepBehaviours(){
+  for (const key of Object.keys(R.actors)){
+    const n = +key, a = R.actors[n];
+
+    if (a.hor){                                  // smooth left/right
+      const acc = a.hor.speed / 6;
+      if (R.keys.left)  a.vx -= acc;
+      if (R.keys.right) a.vx += acc;
+      a.vx *= 0.82;
+      if (Math.abs(a.vx) < .05) a.vx = 0;
+      a.vx = Math.max(-a.hor.speed, Math.min(a.hor.speed, a.vx));
+      const nx = a.x + a.vx;
+      if (nx < 0 || nx + SW > VW || hits(nx, a.y, a.hor.wall, n)) a.vx = 0;
+      else a.x = nx;
+    }
+    if (a.ver){                                  // smooth up/down
+      const acc = a.ver.speed / 6;
+      if (R.keys.up)   a.mvy -= acc;
+      if (R.keys.down) a.mvy += acc;
+      a.mvy *= 0.82;
+      if (Math.abs(a.mvy) < .05) a.mvy = 0;
+      a.mvy = Math.max(-a.ver.speed, Math.min(a.ver.speed, a.mvy));
+      const ny = a.y + a.mvy;
+      if (ny < 0 || ny + SH > VH || hits(a.x, ny, a.ver.wall, n)) a.mvy = 0;
+      else a.y = ny;
+    }
+    if (a.grav){                                 // falling, and landing on things
+      a.vy = Math.min(JUMPFALL, a.vy + GRAV);
+      let ny = a.y + a.vy, landed = false;
+      const floor = VH - SH;
+      if (ny > floor){ ny = floor; landed = true; }
+      if (hits(a.x, ny, a.grav.ground, n)){
+        // walk back until it fits, so it sits neatly on top
+        let ty = a.y;
+        while (ty < ny && !hits(a.x, ty + 1, a.grav.ground, n)) ty++;
+        while (ty > 0 && hits(a.x, ty, a.grav.ground, n)) ty--;   // sit flush, never overlapping
+        ny = ty; landed = true;
+      }
+      a.y = ny;
+      if (landed) a.vy = 0;
+      a.onGround = landed;
+    }
+    if (a.anim && a.anim.list.length){           // flip through a list of sprites
+      a.anim.t++;
+      if (a.anim.t >= a.anim.speed){
+        a.anim.t = 0;
+        a.anim.i = (a.anim.i + 1) % a.anim.list.length;
+      }
+    }
+  }
 }
 
 /* ---------- beeps ---------- */
@@ -795,6 +910,12 @@ function exec(list){
   }
 }
 
+const EASY_ONLY = ["gravity","jump","horizontal","vertical","animate"];
+function easyOnly(name, line){
+  if (project.mode !== "easy")
+    throw new Err(name + "() is an Easy mode command — switch the mode picker at the top to Easy", line);
+}
+
 function runCall(st){
   const m = st.text.match(/^(\w+)\s*\((.*)\)\s*$/s);
   if (!m) throw new Err("this doesn't look like a command: " + st.text, st.n);
@@ -820,6 +941,42 @@ function runCall(st){
                       if (rm && cx >= 0 && cy >= 0 && cx < COLS && cy < ROWS)
                         rm[cy*COLS+cx] = Math.round(n) || 0;
                       break; }
+    /* ---- title screens ---- */
+    case "title": case "titlescreen": case "title_screen": {
+      const [name] = A();
+      if (R.titlesShown[String(name)]) break;      // already dismissed, carry on
+      showTitle(name);
+      collectTitleButtons(R.prog);
+      throw new Wait(0);                            // hold everything until Play
+    }
+    case "titleoption": case "title_option": { addTitleButton(A()[0]); break; }
+
+    /* ---- lobby ---- */
+    case "share": { const [n] = A(); R.shared[Math.round(n)] = true; break; }
+
+    /* ---- Easy only ---- */
+    case "gravity": { easyOnly(name, st.n);
+                      const [n, g] = A();
+                      actor(n).grav = { ground: g || 0 }; break; }
+    case "jump":    { easyOnly(name, st.n);
+                      const [n, power] = A(); const a = actor(n);
+                      if (a.onGround){ a.vy = -(power || 7); a.onGround = false; }
+                      break; }
+    case "horizontal": { easyOnly(name, st.n);
+                         const [n, w, sp] = A();
+                         actor(n).hor = { wall: w || 0, speed: sp || 3 }; break; }
+    case "vertical":   { easyOnly(name, st.n);
+                         const [n, w, sp] = A();
+                         actor(n).ver = { wall: w || 0, speed: sp || 3 }; break; }
+    case "animate": { easyOnly(name, st.n);
+                      const [n, list, speed] = A();
+                      const frames = String(list).split(",").map(v => parseInt(v.trim(), 10))
+                                                 .filter(v => v > 0);
+                      if (!frames.length) throw new Err("animate needs a list like \"1, 2, 3\"", st.n);
+                      frames.forEach(ensureSprite);
+                      actor(n).anim = { list: frames, i:0, t:0, speed: Math.max(1, Math.round(speed || 8)) };
+                      break; }
+
     case "wait":  { throw new Wait(Math.max(1, Math.round(A()[0] || 1))); }
     case "stop":  { throw new Stop(); }
     case "say":   { log(String(A()[0])); break; }
@@ -833,13 +990,20 @@ function run(){
   $("console").innerHTML = "";
   project.code = $("code").value; save();
 
-  try { R.prog = parse(project.code); }
-  catch (e){ return log("Oops — " + e, "err"); }
+  R.hard = null;
+  if (project.mode !== "hard"){
+    try { R.prog = parse(project.code); }
+    catch (e){ return log("Oops — " + e, "err"); }
+  }
 
-  R.running = true; R.actors = {}; R.vars = {}; R.texts = [];
+  R.running = true; R.actors = {}; R.vars = {}; R.texts = []; R.extra = [];
   R.roomData = project.rooms.map(r => r.slice());   // games edit a copy, not your saved rooms
   R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false;
-  log("running…", "ok");
+  R.title = null; R.buttons = []; R.clicks = []; R.titlesShown = {};
+  R.shared = {}; R.mates = {};
+  if (project.mode === "hard" && !runHard()){ R.running = false; return; }
+
+  log("running… (" + MODES[project.mode].label + " mode)", "ok");
   stage.focus();
   loop();
 }
@@ -863,8 +1027,19 @@ function loop(){
   if (!R.running) return;
   R.raf = requestAnimationFrame(loop);
 
+  // a title screen freezes the program until a button is pressed
+  if (R.title){ R.clicks = []; render(); return; }
+
   if (R.waitFrames > 0){ R.waitFrames--; render(); return; }
   R.texts = [];
+
+  R.extra = [];
+
+  if (R.hard){
+    if (!hardLoop()) return;
+    stepBehaviours(); netTick();
+    R.frame++; render(); return;
+  }
 
   if (!R.startDone){
     R.startDone = true;
@@ -878,6 +1053,10 @@ function loop(){
       if (R.frame === 0 && !safe([b], "your code")) return;
     }
   }
+  stepBehaviours();
+  netTick();
+  R.lastButtons = R.buttons.map(b => b.label);
+  R.clicks = [];
   R.frame++;
   render();
 }
@@ -886,13 +1065,22 @@ function render(){
   sctx.fillStyle = "#000";
   sctx.fillRect(0, 0, VW, VH);
 
+  if (R.title){ drawTitle(); return; }   // nothing else shows behind a title screen
+
   const rm = liveRoom(R.room);
   if (rm) for (let i = 0; i < rm.length; i++){
     if (rm[i]) blit(sctx, rm[i], (i % COLS) * SW, Math.floor(i / COLS) * SH);
   }
+  for (const e of (R.extra || [])) blit(sctx, e.n, Math.round(e.x), Math.round(e.y));
+  for (const n of Object.keys(R.mates)){       // the other player's sprites
+    const m = R.mates[n];
+    blit(sctx, m.s, Math.round(m.x), Math.round(m.y));
+  }
   for (const n of Object.keys(R.actors)){
     const a = R.actors[n];
-    if (a.on) blit(sctx, +n, Math.round(a.x), Math.round(a.y));
+    if (!a.on) continue;
+    const which = a.anim ? a.anim.list[a.anim.i] : +n;
+    blit(sctx, which, Math.round(a.x), Math.round(a.y));
   }
   sctx.font = "8px ui-monospace,monospace";
   sctx.textBaseline = "top";
@@ -902,16 +1090,300 @@ function render(){
   }
 }
 
+function drawTitle(){
+  sctx.fillStyle = "#0b0e18";
+  sctx.fillRect(0, 0, VW, VH);
+
+  sctx.textAlign = "center";
+  sctx.font = "bold 26px ui-monospace,monospace";
+  sctx.fillStyle = "#0b1017"; sctx.fillText(R.title, VW/2 + 2, 60);
+  sctx.fillStyle = "#ffd166"; sctx.fillText(R.title, VW/2, 58);
+
+  sctx.font = "10px ui-monospace,monospace";
+  for (const q of buttonRects()){
+    sctx.fillStyle = "#232734";
+    sctx.fillRect(q.x, q.y, q.w, q.h);
+    sctx.strokeStyle = "#5ac8fa"; sctx.lineWidth = 1;
+    sctx.strokeRect(q.x + .5, q.y + .5, q.w - 1, q.h - 1);
+    sctx.fillStyle = "#e8ecf5";
+    sctx.fillText(q.b.label, VW/2, q.y + 7);
+  }
+  sctx.textAlign = "left";
+}
+
+/* =========================================================
+   DIFFICULTY MODES
+   easy   = Normal plus the do-it-for-me commands
+   normal = the little text language
+   hard   = real JavaScript with an engine API
+   ========================================================= */
+const MODES = {
+  easy:   { label:"Easy",
+            blurb:"Everything is a one-liner. <b>gravity()</b>, <b>horizontal()</b>, <b>vertical()</b>, " +
+                  "<b>jump()</b> and <b>animate()</b> do the hard parts for you." },
+  normal: { label:"Normal",
+            blurb:"The Simple++ language: <b>show</b>, <b>move</b>, <b>print</b>, <b>when key</b>, " +
+                  "<b>if</b>, <b>repeat</b>. You write the movement yourself." },
+  hard:   { label:"Hard",
+            blurb:"Plain <b>JavaScript</b>. Real loops, functions, arrays, objects — with the engine " +
+                  "handed to you as an API. For people who already code." }
+};
+
+function setMode(m, quiet){
+  if (!MODES[m]) return;
+  const changed = project.mode !== m;
+  project.mode = m;
+  for (const k of Object.keys(MODES)) $("m-" + k).classList.toggle("on", k === m);
+  $("modeline").innerHTML = "<b>" + MODES[m].label + " mode</b> — " + MODES[m].blurb;
+  buildHelp(); buildLessons();
+  if (changed && !quiet){
+    stop();
+    if (confirm("Switch to " + MODES[m].label + " mode?\n\nThe editor will load the " +
+                MODES[m].label + " starter program. Your sprites and rooms are kept.")){
+      $("code").value = STARTERS[m];
+    }
+    save();
+  }
+}
+
+const STARTERS = {
+  easy:`# EASY MODE — the engine does the hard parts
+# sprite 1 = you, sprite 2 = the ground
+
+title("My Game")
+
+when start
+  room(1)
+  put(1, 40, 40)
+  show(1)
+  gravity(1, 2)      # sprite 1 falls, sprite 2 is solid
+  horizontal(1, 2)   # left/right keys, smooth, blocked by sprite 2
+end
+
+when key up
+  jump(1, 8)
+end
+
+every frame
+  print("arrows to move, up to jump", 4, 4)
+end
+`,
+  normal:`# NORMAL MODE — you are in charge
+when start
+  put(1, 150, 110)
+  show(1)
+end
+
+every frame
+  room(1)
+  print("arrow keys to move", 4, 4)
+end
+
+when key left
+  move(1, -2, 0)
+end
+when key right
+  move(1, 2, 0)
+end
+when key up
+  move(1, 0, -2)
+end
+when key down
+  move(1, 0, 2)
+end
+`,
+  hard:`// HARD MODE — this is JavaScript.
+// The engine is on \`S\`: S.show S.hide S.put S.move S.print S.room
+// S.sprite(n) S.touching(a,b) S.free(n,dx,dy) S.tile(x,y) S.setTile(x,y,n)
+// S.sound(n) S.keys.left S.width S.height S.stop()
+
+const stars = [];
+
+onStart(() => {
+  S.room(1);
+  S.put(1, 150, 110);
+  S.show(1);
+  for (let i = 0; i < 6; i++) stars.push({ x: 30 + i * 45, y: 40 + (i % 3) * 50, got: false });
+});
+
+let score = 0;
+
+onFrame(() => {
+  const me = S.sprite(1);
+  const speed = 2.5;
+  if (S.keys.left)  me.x -= speed;
+  if (S.keys.right) me.x += speed;
+  if (S.keys.up)    me.y -= speed;
+  if (S.keys.down)  me.y += speed;
+  me.x = Math.max(0, Math.min(S.width  - 16, me.x));
+  me.y = Math.max(0, Math.min(S.height - 16, me.y));
+
+  for (const st of stars){
+    if (st.got) continue;
+    S.draw(3, st.x, st.y);                       // draw without an actor
+    if (Math.hypot(st.x - me.x, st.y - me.y) < 14){
+      st.got = true; score++; S.sound(1);
+    }
+  }
+  S.print(\`score \${score} / \${stars.length}\`, 6, 6);
+  if (score === stars.length) S.print("ALL DONE!", 120, 110);
+});
+`
+};
+
+/* =========================================================
+   HARD MODE — run the editor contents as JavaScript
+   ========================================================= */
+function runHard(){
+  const starts = [], frames = [], keyHandlers = [];
+  const S = {
+    width: VW, height: VH,
+    get keys(){ return R.keys; },
+    sprite: n => actor(n),
+    show:  n => { ensureSprite(Math.round(n)); actor(n).on = true; },
+    hide:  n => actor(n).on = false,
+    put:   (n,x,y) => { const a = actor(n); a.x = x; a.y = y; },
+    move:  (n,dx,dy) => { const a = actor(n); a.x += dx||0; a.y += dy||0; },
+    print: (t,x,y) => R.texts.push({ t:String(t), x:x||0, y:y||0 }),
+    draw:  (n,x,y) => R.extra.push({ n:Math.round(n), x, y }),
+    room:  n => R.room = Math.round(n),
+    tile:  (x,y) => tileAtPixel(x,y),
+    setTile: (x,y,n) => {
+      const rm = liveRoom(R.room);
+      const cx = Math.floor(x/SW), cy = Math.floor(y/SH);
+      if (rm && cx>=0 && cy>=0 && cx<COLS && cy<ROWS) rm[cy*COLS+cx] = Math.round(n)||0;
+    },
+    touching, free: isFree, sound: beep,
+    sprites: () => project.sprites.length,
+    stop: () => stop(),
+    log: (...a) => log(a.join(" ")),
+    random: n => Math.floor(Math.random() * n)
+  };
+  const onStart = fn => starts.push(fn);
+  const onFrame = fn => frames.push(fn);
+  const onKey   = (k, fn) => keyHandlers.push({ k:String(k).toLowerCase(), fn });
+
+  try {
+    new Function("S", "onStart", "onFrame", "onKey", '"use strict";' + project.code)
+      (S, onStart, onFrame, onKey);
+  } catch(e){
+    return log("JavaScript error — " + e.message, "err");
+  }
+  R.hard = { starts, frames, keyHandlers };
+  return true;
+}
+
+function hardLoop(){
+  const h = R.hard;
+  try {
+    if (!R.startDone){ R.startDone = true; for (const f of h.starts) f(); }
+    for (const f of h.frames) f();
+    for (const k of h.keyHandlers) if (R.keys[k.k]) k.fn();
+  } catch(e){
+    log("JavaScript error — " + e.message, "err");
+    stop(); return false;
+  }
+  return true;
+}
+
+/* =========================================================
+   LOBBY — play together in two browser tabs on this computer
+   ========================================================= */
+let chan = null;
+function makeCode(){
+  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = ""; for (let i = 0; i < 5; i++) out += A[Math.floor(Math.random()*A.length)];
+  return out;
+}
+function joinChannel(code, me){
+  if (chan) chan.close();
+  chan = new BroadcastChannel("simplepp-" + code);
+  R.lobby = { code, me, players: me === 1 ? 1 : 2, seen: 0 };
+  chan.onmessage = ev => {
+    const d = ev.data;
+    if (d.type === "hello"){ R.lobby.players = 2; if (me === 1) chan.postMessage({ type:"hello", from:me }); }
+    if (d.type === "state" && d.from !== me){
+      R.lobby.players = 2; R.lobby.seen = Date.now();
+      R.mates = {};
+      for (const it of d.sprites) R.mates[it.s] = it;
+    }
+  };
+  chan.postMessage({ type:"hello", from:me });
+  drawLobby();
+}
+function netTick(){
+  if (!chan || !R.lobby) return;
+  if (R.frame % 3) return;                       // ~20 updates a second is plenty
+  const out = [];
+  for (const key of Object.keys(R.shared || {})){
+    const a = R.actors[key];
+    if (a && a.on) out.push({ s:+key, x:a.x, y:a.y });
+  }
+  chan.postMessage({ type:"state", from:R.lobby.me, sprites: out });
+}
+function matePos(n, which){
+  const m = R.mates[Math.round(n)];
+  if (!m) return -100;
+  return String(which || "x").toLowerCase().startsWith("y") ? m.y : m.x;
+}
+
+function openLobby(){ $("lobby-ov").classList.add("on"); drawLobby(); }
+function closeLobby(){ $("lobby-ov").classList.remove("on"); }
+function leaveLobby(){ if (chan) chan.close(); chan = null; R.lobby = null; R.mates = {}; drawLobby(); }
+
+function drawLobby(){
+  $("lobby-note").innerHTML =
+    "Two players, two browser tabs <b>on this same computer</b>. One person makes a lobby, " +
+    "the other opens Simple++ in a second tab and types the code in. " +
+    "<br><br>Playing with someone in another house needs a server on the internet, " +
+    "and a single HTML file with no server behind it can't do that — so this is the honest version.";
+  const box = $("lobby-body");
+  if (R.lobby){
+    box.innerHTML =
+      `<div class="hint">You are <b style="color:var(--accent)">player ${R.lobby.me}</b> in lobby</div>
+       <div class="code-field" style="margin:10px 0">${R.lobby.code}</div>
+       <div class="hint" style="margin-bottom:10px">
+         ${R.lobby.players > 1 ? "✅ another player is here" : "waiting for someone to join…"}
+       </div>`;
+    const copy = document.createElement("button");
+    copy.textContent = "Copy code";
+    copy.onclick = () => { navigator.clipboard?.writeText(R.lobby.code); copy.textContent = "Copied!"; };
+    const leave = document.createElement("button");
+    leave.textContent = "Leave"; leave.onclick = leaveLobby;
+    box.append(copy, " ", leave);
+    return;
+  }
+  box.innerHTML = "";
+  const mk = document.createElement("button");
+  mk.textContent = "Create a lobby";
+  mk.onclick = () => joinChannel(makeCode(), 1);
+  const inp = document.createElement("input");
+  inp.type = "text"; inp.placeholder = "CODE"; inp.style.maxWidth = "120px";
+  inp.style.textTransform = "uppercase";
+  const jn = document.createElement("button");
+  jn.textContent = "Join";
+  jn.onclick = () => { const c = inp.value.trim().toUpperCase(); if (c) joinChannel(c, 2); };
+  const row = document.createElement("div");
+  row.className = "row"; row.style.marginTop = "8px";
+  row.append(inp, jn);
+  box.append(mk, row);
+  const h = document.createElement("div");
+  h.className = "hint"; h.style.marginTop = "12px";
+  h.innerHTML = "In your code: <code>share(1)</code> sends sprite 1 to the other player, " +
+                "<code>me()</code> is 1 or 2, and <code>mate(1, x)</code> reads where their sprite 1 is.";
+  box.append(h);
+}
+
 /* =========================================================
    SAVE / LOAD
    ========================================================= */
 function save(){
   project.code = $("code").value;
-  try { localStorage.setItem("numsprite", JSON.stringify(project)); } catch(e){}
+  try { localStorage.setItem("simplepp", JSON.stringify(project)); } catch(e){}
 }
 function load(){
   try {
-    const raw = localStorage.getItem("numsprite");
+    const raw = localStorage.getItem("simplepp");
     if (raw){
       const p = JSON.parse(raw);
       if (p.sprites && p.rooms) project = p;
@@ -922,7 +1394,7 @@ function saveFile(){
   save();
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify(project)], { type:"application/json" }));
-  a.download = "numsprite-project.json";
+  a.download = "simplepp-project.json";
   a.click();
 }
 function loadFile(input){
@@ -933,10 +1405,11 @@ function loadFile(input){
       const p = JSON.parse(r.result);
       if (!p.sprites || !p.rooms) throw 0;
       project = p; curSprite = 0; curRoom = 0; curTile = 1;
+      setMode(project.mode || "normal", true);
       $("code").value = project.code || "";
       drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList(); save();
       log("loaded " + f.name, "ok");
-    } catch(e){ log("that file isn't a NumSprite project", "err"); }
+    } catch(e){ log("that file isn't a Simple++ project", "err"); }
   };
   r.readAsText(f);
   input.value = "";
@@ -1326,6 +1799,97 @@ end
 `
   },
   {
+    em:"🏃", name:"Jump About",  mode:"easy",
+    desc:"An Easy-mode platformer. Gravity, walls and jumping are one line each.",
+    sprites:["face","brick","coin"],
+    rooms:[() => { const r = borderRoom(2);
+                   for (let x = 3; x < 8; x++)  r[10*COLS+x] = 2;
+                   for (let x = 11; x < 16; x++) r[7*COLS+x] = 2;
+                   for (let x = 5; x < 9; x++)  r[4*COLS+x] = 2;
+                   return r; }],
+    code:`# JUMP ABOUT — Easy mode
+# gravity() and horizontal() do the physics for you
+
+title("Jump About")
+titleoption("How to play")
+
+when start
+  room(1)
+  put(1, 40, 40)
+  show(1)
+  put(3, 250, 90)
+  show(3)
+  gravity(1, 2)        # fall, and land on sprite 2
+  horizontal(1, 2)     # arrow keys, smooth, sprite 2 is a wall
+  set(coins, 0)
+end
+
+when key up
+  jump(1, 8)
+end
+
+every frame
+  print("coins: " + coins, 6, 6)
+
+  if clickbutton("How to play")
+    print("arrows + up to jump", 90, 200)
+  end
+
+  if touching(1, 3)
+    add(coins, 1)
+    sound(1)
+    put(3, 30 + random(250), 30 + random(120))
+  end
+end
+
+# TRY THIS
+# · change jump(1, 8) to jump(1, 12) for a moon jump
+# · draw a second ground sprite and build a bigger level in the Rooms tab
+`
+  },
+  {
+    em:"👥", name:"Tag (2 players)", mode:"normal",
+    desc:"Two browser tabs, one lobby code. Open the 👥 Lobby button first.",
+    sprites:["face","brick","ship"],
+    rooms:[() => borderRoom(2)],
+    code:`# TAG — for two players
+# 1. press the 👥 Lobby button and make a lobby
+# 2. open this same file in a second tab, join with the code
+# 3. press Run in BOTH tabs
+
+when start
+  room(1)
+  show(1)
+  put(1, 60, 60)
+  share(1)          # the other player can see my sprite 1
+end
+
+every frame
+  print("you are player " + me(), 6, 6)
+  if players() < 2
+    print("waiting for a friend...", 6, 18)
+  end
+end
+
+when key left
+  move(1, -3, 0)
+end
+when key right
+  move(1, 3, 0)
+end
+when key up
+  move(1, 0, -3)
+end
+when key down
+  move(1, 0, 3)
+end
+
+# TRY THIS
+# · mate(1, x) and mate(1, y) tell you where they are
+# · score a point when you get close to them
+`
+  },
+  {
     em:"✏️", name:"Empty Sandbox",
     desc:"Three blank sprites, one blank room, one line of code. Build whatever you want.",
     sprites:[null, null, null],
@@ -1350,10 +1914,12 @@ function loadTemplate(i){
   const t = TEMPLATES[i];
   stop();
   project = {
+    mode:    t.mode || "normal",
     sprites: t.sprites.map(k => k ? ART[k].slice() : blankSprite()),
     rooms:   t.rooms.map(f => f()),
     code:    t.code
   };
+  setMode(project.mode, true);
   curSprite = 0; curRoom = 0; curTile = 1;
   $("code").value = project.code;
   drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
@@ -1368,7 +1934,10 @@ function openGallery(){
   TEMPLATES.forEach((t, i) => {
     const d = document.createElement("div");
     d.className = "card";
-    d.innerHTML = `<div class="em">${t.em}</div><b>${t.name}</b><span>${t.desc}</span>`;
+    const badge = (t.mode || "normal");
+    d.innerHTML = `<div class="em">${t.em}</div><b>${t.name}</b>` +
+                  `<span style="color:var(--accent2)">${MODES[badge].label} mode</span>` +
+                  `<span style="display:block;margin-top:4px">${t.desc}</span>`;
     const strip = document.createElement("div");
     strip.className = "art";
     t.sprites.forEach(k => {
@@ -1437,9 +2006,48 @@ const LESSONS = [
     c:`when start\n  show(1)\n  put(1, 0, 110)\n  repeat 10\n    move(1, 30, 0)\n  end\nend\n\nevery frame\n  print("that was 10 moves of 30", 40, 40)\nend` }
 ];
 
+const EASY_LESSONS = [
+  { t:"Fall down",
+    p:"gravity(1, 2) means: sprite 1 falls, and sprite 2 is solid ground — both the sprite itself and every room tile painted with it.",
+    c:`when start\n  room(1)\n  put(1, 40, 20)\n  show(1)\n  gravity(1, 2)\nend` },
+  { t:"Walk about",
+    p:"horizontal(1, 2) hands the left and right arrow keys to sprite 1, with smooth speeding up and slowing down, and sprite 2 in the way.",
+    c:`when start\n  room(1)\n  put(1, 40, 20)\n  show(1)\n  gravity(1, 2)\n  horizontal(1, 2)\nend` },
+  { t:"Jump",
+    p:"jump() only works when you're standing on something, so you can't fly. The second number is how hard.",
+    c:`when start\n  room(1)\n  put(1, 40, 20)\n  show(1)\n  gravity(1, 2)\n  horizontal(1, 2)\nend\n\nwhen key up\n  jump(1, 8)\nend` },
+  { t:"Up and down instead",
+    p:"vertical() is horizontal()'s twin. Use it on its own for a top-down game — no gravity anywhere.",
+    c:`when start\n  room(1)\n  put(1, 100, 100)\n  show(1)\n  horizontal(1, 2)\n  vertical(1, 2)\nend` },
+  { t:"Make it wiggle",
+    p:"animate(1, \"1, 2, 3, 2\") makes sprite 1 flip through those sprites forever. Paint sprites 2 and 3 to see it properly.",
+    c:`when start\n  put(1, 150, 110)\n  show(1)\n  animate(1, "1, 2, 3, 2", 12)\nend` },
+  { t:"A front door",
+    p:"title() stops everything and shows a Play button. titleoption() adds more buttons, and clickbutton() tells you when one was pressed.",
+    c:`title("My Game")\ntitleoption("Options")\n\nwhen start\n  put(1, 150, 110)\n  show(1)\nend\n\nevery frame\n  print("the game!", 120, 40)\n  if clickbutton("Options")\n    print("no options yet :)", 90, 200)\n  end\nend` }
+];
+
+const HARD_LESSONS = [
+  { t:"The shape of a Hard program",
+    p:"Your code is one script, run once. Register onStart and onFrame; the engine calls them. S is the engine.",
+    c:`onStart(() => {\n  S.put(1, 150, 110);\n  S.show(1);\n});\n\nonFrame(() => {\n  S.print("hello from JavaScript", 60, 20);\n});` },
+  { t:"Sprites are live objects",
+    p:"S.sprite(n) hands you the actual object. Assign to .x and .y directly — no setter needed.",
+    c:`onStart(() => { S.show(1); });\n\nonFrame(() => {\n  const me = S.sprite(1);\n  const speed = 3;\n  if (S.keys.left)  me.x -= speed;\n  if (S.keys.right) me.x += speed;\n  if (S.keys.up)    me.y -= speed;\n  if (S.keys.down)  me.y += speed;\n  me.x = Math.max(0, Math.min(S.width - 16, me.x));\n  me.y = Math.max(0, Math.min(S.height - 16, me.y));\n});` },
+  { t:"Entities without actors",
+    p:"S.draw() paints a sprite for a single frame, so you can keep hundreds of things in an ordinary array and never touch the actor table.",
+    c:`const bits = Array.from({length: 40}, () => ({\n  x: Math.random() * 320, y: Math.random() * 240,\n  vx: Math.random() * 2 - 1, vy: Math.random() * 2 - 1\n}));\n\nonFrame(() => {\n  for (const b of bits){\n    b.x = (b.x + b.vx + 320) % 320;\n    b.y = (b.y + b.vy + 240) % 240;\n    S.draw(3, b.x, b.y);\n  }\n  S.print(bits.length + " stars, no actors", 6, 6);\n});` },
+  { t:"Talk to the room grid",
+    p:"S.tile() and S.setTile() read and write the tile map at runtime, on a copy — the rooms you drew are safe.",
+    c:`onStart(() => { S.room(1); S.put(1, 24, 24); S.show(1); });\n\nonFrame(() => {\n  const me = S.sprite(1);\n  const speed = 2;\n  if (S.keys.left)  me.x -= speed;\n  if (S.keys.right) me.x += speed;\n  if (S.keys.up)    me.y -= speed;\n  if (S.keys.down)  me.y += speed;\n\n  // dig out whatever you walk over\n  if (S.tile(me.x + 8, me.y + 8)) {\n    S.setTile(me.x + 8, me.y + 8, 0);\n    S.sound(4);\n  }\n});` }
+];
+
 function buildLessons(){
   const box = $("lessons"); box.innerHTML = "";
-  LESSONS.forEach((l, i) => {
+  const m = project.mode || "normal";
+  const set = m === "hard" ? HARD_LESSONS : (m === "easy" ? EASY_LESSONS : LESSONS);
+  $("learn-title").textContent = set.length + " little steps · " + MODES[m].label + " mode";
+  set.forEach((l, i) => {
     const d = document.createElement("div");
     d.className = "lesson";
     const h = document.createElement("h4");
@@ -1449,6 +2057,198 @@ function buildLessons(){
     const b = document.createElement("button"); b.textContent = "Try it ▶";
     b.onclick = () => { $("code").value = l.c; save(); tab("code"); run(); };
     d.append(h, p, pre, b);
+    box.appendChild(d);
+  });
+}
+
+
+/* =========================================================
+   HELP — different for each mode
+   ========================================================= */
+const HELP_CORE = `
+<code>show(1)</code>              show sprite 1
+<code>hide(1)</code>              hide sprite 1
+<code>move(1, 10, 0)</code>       move sprite 1 by 10 pixels right, 0 down
+<code>put(1, 100, 50)</code>      put sprite 1 exactly at x=100 y=50
+<code>print("Hi", 0, 0)</code>    draw text at x=0 y=0
+<code>room(2)</code>             show room 2 behind everything
+<code>set(score, 0)</code>       make a variable
+<code>add(score, 1)</code>       add to a variable
+<code>wait(30)</code>            wait 30 frames (about half a second)
+<code>sound(1)</code>            make a beep — try 1 to 6
+<code>settile(80, 64, 0)</code>  change the room tile there (0 = rub it out)
+<code>stop()</code>              stop the program
+
+Blocks (a block ends with <code>end</code>):
+
+<code>when start</code>            runs one time at the beginning
+  show(1)
+<code>end</code>
+
+<code>when key left</code>         runs while the left arrow is held
+  move(1, -2, 0)                keys: left right up down space z x
+<code>end</code>
+
+<code>every frame</code>           runs 60 times a second
+  print("score: " + score, 4, 4)
+<code>end</code>
+
+<code>repeat 5</code>              do something 5 times
+  move(1, 4, 0)
+<code>end</code>
+
+<code>if touching(1, 2)</code>      true when sprite 1 overlaps sprite 2
+  hide(2)
+<code>end</code>
+
+Things you can ask about:
+
+<code>x(1)  y(1)</code>           where a sprite is
+<code>visible(1)</code>          is it shown?
+<code>touching(1, 2)</code>      are two sprites overlapping?
+<code>free(1, dx, dy)</code>     can it move there, or is a wall in the way?
+<code>tile(80, 64)</code>        which sprite is painted at that spot
+<code>random(10)</code>          a surprise number from 0 to 9
+<code>key(space)</code>          is a key held down right now?
+
+Title screens:
+
+<code>title("My Game")</code>      big title with a Play button — the program
+                          waits here until Play is clicked.
+                          <code>titlescreen()</code> and <code>title_screen()</code> work too.
+<code>titleoption("Options")</code> adds another button to that screen
+                          (<code>title_option()</code> is the same thing)
+
+<code>if clickbutton("Options")</code>   true on the frame that button is clicked
+  print("you clicked it", 100, 200)  <code>click_button()</code> is the same thing.
+<code>end</code>                        Naming a button you never made is an error.
+
+Playing together (see the 👥 Lobby button):
+
+<code>share(1)</code>            send sprite 1 to the other player
+<code>me()</code>                are you player 1 or player 2?
+<code>players()</code>           how many of you are connected
+<code>mate(1, x)</code>          where the other player's sprite 1 is
+
+Notes
+· The screen is 320 x 240 pixels. x grows right, y grows down.
+· Sprites are 16 x 16. Sprite numbers start at 1 and never run out.
+· Anything after <code>#</code> is a comment.
+· Variables work anywhere a number does: <code>move(1, speed, 0)</code>
+`;
+
+const HELP_EASY_EXTRA = `
+<b style="color:var(--accent2)">Easy mode extras</b> — these do the fiddly parts for you.
+The second number is what counts as solid: a sprite number, which also means
+every room tile painted with that sprite. Leave it out and only the edges of
+the screen stop you.
+
+<code>gravity(1, 2)</code>        sprite 1 falls; sprite 2 is the ground
+<code>gravity(1)</code>           sprite 1 falls to the bottom of the screen
+<code>jump(1, 8)</code>           jump — only works when standing on something
+<code>horizontal(1, 2)</code>     left/right keys move sprite 1, smoothly,
+                          and sprite 2 blocks it
+<code>horizontal(1)</code>        the same with nothing in the way
+<code>vertical(1, 2)</code>       up/down keys, same idea
+<code>animate(1, "1, 2, 3, 2")</code>
+                          sprite 1 flips through those sprites forever
+<code>animate(1, "1, 2", 20)</code>  a third number = slower (frames per picture)
+
+A whole platformer, in Easy mode:
+
+<code>when start</code>
+  room(1)
+  put(1, 40, 40)
+  show(1)
+  gravity(1, 2)
+  horizontal(1, 2)
+<code>end</code>
+
+<code>when key up</code>
+  jump(1, 8)
+<code>end</code>
+
+`;
+
+const HELP_HARD = `
+<b style="color:var(--accent2)">Hard mode is JavaScript.</b> The whole editor is one script,
+run once. Register callbacks, then the engine drives them.
+
+<code>onStart(() => { ... })</code>       once, at the beginning
+<code>onFrame(() => { ... })</code>       every frame, 60 times a second
+<code>onKey("left", () => { ... })</code> every frame that key is held
+
+The engine hangs off <code>S</code>:
+
+<code>S.sprite(n)</code>          live object — <code>{x, y, on}</code>, assign to it directly
+<code>S.show(n)  S.hide(n)</code>
+<code>S.put(n, x, y)  S.move(n, dx, dy)</code>
+<code>S.draw(n, x, y)</code>      draw a sprite for one frame with no actor —
+                        good for particles, bullets, tile-free entities
+<code>S.print(text, x, y)</code>
+<code>S.room(n)  S.tile(x, y)  S.setTile(x, y, n)</code>
+<code>S.touching(a, b)  S.free(n, dx, dy)</code>
+<code>S.keys.left</code>          .right .up .down .space .z .x .c .enter
+<code>S.sound(n)  S.random(n)  S.log(...)  S.stop()</code>
+<code>S.width  S.height</code>    320 and 240
+<code>S.sprites()</code>          how many sprites the project has
+
+Everything else is ordinary JavaScript: <code>let</code>, <code>const</code>, arrays, objects,
+classes, <code>for</code>, <code>while</code>, closures, <code>Math</code>, template strings. Errors come
+back with the JavaScript message, not a friendly one — you asked for Hard.
+
+The Paint and Rooms tabs work exactly the same in every mode.
+`;
+
+function buildHelp(){
+  const m = project.mode || "normal";
+  const head = `<h3>${MODES[m].label} mode — every command</h3>`;
+  const body = m === "hard" ? HELP_HARD
+             : (m === "easy" ? HELP_EASY_EXTRA + HELP_CORE : HELP_CORE);
+  $("helpbox").innerHTML = head +
+    `<div class="hint" style="max-width:820px;font-size:13px"><pre style="white-space:pre-wrap">${body}</pre></div>`;
+}
+
+/* =========================================================
+   CHANGELOG (the same list as CHANGELOG.md)
+   ========================================================= */
+const RELEASES = [
+  { v:"0.3.0", t:"Simple++",
+    lines:[
+      "<b>Renamed to Simple++.</b> Old saved projects still load.",
+      "<b>Three difficulty modes</b>, saved with the project. Easy adds one-line commands that do the hard parts for you, Normal is the language as it was, Hard is plain JavaScript with the engine as an <code>S</code> API plus <code>onStart</code>/<code>onFrame</code>/<code>onKey</code>.",
+      "<b>Easy commands:</b> <code>gravity(1, 2)</code>, <code>horizontal(1, 2)</code>, <code>vertical(1, 2)</code>, <code>jump(1, 8)</code>, <code>animate(1, \"1, 2, 3, 2\")</code>. The second number is what counts as solid; leave it out and only the screen edges stop you.",
+      "<b>Title screens:</b> <code>title(\"Game\")</code> (or <code>titlescreen</code>/<code>title_screen</code>) freezes the program behind a Play button, <code>titleoption(\"Options\")</code> adds buttons, <code>if clickbutton(\"Options\")</code> reads them. Naming a button that doesn't exist stops the program and says so.",
+      "<b>Lobby:</b> code-based two-player across two browser tabs on one computer — <code>share(1)</code>, <code>me()</code>, <code>players()</code>, <code>mate(1, x)</code>. Over the internet this needs a server, which a lone HTML file can't provide, so this is the local version rather than a pretend one.",
+      "<b>This changelog</b>, in the app and in <code>CHANGELOG.md</code>.",
+      "Two more templates: <b>Jump About</b> (Easy platformer) and <b>Tag</b> (two players).",
+      "Help and the Learn steps now follow whichever mode you're in."
+    ] },
+  { v:"0.2.0", t:"Templates and lessons",
+    lines:[
+      "<b>Template gallery</b> — six complete games, shown automatically on a first visit, each ending with a <code>#\u00a0TRY THIS</code> list.",
+      "<b>Learn tab</b> — ten steps, each with a Try it button that loads and runs the code.",
+      "New commands: <code>sound()</code>, <code>tile()</code>, <code>settile()</code>, <code>free()</code>.",
+      "Fixed: running a game edited the rooms you had drawn. Games now use a copy.",
+      "Fixed: <code>key(space)</code> complained that <code>space</code> wasn't a variable."
+    ] },
+  { v:"0.1.0", t:"First version",
+    lines:[
+      "Sprites are numbers — unlimited, 16\u00d716, sixteen colours, painted with the mouse.",
+      "Rooms: stamp any sprite as a tile on a 20\u00d715 grid, unlimited rooms.",
+      "The language: <code>show hide move put print room set add wait stop</code>, with <code>when start</code>, <code>every frame</code>, <code>when key</code>, <code>repeat</code> and <code>if</code>.",
+      "Errors give you the line number and plain words.",
+      "Auto-save in the browser, plus JSON export and import."
+    ] }
+];
+
+function buildReleases(){
+  const box = $("releases"); box.innerHTML = "";
+  RELEASES.forEach((r, i) => {
+    const d = document.createElement("div");
+    d.className = "rel";
+    d.innerHTML = `<h4>${r.v} — ${r.t}${i ? "" : "<em>newest</em>"}</h4><ul>` +
+                  r.lines.map(l => "<li>" + l + "</li>").join("") + "</ul>";
     box.appendChild(d);
   });
 }
@@ -1467,14 +2267,15 @@ load();
 if (project.sprites.every(s => s.every(p => p < 0))) defaultArt();
 $("code").value = project.code || "";
 $("code").addEventListener("input", save);
-buildLessons();
+buildLessons(); buildReleases(); buildHelp();
+setMode(project.mode || "normal", true);
 drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
 render();
 log("press ▶ Run to start. New here? Open ✦ Templates, or the ★ Learn tab.", "ok");
 
 // first ever visit: show off the templates straight away
-if (!localStorage.getItem("numsprite-seen")){
-  try { localStorage.setItem("numsprite-seen", "1"); } catch(e){}
+if (!localStorage.getItem("simplepp-seen")){
+  try { localStorage.setItem("simplepp-seen", "1"); } catch(e){}
   setTimeout(openGallery, 350);
 }
 </script>
