@@ -18,9 +18,11 @@ hide(1)
   plain words with the line number. **⛶ Fullscreen** (or the **F** key) blows
   the stage up to fill the monitor, scaled by a whole number so the pixels stay
   sharp; Escape comes back.
-- **Paint** — a 16×16 pixel editor with pencil, eraser, fill, line, box, circle
-  and eyedropper tools, a colour wheel for adding your own colours, and a slider
-  for how big the drawing area is. Unlimited sprites, numbered 1, 2, 3, and up.
+- **Paint** — a pixel editor with pencil, eraser, fill, line, box, circle and
+  eyedropper tools, a colour wheel for adding your own colours, and a slider for
+  how big the drawing area is. Sprites are 16×16 by default and can be set to 8,
+  24, 32, 48 or 64 — the room grid adjusts to match. Unlimited sprites, numbered
+  1, 2, 3, and up.
 - **Rooms** — stamp any sprite onto a 20×15 tile grid with the mouse.
   Unlimited rooms, shown from code with `room(2)`.
 - **Learn** — short steps, each with a button that loads and runs the code.
@@ -112,6 +114,9 @@ fps(30)                how many times a second the game moves
 ```
 
 `if ... else ... end` and `else if` work in Normal mode and up.
+
+`after start ... end` runs once after `when start` has finished and the first
+frame is drawn. You can write several `when start` blocks; they all run.
 
 `every frame unless <condition> ... end` pauses itself while the condition is
 true and carries on when it stops.

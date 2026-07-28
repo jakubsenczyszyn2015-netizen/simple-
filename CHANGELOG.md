@@ -3,6 +3,35 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.9.0 — Bigger sprites, after start, gallery fixed
+
+### Added
+- **Sprites can be bigger than 16×16.** A picker in the Paint tab offers 8, 16,
+  24, 32, 48 and 64. Changing it resamples every drawing to the new size and
+  rebuilds each room so the tiles stay where they were on screen; the room grid
+  is recalculated to suit (64 → 5×4 tiles, 32 → 10×8, 16 → 20×15, 8 → 40×30).
+
+  The size is saved with the project and carried by `.simple` files, share links
+  and exported games, so anything you send opens at the size it was made at.
+  Templates are drawn at 16 and switch back to it when loaded.
+- **`after start`** — a second opening block, run once after everything in
+  `when start` has finished and the first frame is on screen. Useful for
+  anything that needs the game already set up. Several `when start` blocks are
+  allowed too; they all run, in the order written.
+
+### Fixed
+- **Games posted as issues never appeared in the gallery.** The gallery asked
+  GitHub for issues carrying the label *game-submission*, and the Publish button
+  put that label in the pre-filled link. GitHub drops the `labels` parameter for
+  anyone without write access to the repository, so every submission from
+  anybody but the owner arrived unlabelled and was invisible to the query.
+
+  It now reads **every** issue and keeps the ones that contain a game, whether
+  it arrives as a share link, a fenced block, or pasted in on its own. Pull
+  requests and ordinary bug reports are ignored. If GitHub refuses the request —
+  it allows sixty an hour from one address — the window says so rather than
+  quietly showing nothing.
+
 ## 0.8.1 — Sprites survive the round trip
 
 ### Fixed

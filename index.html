@@ -260,6 +260,17 @@
         <input id="png-limited" type="checkbox" checked style="width:auto">
         <span>Limited colours</span>
       </label>
+      <h3>Sprite size</h3>
+      <select id="sprite-size" onchange="changeSpriteSize(this.value)"
+              style="width:100%;background:#0c0e13;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+        <option value="8">8 × 8 — tiny</option>
+        <option value="16" selected>16 × 16 — normal</option>
+        <option value="24">24 × 24</option>
+        <option value="32">32 × 32 — detailed</option>
+        <option value="48">48 × 48</option>
+        <option value="64">64 × 64 — big</option>
+      </select>
+      <div id="size-note" class="hint" style="margin-bottom:10px"></div>
       <div id="sprite-list" class="sprites"></div>
     </div>
 
@@ -460,9 +471,16 @@
    Simple++ — sprites are numbers, rooms are grids of numbers
    ========================================================= */
 
-const SW = 16, SH = 16;                 // sprite size
-const VW = 320, VH = 240;               // screen size
-const COLS = VW / SW, ROWS = VH / SH;   // room grid = 20 x 15
+let SW = 16, SH = 16;                   // sprite size — a project can change this
+const VW = 320, VH = 240;               // screen size, always
+let COLS = 20, ROWS = 15;               // room grid, worked out from the sprite size
+const SPRITE_SIZES = [8, 16, 24, 32, 48, 64];
+
+function applySpriteSize(n){
+  SW = SH = Math.max(4, Math.min(64, Math.round(n) || 16));
+  COLS = Math.ceil(VW / SW);
+  ROWS = Math.ceil(VH / SH);
+}
 
 const BASE_PALETTE = [
   "#000000","#1d2b53","#7e2553","#008751",
@@ -598,7 +616,7 @@ function thumb(n, size = 48){
    PAINT EDITOR
    ========================================================= */
 const paintCv = $("paint"), paintCtx = paintCv.getContext("2d");
-const PZ = paintCv.width / SW;   // 32 px per pixel
+function PZnow(){ return paintCv.width / SW; }   // how big one pixel is in the editor
 
 function drawPaint(){
   const s = ensureSprite(curSprite + 1);
@@ -606,6 +624,7 @@ function drawPaint(){
   paintCtx.fillRect(0, 0, paintCv.width, paintCv.height);
 
   // checkerboard for transparency
+  const PZ = PZnow();
   for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
     if (s[y*SW+x] >= 0) continue;
     paintCtx.fillStyle = (x + y) % 2 ? "#161a22" : "#1b202b";
@@ -614,22 +633,25 @@ function drawPaint(){
   for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
     const c = s[y*SW+x];
     if (c < 0) continue;
-    paintCtx.fillStyle = PALETTE[c];
+    paintCtx.fillStyle = PALETTE[c] || "#ff00ff";
     paintCtx.fillRect(x*PZ, y*PZ, PZ, PZ);
   }
-  paintCtx.strokeStyle = "rgba(255,255,255,.07)";
-  paintCtx.lineWidth = 1;
-  for (let i = 0; i <= SW; i++){
-    paintCtx.beginPath();
-    paintCtx.moveTo(i*PZ + .5, 0); paintCtx.lineTo(i*PZ + .5, paintCv.height); paintCtx.stroke();
-    paintCtx.beginPath();
-    paintCtx.moveTo(0, i*PZ + .5); paintCtx.lineTo(paintCv.width, i*PZ + .5); paintCtx.stroke();
+  if (PZ >= 6){                                   // the grid would be a smear at 64x64
+    paintCtx.strokeStyle = "rgba(255,255,255,.07)";
+    paintCtx.lineWidth = 1;
+    for (let i = 0; i <= SW; i++){
+      paintCtx.beginPath();
+      paintCtx.moveTo(i*PZ + .5, 0); paintCtx.lineTo(i*PZ + .5, paintCv.height); paintCtx.stroke();
+      paintCtx.beginPath();
+      paintCtx.moveTo(0, i*PZ + .5); paintCtx.lineTo(paintCv.width, i*PZ + .5); paintCtx.stroke();
+    }
   }
   if (dragFrom && dragTo){
+    const PZ2 = PZnow();
     paintCtx.fillStyle = painting === 2 ? "rgba(255,255,255,.35)" : PALETTE[curColor];
     paintCtx.globalAlpha = .75;
     shapePixels(curTool, dragFrom, dragTo, false).forEach(([x, y]) => {
-      if (x >= 0 && y >= 0 && x < SW && y < SH) paintCtx.fillRect(x*PZ, y*PZ, PZ, PZ);
+      if (x >= 0 && y >= 0 && x < SW && y < SH) paintCtx.fillRect(x*PZ2, y*PZ2, PZ2, PZ2);
     });
     paintCtx.globalAlpha = 1;
   }
@@ -776,6 +798,8 @@ function setPaintZoom(px){
   paintCv.style.width = paintCv.style.height = px + "px";
   $("zoom").value = px;
   $("zoom-label").textContent = px + " × " + px + " on screen · still " + SW + " × " + SH + " pixels";
+  const sn = $("size-note");
+  if (sn) sn.textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
   save();
 }
 
@@ -952,6 +976,7 @@ function parse(src){
       else if ((m = text.match(/^reset\s+if\s+(.+)$/i)))
                                                    out.push({ k:"resetif", cond:m[1], n });
       else if (/^when\s+start$/i.test(text))            out.push({ k:"start",  body: block(true), n });
+      else if (/^after\s+start$/i.test(text))           out.push({ k:"after",  body: block(true), n });
       else if ((m = text.match(/^every\s+frame\s+unless\s+(.+)$/i)))
                                                    out.push({ k:"frame", unless:m[1], body: block(true), n });
       else if (/^every\s+frame$/i.test(text))      out.push({ k:"frame",  body: block(true), n });
@@ -1819,7 +1844,7 @@ function startWith(source){
 
   R.running = true; R.actors = {}; R.vars = {}; R.texts = []; R.extra = [];
   R.roomData = project.rooms.map(r => r.slice()); ROOM_EPOCH++;   // games edit a copy, not your saved rooms
-  R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false;
+  R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false; R.afterDone = false;
   R.title = null; R.buttons = []; R.clicks = []; R.titlesShown = {};
   R.player = 0; R.roles = {}; R.lives = null; R.gameOver = false;
   R.resetting = false; R.homes = {}; R.speed = 3;
@@ -1841,7 +1866,7 @@ function startWith(source){
 function doReset(){
   R.actors = {}; R.vars = {}; R.texts = []; R.extra = [];
   R.roomData = project.rooms.map(r => r.slice()); ROOM_EPOCH++;
-  R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false;
+  R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false; R.afterDone = false;
   R.player = 0; R.roles = {}; R.lives = null; R.gameOver = false;
   R.resetting = false; R.homes = {}; R.speed = 3;
   R.solids = []; R.doorTo = {}; R.doorCool = 0;
@@ -1926,7 +1951,14 @@ function step(){
 
   if (!R.startDone){
     R.startDone = true;
+    // every "when start" runs, in the order you wrote them
     for (const b of R.prog) if (b.k === "start") if (!safe(b.body, "when start")) return false;
+    R.afterDone = false;
+  }
+  if (!R.afterDone){
+    R.afterDone = true;
+    // "after start" runs once the first frame has been set up
+    for (const b of R.prog) if (b.k === "after") if (!safe(b.body, "after start")) return false;
   }
   for (const b of R.prog){
     if (b.k === "frame"){
@@ -2675,6 +2707,66 @@ function loadFile(input){
 }
 
 /* =========================================================
+   SPRITE SIZE
+   Everything is stored as "one number per pixel" and "one sprite
+   number per tile", so changing the size means redrawing both:
+   sprites are resampled, and rooms are rebuilt by asking what was
+   at the same place on screen before.
+   ========================================================= */
+function resampleSprite(pixels, oldW, oldH, newW, newH){
+  const out = new Array(newW * newH).fill(-1);
+  for (let y = 0; y < newH; y++){
+    const sy = Math.min(oldH - 1, Math.floor(y * oldH / newH));
+    for (let x = 0; x < newW; x++){
+      const sx = Math.min(oldW - 1, Math.floor(x * oldW / newW));
+      out[y * newW + x] = pixels[sy * oldW + sx];
+    }
+  }
+  return out;
+}
+
+function changeSpriteSize(n, quiet){
+  n = Math.round(n) || 16;
+  const oldW = SW, oldH = SH, oldCols = COLS, oldRows = ROWS;
+  if (n === oldW){ return; }
+
+  if (!quiet && !confirm(
+      "Change every sprite to " + n + " × " + n + "?\n\n" +
+      "Your drawings are stretched or squashed to the new size, and the rooms are " +
+      "rebuilt so the tiles stay where they are on screen. " +
+      (n > oldW ? "Making them bigger cannot invent detail that was never drawn."
+                : "Making them smaller loses detail for good."))) {
+    $("sprite-size").value = oldW;
+    return;
+  }
+
+  const oldRooms = project.rooms.map(r => r.slice());
+  applySpriteSize(n);
+  project.spriteSize = SW;
+
+  project.sprites = project.sprites.map(sp => resampleSprite(sp, oldW, oldH, SW, SH));
+  project.rooms = oldRooms.map(old => {
+    const room = new Array(COLS * ROWS).fill(0);
+    for (let y = 0; y < ROWS; y++){
+      for (let x = 0; x < COLS; x++){
+        const px = x * SW, py = y * SH;                  // the same spot on screen
+        const ox = Math.floor(px / oldW), oy = Math.floor(py / oldH);
+        if (ox < oldCols && oy < oldRows) room[y * COLS + x] = old[oy * oldCols + ox] || 0;
+      }
+    }
+    return room;
+  });
+
+  spriteCache.clear(); texCache.clear(); roomPaint = { key:null, cv:null };
+  SPRITE_EPOCH++; ROOM_EPOCH++;
+  $("sprite-size").value = SW;
+  $("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
+  drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList(); drawStageInfo();
+  save(); render();
+  if (!quiet) log("sprites are now " + SW + " × " + SW, "ok");
+}
+
+/* =========================================================
    PIXEL ART, WRITTEN AS TEXT
    one character per pixel — a palette digit 0-f, or '.' for see-through
    ========================================================= */
@@ -3220,8 +3312,10 @@ end
 function loadTemplate(i){
   const t = TEMPLATES[i];
   stop();
+  applySpriteSize(16);               // the built-in artwork is 16 x 16
   project = {
     mode:    t.mode || "normal",
+    spriteSize: 16,
     sprites: t.sprites.map(k => k ? ART[k].slice() : blankSprite()),
     rooms:   t.rooms.map(f => f()),
     code:    t.code
@@ -4371,9 +4465,10 @@ function libOpen(){ return $("lib-ov") && $("lib-ov").classList.contains("on"); 
 function gameNow(name, author){
   save();
   return {
-    v: 2,
+    v: 3,
     name, author: author || "",
     mode: project.mode, code: project.code,
+    spriteSize: SW,
     sprites: project.sprites, rooms: project.rooms,
     palette: PALETTE.slice(),      // without this, colours you added came back black
     fps: project.fps || 60, zoom: project.zoom || 512,
@@ -4416,11 +4511,12 @@ function hslToHex(h, s, l){
 
 function libLoad(g){
   stop();
+  applySpriteSize(g.spriteSize || 16);      // before anything is copied, so the sizes line up
   const fixed = repairPalette(g);
   project = { mode:g.mode || "normal", code:g.code || "",
               sprites:(g.sprites||[]).map(a => a.slice()),
               rooms:(g.rooms||[]).map(a => a.slice()),
-              palette: fixed.pal.slice(),
+              palette: fixed.pal.slice(), spriteSize: SW,
               fps: g.fps || 60, zoom: g.zoom || 512 };
   if (fixed.guessed)
     log("this game was saved before colours travelled with the file — " +
@@ -4432,6 +4528,8 @@ function libLoad(g){
   if (curColor >= PALETTE.length) curColor = 8;
   buildPalette(); SPRITE_EPOCH++; ROOM_EPOCH++;
   spriteCache.clear(); texCache.clear(); roomPaint = { key:null, cv:null };
+  $("sprite-size").value = SW;
+  $("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
   setMode(project.mode, true);
   setFps(project.fps || 60); setPaintZoom(project.zoom || 512);
   $("code").value = project.code;
@@ -4507,8 +4605,8 @@ function unpackSpriteOld(str){
 
 function packGame(g){
   const packed = {
-    v: 2,
-    n: g.name, a: g.author, m: g.mode, c: g.code,
+    v: 3,
+    n: g.name, a: g.author, m: g.mode, c: g.code, z: g.spriteSize || SW,
     p: g.palette || PALETTE.slice(),
     f: g.fps || 60,
     s: g.sprites.map(packSprite),
@@ -4520,8 +4618,10 @@ function packGame(g){
 function unpackGame(txt){
   const b = txt.replace(/-/g, "+").replace(/_/g, "/");
   const p = JSON.parse(decodeURIComponent(escape(atob(b))));
+  applySpriteSize(p.z || 16);        // so the sprites unpack to the right length
   return {
     name: p.n, author: p.a, mode: p.m, code: p.c,
+    spriteSize: p.z || 16,
     palette: (p.p && p.p.length) ? p.p : null,
     fps: p.f || 60,
     sprites: p.s.map(unpackSprite),
@@ -4714,6 +4814,7 @@ function libSaveHere(){
    game, and merging it puts you in the list for everybody. */
 const GALLERY_REPO = "jakubsenczyszyn2015-netizen/simple-";
 let galleryData = null, galleryState = "idle", galleryTimer = null, galleryLastFetch = 0;
+let galleryError = "";
 
 /* Games arrive two ways: the games/ folder in the repo, and any issue
    labelled game-submission — the issue body carries the packed game, so
@@ -4721,11 +4822,14 @@ let galleryData = null, galleryState = "idle", galleryTimer = null, galleryLastF
 function gameFromIssue(issue){
   const body = issue.body || "";
   let packed = null;
-  const fence = body.match(/```\s*\n([A-Za-z0-9_\-]{200,})\s*\n```/);
-  if (fence) packed = fence[1].trim();
+
+  // a game can be in the body as a link, in a fenced block, or just sitting there:
+  // take the longest run of link-safe characters, whatever surrounds it
+  const link = body.match(/#game=([A-Za-z0-9_\-]+)/);
+  if (link) packed = link[1];
   if (!packed){
-    const link = body.match(/#game=([A-Za-z0-9_\-]+)/);
-    if (link) packed = link[1];
+    const runs = body.match(/[A-Za-z0-9_\-]{200,}/g);
+    if (runs) packed = runs.sort((a, b) => b.length - a.length)[0];
   }
   if (!packed) return null;
 
@@ -4745,16 +4849,31 @@ async function fetchGallery(){
     const res = await fetch("games/index.json", { cache:"no-cache" });
     if (res.ok){ const j = await res.json(); (j.games || []).forEach(g => found.push(g)); }
   } catch(e){}
+  // Every issue, not only the labelled ones: GitHub quietly drops the label
+  // from a pre-filled link unless the person posting can write to the repo,
+  // so filtering by label hid almost every real submission.
+  galleryError = "";
   try {
     const res = await fetch("https://api.github.com/repos/" + GALLERY_REPO +
-                            "/issues?labels=game-submission&state=all&per_page=100",
+                            "/issues?state=all&per_page=100&sort=created&direction=desc",
                             { headers: { accept:"application/vnd.github+json" } });
     if (res.ok){
       const issues = await res.json();
       if (Array.isArray(issues))
-        issues.forEach(it => { const g = gameFromIssue(it); if (g) found.push(g); });
+        issues.forEach(it => {
+          if (it.pull_request) return;                 // pull requests are not games
+          const g = gameFromIssue(it);
+          if (g) found.push(g);
+        });
+    } else if (res.status === 403){
+      galleryError = "GitHub is not answering just now — it only allows sixty " +
+                     "requests an hour from one address. It will come back by itself.";
+    } else {
+      galleryError = "GitHub answered " + res.status + ".";
     }
-  } catch(e){}
+  } catch(e){
+    galleryError = "Could not reach GitHub from here.";
+  }
   return found;
 }
 
@@ -4788,7 +4907,8 @@ function drawWorldList(){
   const note = $("world-note"), list = $("world-list");
   note.innerHTML =
     "Everything here is what everybody sees: the games in the project's <code>games/</code> " +
-    "folder, plus every game posted as an issue. <b>Publish to gallery</b> posts yours.";
+    "folder, plus every game posted as an issue. <b>Publish to gallery</b> posts yours." +
+    (galleryError ? '<br><span style="color:var(--bad)">' + galleryError + "</span>" : "");
   list.innerHTML = "";
 
   if (!galleryData){ list.innerHTML = '<div class="hint">nothing to show yet.</div>'; return; }
@@ -4844,15 +4964,12 @@ Play it straight away — this link contains the whole game:
 
 ${link}
 
-<details><summary>the game, packed (for whoever adds it to the gallery)</summary>
+The whole game is on the line below — leave it alone and it will appear in the
+gallery by itself.
 
-\`\`\`
 ${packed}
-\`\`\`
-
-</details>
 `;
-  const base = "https://github.com/" + GALLERY_REPO + "/issues/new?labels=game-submission";
+  const base = "https://github.com/" + GALLERY_REPO + "/issues/new";
   const url = base + "&title=" + encodeURIComponent("Game: " + name) +
                      "&body="  + encodeURIComponent(body);
 
@@ -4900,6 +5017,10 @@ Blocks (a block ends with <code>end</code>):
                             pauses itself while that is true,
                             then carries on by itself
 <code>end</code>
+
+<code>after start</code>           runs once too, but after everything in
+  print("ready", 4, 4)      <code>when start</code> has finished and the first
+<code>end</code>                        picture is on screen
 
 <code>every frame</code>           runs 60 times a second
   print("score: " + score, 4, 4)
@@ -4963,7 +5084,9 @@ Title screens:
 
 Notes
 · The screen is 320 x 240 pixels. x grows right, y grows down.
-· Sprites are 16 x 16. Sprite numbers start at 1 and never run out.
+· Sprites are 16 x 16 to begin with — the Paint tab can change that to
+  8, 24, 32, 48 or 64, and the room grid changes to match.
+· Sprite numbers start at 1 and never run out.
 · Anything after <code>#</code> is a comment.
 · Variables work anywhere a number does: <code>move(1, speed, 0)</code>
 `;
@@ -5189,6 +5312,12 @@ function buildHelp(){
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.9.0", t:"Bigger sprites, after start, gallery fixed",
+    lines:[
+      "<b>Sprites can be 8, 16, 24, 32, 48 or 64 pixels.</b> The picker is in the Paint tab. Changing it stretches your drawings to the new size and rebuilds the rooms so every tile stays where it was on screen — the room grid grows or shrinks to match (64 gives you 5 × 4 tiles, 8 gives you 40 × 30). The size travels with the game, so files, links and exports all open at whatever they were saved at.",
+      "<b><code>after start</code></b> — a second opening block that runs once <i>after</i> everything in <code>when start</code> is done and the first picture is up. You can also write as many <code>when start</code> blocks as you like; they all run, in order.",
+      "<b>Submitted games never reached the gallery.</b> It asked GitHub only for issues labelled <i>game-submission</i>, but GitHub silently drops that label from a pre-filled link unless the person posting can write to the repository — so every submission from anyone else was invisible. It now reads every issue and picks out the ones carrying a game, ignoring bug reports and pull requests. If GitHub refuses to answer, the window says so instead of looking empty."
+    ] },
   { v:"0.8.1", t:"Sprites survive the round trip",
     lines:[
       "<b>Shared links and gallery games destroyed the artwork.</b> Sprites were squashed into a string of two characters per run of colour, which works only while every colour number is a single hex digit. The moment a project had more than sixteen colours, a number like 16 became \u201c10\u201d — two characters where one was expected — and everything after it shifted along. With enough colours it did not merely look wrong, it threw an error. Runs are stored as pairs of numbers now, which cannot be misread. Links made before this still open.",
@@ -5320,11 +5449,14 @@ function defaultArt(){
 }
 
 load();
+applySpriteSize(project.spriteSize || 16);
 if (project.sprites.every(s => s.every(p => p < 0))) defaultArt();
 $("code").value = project.code || "";
 $("code").addEventListener("input", save);
 PALETTE = (project.palette && project.palette.length) ? project.palette.slice() : BASE_PALETTE.slice();
 buildPalette(); buildTools(); setPaintZoom(project.zoom || 512);
+$("sprite-size").value = SW;
+$("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
 setFps(project.fps || 60);
 buildLessons(); buildReleases(); buildHelp();
 setMode(project.mode || "normal", true);
