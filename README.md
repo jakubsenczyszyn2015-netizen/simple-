@@ -21,10 +21,10 @@ hide(1)
 - **Rooms** — stamp any sprite onto a 20×15 tile grid with the mouse.
   Unlimited rooms, shown from code with `room(2)`.
 - **Learn** — short steps, each with a button that loads and runs the code.
-- **Templates** — eight complete games to open, run and take apart.
+- **Templates** — ten complete games to open, run and take apart.
 - **Changelog** — see [CHANGELOG.md](CHANGELOG.md).
 
-## Three modes
+## Four modes
 
 Pick one at the top of the window; it's saved with your project.
 
@@ -43,6 +43,23 @@ animate(1, "1, 2, 3, 2")   flip through those sprites forever
 `when key`, `repeat` and `if` blocks, and `x()`, `y()`, `touching()`, `free()`,
 `tile()`, `random()`.
 
+**AI** — type what you want in plain English, one wish per line:
+
+```
+I want a platformer
+Sprite 1 is the player and sprite 2 is the ground
+Give me 3 lives
+Sprite 3 is a coin
+Restart if I fall off the bottom
+A title screen called Coin Rush
+```
+
+Run writes the Easy-mode program, lists everything it understood, and names any
+line it couldn't. **Show me the code** hands you the finished program in Easy
+mode to carry on with. It is a hand-written intent parser, not a chatbot — it
+runs offline with no API key, always gives the same answer, and says so when a
+line falls outside its vocabulary instead of ignoring it.
+
 **Hard** — plain JavaScript. The engine arrives as `S`, and you register
 `onStart()`, `onFrame()` and `onKey()` callbacks:
 
@@ -52,6 +69,48 @@ onFrame(() => {
   if (S.keys.left) me.x -= 3;
   S.print(`x is ${me.x}`, 6, 6);
 });
+```
+
+### More Easy blocks
+
+```
+playerspeed(4)         how fast the player moves
+coin(3)                vanishes when touched, adds 1 to `coins`
+death(4)               costs a life, or restarts if you have none
+spring(5)              flings the player upwards
+lives(3)               a life counter in the corner
+bounce(1, 2)           sprite 1 flies about and bounces off sprite 2
+chase(1, 2)            sprite 1 walks at sprite 2
+smartchase(1, 2, 3)    a chaser that jumps pits and walls (3 is the ground)
+reset if y(1) > 240    start over when that becomes true
+bind("left", "A")      remap any key
+```
+
+## Sprites from PNGs
+
+The 🖼 button in the Paint tab imports an image. Colours snap to the nearest of
+the sixteen in the palette. Anything larger than 16×16 asks whether to squash it
+into one sprite or spread it across a grid of sprites.
+
+## Sharing and My Games
+
+📚 **My Games** keeps a searchable library in your browser — search by name or
+author, and give each game its own author name or leave it anonymous.
+
+- **Share link** puts the entire game inside a URL. Send it in a chat message
+  and whoever opens it has your sprites, rooms and code.
+- **.simple file** does the same as a file.
+
+There is no upload and no global directory of everyone's games: that needs a
+server, and this is one HTML file with nothing behind it. A link does the job
+honestly instead.
+
+## Breaking the fourth wall
+
+```
+closegame()
+importgame("My Other Game")     pull in a game from My Games
+changegame("My Other Game")     become it — sprites, rooms and code
 ```
 
 ## Title screens

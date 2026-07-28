@@ -3,6 +3,61 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.4.0 — AI mode, sharing, and jobs for sprites
+
+### Added
+- **AI mode.** Write what you want in plain English, one wish per line. Run
+  turns it into a real Easy-mode program, lists every single thing it
+  understood, and names any line it couldn't. **Show me the code** then drops
+  the finished program into Easy mode so you can take it over.
+
+  It is a hand-written intent parser — about twenty rules that look for words
+  like *coin*, *gravity*, *lives* or *chases* and pull out the sprite numbers.
+  Nothing leaves the browser, no API key, no cost, works on GitHub Pages, and
+  the same description always compiles to the same program. It only knows the
+  vocabulary in the Help tab, and it says so when a line falls outside it
+  rather than ignoring it quietly.
+- **Easy mode runs every Normal program**, so picking Easy costs you nothing.
+- **Jobs you can give a sprite** (Easy):
+  - `coin(3)` — vanishes when the player touches it, adds 1 to `coins`.
+    Works as a sprite and as any room tile painted with it.
+  - `death(4)` — costs a life and sends you back to the start; without
+    `lives()` the game simply restarts.
+  - `spring(5)` / `boing(5)` — flings the player upwards.
+  - `lives(3)` / `lifes(3)` — a life count, drawn in the corner. Leave it out
+    for infinite lives.
+  - `bounce(1, 2)` — sprite 1 flies about and bounces off sprite 2 and the
+    screen edges, like a pong ball.
+  - `chase(1, 2)` — sprite 1 walks straight at sprite 2.
+  - `smartchase(1, 2, 3)` — a platformer chaser: it falls, and jumps over
+    walls and pits, with sprite 3 as the ground.
+  - `playerspeed(4)` / `player_speed(4)`, and `player(1)` when the engine's
+    guess about who the player is needs correcting.
+- **`reset if`**, one-liner or block form — starts the game over when true.
+- **Fourth-wall commands:** `closegame()` / `close_game()`,
+  `importgame("My Other Game")` / `import_game()`, and
+  `changegame("My Other Game")` / `change_game()`, which hands the running
+  game over to another one — its sprites, rooms and code all take over.
+- **`bind("left", "A")`** remaps any key to any other.
+- **PNG import** (🖼 in the Paint tab). Colours snap to the nearest of the
+  sixteen in the palette. If the image is bigger than 16×16 a menu asks
+  whether to squash it into one sprite or spread it across a grid of sprites.
+- **My Games** (📚): a library kept in this browser, searchable by name or
+  author. Share a game as a link that carries the entire game inside the URL,
+  or as a `.simple` file. Each game has its own author name, or none.
+- The stage now reports how many sprites and room tiles a project holds.
+
+### Changed
+- Templates now say in a comment which parts of what you see come from the
+  Rooms tab rather than from code.
+- Two new templates: **Just Ask For It** (AI) and **Coin Quest** (Easy).
+
+### A note on "online"
+Sharing is by link and by file. There is no upload, no accounts and no global
+search across other people's games, because all of that needs a server and
+this is one HTML file with nothing behind it. A link is genuinely enough to
+send a whole game to anyone, and it is honest about where the game lives.
+
 ## 0.3.0 — Simple++
 
 The engine got a name, three difficulty modes, and a title screen system.
