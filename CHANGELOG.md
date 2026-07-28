@@ -3,6 +3,17 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.6.1 — Fullscreen
+
+### Added
+- **⛶ Fullscreen** button under the stage, and **F** as a shortcut (ignored
+  while you are typing in the editor or a text box). Escape leaves, as usual.
+- The 320×240 picture is scaled by a whole number wherever one fits, so pixels
+  stay square and sharp rather than blurring. The rest of the screen is black
+  and the game keeps its proportions instead of stretching.
+- Keys and clicks behave identically while blown up — title-screen buttons are
+  hit-tested against the scaled canvas, so they land where you press them.
+
 ## 0.6.0 — A real global gallery, and no more multiplayer
 
 ### Removed

@@ -15,7 +15,9 @@ hide(1)
 ## What's in it
 
 - **Code** — write the game, watch it run on a 320×240 screen, get errors in
-  plain words with the line number.
+  plain words with the line number. **⛶ Fullscreen** (or the **F** key) blows
+  the stage up to fill the monitor, scaled by a whole number so the pixels stay
+  sharp; Escape comes back.
 - **Paint** — a 16×16 pixel editor with sixteen colours. Unlimited sprites,
   numbered 1, 2, 3, and up.
 - **Rooms** — stamp any sprite onto a 20×15 tile grid with the mouse.

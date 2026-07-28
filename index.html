@@ -46,6 +46,13 @@
     background:#12141a; color:#e8ecf5; font:14px/1.6 inherit; tab-size:2;
   }
   #stage-wrap{background:#0c0e13;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px}
+  #stage-frame{display:flex;align-items:center;justify-content:center}
+  #stage-frame:fullscreen{
+    width:100vw; height:100vh; background:#000; cursor:none;
+  }
+  #stage-frame:fullscreen canvas{border:0; border-radius:0}
+  #stage-frame:-webkit-full-screen{width:100vw;height:100vh;background:#000}
+
   canvas{image-rendering:pixelated; background:#000; border:1px solid var(--line); border-radius:4px}
   #console{
     height:130px; overflow:auto; background:#0c0e13; border-top:1px solid var(--line);
@@ -184,8 +191,13 @@
       <div id="console"></div>
     </div>
     <div id="stage-wrap" class="col" style="flex:none">
-      <canvas id="stage" width="320" height="240" style="width:480px;height:360px"></canvas>
-      <div class="hint">click the stage, then use the arrow keys / z</div>
+      <div id="stage-frame">
+        <canvas id="stage" width="320" height="240" style="width:480px;height:360px"></canvas>
+      </div>
+      <div class="row" style="justify-content:center">
+        <button id="fs-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+      </div>
+      <div class="hint">click the stage, then use the arrow keys / z · <b>F</b> for fullscreen</div>
       <div id="stage-info" class="hint" style="text-align:center;max-width:300px"></div>
     </div>
   </section>
@@ -1609,6 +1621,53 @@ function hardLoop(){
   }
   return true;
 }
+
+/* =========================================================
+   FULLSCREEN
+   The canvas is 320x240 of real pixels; blowing it up by a whole
+   number keeps every pixel square, so it stays crisp instead of
+   going blurry at the edges.
+   ========================================================= */
+function fullscreenOn(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+function toggleFullscreen(){
+  const frame = $("stage-frame");
+  if (fullscreenOn()){
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    return;
+  }
+  const go = frame.requestFullscreen || frame.webkitRequestFullscreen;
+  if (!go){ log("this browser won't do fullscreen here", "err"); return; }
+  Promise.resolve(go.call(frame)).then(() => stage.focus())
+    .catch(() => log("the browser said no to fullscreen", "err"));
+}
+function fitStage(){
+  const big = fullscreenOn();
+  $("fs-btn").textContent = big ? "⛶ Leave fullscreen" : "⛶ Fullscreen";
+  if (!big){
+    stage.style.width = "480px";
+    stage.style.height = "360px";
+    return;
+  }
+  const w = window.innerWidth, h = window.innerHeight;
+  let scale = Math.min(w / VW, h / VH);
+  if (scale >= 2) scale = Math.floor(scale);      // whole numbers keep the pixels square
+  stage.style.width  = Math.round(VW * scale) + "px";
+  stage.style.height = Math.round(VH * scale) + "px";
+}
+document.addEventListener("fullscreenchange", fitStage);
+document.addEventListener("webkitfullscreenchange", fitStage);
+window.addEventListener("resize", () => { if (fullscreenOn()) fitStage(); });
+
+/* F does it too, as long as you aren't typing */
+window.addEventListener("keydown", e => {
+  if (e.key !== "f" && e.key !== "F") return;
+  if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  e.preventDefault();
+  toggleFullscreen();
+});
 
 /* =========================================================
    SAVE / LOAD
@@ -3661,6 +3720,12 @@ function buildHelp(){
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.6.1", t:"Fullscreen",
+    lines:[
+      "<b>⛶ Fullscreen</b> under the stage, or just press <b>F</b> (unless you are typing). Escape comes back.",
+      "The picture is blown up by a whole number wherever it fits, so the pixels stay square and sharp instead of going soft. Anything left over is black, and the game keeps its shape rather than stretching.",
+      "Keys and mouse clicks work exactly as before while blown up — title screen buttons land where you press them."
+    ] },
   { v:"0.6.0", t:"A real global gallery, and no more multiplayer",
     lines:[
       "<b>Multiplayer is gone.</b> It only ever worked between two tabs on one computer, which is not what multiplayer means to anyone. <code>share()</code>, <code>me()</code>, <code>players()</code> and <code>mate()</code> are removed along with the Lobby button and the Tag template.",
