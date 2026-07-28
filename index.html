@@ -1552,6 +1552,9 @@ function exec(list){
   }
 }
 
+/* a few names are both a question and a command, so they must not be caught */
+const COMMANDS_TOO = new Set(["button", "room", "size", "speak", "print", "move"]);
+
 const EASY_ONLY = ["gravity","jump","horizontal","vertical","animate","playerspeed","player_speed",
                    "player","coin","death","lives","lifes","spring","boing","bounce","chase","smartchase",
                    "solid","wall","door","nextroom","next_room","camx","camy","camera",
@@ -1577,10 +1580,37 @@ function easyOnly(name, line){
     throw new Err(name + "() is an Easy mode command — switch the mode picker at the top to Easy", line);
 }
 
+/* These answer a question — they belong in an "if", not on a line by
+   themselves, where they would do nothing at all. */
+const QUESTIONS = {
+  room_changed:"if room_changed",       roomchanged:"if room_changed",
+  touching:"if touching(1, 2)",         free:"if free(1, -2, 0)",
+  whenclick:"if whenclick(1)",          when_click:"if when_click(1)",
+  clicked:'if clicked("Play")',         clickbutton:'if clickbutton("Options")',
+  click_button:'if click_button("Options")',
+  buttonclicked:'if clicked("Play")',   button_clicked:'if clicked("Play")',
+  visible:"if visible(1)",              key:"if key(space)",
+  x:"if x(1) > 100",                    y:"if y(1) > 100",
+  tile:"if tile(80, 64) == 2",          random:"set(n, random(10))",
+  mousex:"set(mx, mousex())",           mousey:"set(my, mousey())",
+  coins:'print("coins: " + coins, 6, 6)'
+};
+function questionError(name, given, line){
+  const how = QUESTIONS[name];
+  return new Err(
+    "\u201c" + given + "\u201d asks a question, it does not do anything on its own. " +
+    "Use it inside an if, like this:  " + how, line);
+}
+
 function runCall(st){
   const m = st.text.match(/^(\w+)\s*\((.*)\)\s*$/s);
-  if (!m) throw new Err("this doesn't look like a command: " + st.text, st.n);
+  if (!m){
+    const bare = st.text.trim().toLowerCase();
+    if (QUESTIONS[bare]) throw questionError(bare, st.text.trim(), st.n);
+    throw new Err("this doesn't look like a command: " + st.text, st.n);
+  }
   const name = m[1].toLowerCase();
+  if (QUESTIONS[name] && !COMMANDS_TOO.has(name)) throw questionError(name, st.text.trim(), st.n);
   const raw  = splitArgs(m[2]);
   const A    = () => raw.map(a => evalExpr(a, st.n));
 
@@ -1804,7 +1834,8 @@ function runCall(st){
     case "wait":  { throw new Wait(Math.max(1, Math.round(A()[0] || 1))); }
     case "stop":  { throw new Stop(); }
     case "note":  { log(String(A()[0])); break; }
-    default: throw new Err("I don't know the command '" + name + "'", st.n);
+    default: throw new Err("I don't know the command '" + name + "'" +
+                           " — the ? Help tab lists every one", st.n);
   }
 }
 
@@ -5312,6 +5343,12 @@ function buildHelp(){
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.9.1", t:"Questions explain themselves",
+    lines:[
+      "Writing a question on a line by itself — <code>room_changed()</code>, <code>touching(1, 2)</code>, <code>whenclick(1)</code> — used to come back with \u201cI don\u2019t know the command\u201d, which is misleading: the engine knows it perfectly well, it just answers a question rather than doing something. It now says so and shows the line you meant: <i>\u201croom_changed()\u201d asks a question, it does not do anything on its own. Use it inside an if, like this: if room_changed</i>",
+      "It covers every question word, and works whether you wrote the brackets or not.",
+      "An unknown command now points at the Help tab."
+    ] },
   { v:"0.9.0", t:"Bigger sprites, after start, gallery fixed",
     lines:[
       "<b>Sprites can be 8, 16, 24, 32, 48 or 64 pixels.</b> The picker is in the Paint tab. Changing it stretches your drawings to the new size and rebuilds the rooms so every tile stays where it was on screen — the room grid grows or shrinks to match (64 gives you 5 × 4 tiles, 8 gives you 40 × 30). The size travels with the game, so files, links and exports all open at whatever they were saved at.",

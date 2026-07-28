@@ -3,6 +3,26 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.9.1 — Questions explain themselves
+
+### Fixed
+- **A question used as a command gave a misleading error.** Writing
+  `room_changed()` — or `touching(1, 2)`, `whenclick(1)`, `free(...)`,
+  `clicked(...)` — on a line of its own reported *"I don't know the command
+  'room_changed'"*, which is not true: the engine knows it, it just answers a
+  question instead of doing something, so on its own it has nowhere to put the
+  answer.
+
+  The message now says that, and shows the line that was meant:
+
+  > "room_changed()" asks a question, it does not do anything on its own.
+  > Use it inside an if, like this:  if room_changed
+
+  Every question word is covered, with or without the brackets. Names that are
+  both a question and a command — `room`, `size`, `button`, `print`, `move`,
+  `speak` — are unaffected.
+- An unknown command now points at the Help tab.
+
 ## 0.9.0 — Bigger sprites, after start, gallery fixed
 
 ### Added
