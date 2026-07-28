@@ -1,0 +1,26 @@
+{
+  "note": "The Simple++ gallery. Add a game by opening an issue from the app's Publish button.",
+  "games": [
+    {
+      "name": "Coin Quest",
+      "author": "Simple++",
+      "file": "coin-quest.simple",
+      "mode": "easy",
+      "about": "A little platformer: coins, spikes, a spring and something that hunts you."
+    },
+    {
+      "name": "Maze Runner",
+      "author": "Simple++",
+      "file": "maze-runner.simple",
+      "mode": "normal",
+      "about": "Find your way through the walls to the flag."
+    },
+    {
+      "name": "Just Ask For It",
+      "author": "Simple++",
+      "file": "just-ask-for-it.simple",
+      "mode": "ai",
+      "about": "Written by AI mode from eight lines of plain English."
+    }
+  ]
+}

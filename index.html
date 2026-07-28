@@ -76,11 +76,11 @@
     background-size:10px 10px;background-position:0 0,5px 5px}
 
   /* ---- template gallery ---- */
-  #overlay,#lobby-ov,#png-ov,#lib-ov{
+  #overlay,#png-ov,#lib-ov{
     position:fixed; inset:0; background:rgba(8,10,14,.82); z-index:50;
     display:none; align-items:center; justify-content:center; padding:24px;
   }
-  #overlay.on,#lobby-ov.on,#png-ov.on,#lib-ov.on{display:flex}
+  #overlay.on,#png-ov.on,#lib-ov.on{display:flex}
   .modal{
     background:var(--panel); border:1px solid var(--line); border-radius:12px;
     max-width:900px; width:100%; max-height:100%; overflow:auto; padding:20px;
@@ -164,7 +164,6 @@
   </div>
   <div class="spacer"></div>
   <button onclick="openLib()" style="background:#5a4020;border-color:#8a6330">📚 My Games</button>
-  <button onclick="openLobby()" style="background:#1f4f6b;border-color:#2d6f95">👥 Lobby</button>
   <button onclick="openGallery()" style="background:#4a3a80;border-color:#6a55b8">✦ Templates</button>
   <button onclick="run()" style="background:#2e7d32;border-color:#2e7d32">▶ Run</button>
   <button onclick="stop()">■ Stop</button>
@@ -303,22 +302,49 @@
 
 <div id="lib-ov" onclick="if(event.target===this) closeLib()">
   <div class="modal">
-    <h2>My Games</h2>
-    <p class="sub">
-      Games saved in this browser. Share one as a link (the whole game rides inside the URL)
-      or as a <b>.simple</b> file you can send to anyone.
-    </p>
-    <div id="lib-body"></div>
-    <div style="margin-top:16px;text-align:right"><button onclick="closeLib()">Close</button></div>
-  </div>
-</div>
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <h2 style="margin:0">Games</h2>
+      <div class="tabs">
+        <button id="lt-mine" class="on" onclick="libTab('mine')">📚 My games</button>
+        <button id="lt-world" onclick="libTab('world')">🌍 Gallery</button>
+      </div>
+    </div>
 
-<div id="lobby-ov" onclick="if(event.target===this) closeLobby()">
-  <div class="modal" style="max-width:520px">
-    <h2>Lobby</h2>
-    <p class="sub" id="lobby-note"></p>
-    <div id="lobby-body"></div>
-    <div style="margin-top:16px;text-align:right"><button onclick="closeLobby()">Close</button></div>
+    <!-- ============ my games ============ -->
+    <div id="lib-mine">
+      <p class="sub" style="margin-top:10px">
+        Saved in this browser. Name it, then save it, share it as a link, or send it as a
+        <b>.simple</b> file.
+      </p>
+      <div class="row" style="margin-bottom:10px">
+        <label style="flex:1;min-width:170px">Game name
+          <input id="lib-name" type="text" placeholder="My Game">
+        </label>
+        <label style="flex:1;min-width:170px">Author <span style="opacity:.6">(blank = anonymous)</span>
+          <input id="lib-author" type="text" placeholder="anonymous">
+        </label>
+      </div>
+      <div class="row" style="margin-bottom:12px">
+        <button onclick="libSaveHere()">💾 Save here</button>
+        <button onclick="shareLink()">🔗 Copy share link</button>
+        <button onclick="saveSimple()">⬇ Save .simple</button>
+        <button onclick="document.getElementById('simplefile').click()">⬆ Open .simple</button>
+        <button onclick="publishToGallery()" style="background:#2c5c34;border-color:#3d7d47">🌍 Publish to gallery</button>
+      </div>
+      <input id="lib-search" type="text" placeholder="search your games by name or author"
+             style="margin-bottom:10px" autocomplete="off">
+      <div id="lib-list" class="cards"></div>
+    </div>
+
+    <!-- ============ the global gallery ============ -->
+    <div id="lib-world" style="display:none">
+      <p class="sub" style="margin-top:10px" id="world-note"></p>
+      <input id="world-search" type="text" placeholder="search the gallery"
+             style="margin-bottom:10px" autocomplete="off">
+      <div id="world-list" class="cards"></div>
+    </div>
+
+    <div style="margin-top:16px;text-align:right"><button onclick="closeLib()">Close</button></div>
   </div>
 </div>
 
@@ -751,9 +777,6 @@ function evalExpr(src, line){
       case "touching": return touching(args[0], args[1]);
       case "random": return Math.floor(Math.random() * (args[0] || 1));
       case "clickbutton": case "click_button": return wasClicked(args[0], line);
-      case "mate": return matePos(args[0], args[1]);
-      case "me": return R.lobby ? R.lobby.me : 1;
-      case "players": return R.lobby ? R.lobby.players : 1;
       case "tile": return tileAtPixel(args[0], args[1]);
       case "free": return isFree(args[0], args[1] || 0, args[2] || 0);
       case "key": return !!R.keys[String(args[0]).toLowerCase()];
@@ -781,7 +804,7 @@ const R = {
   title:null, buttons:[], clicks:[], titlesShown:{},   // title screens
   player:0, roles:{}, lives:null, gameOver:false, resetting:false, homes:{},
   solids:[], doorTo:{}, doorCool:0,
-  hard:null, mates:{}                                   // hard mode / lobby
+  hard:null
 };
 
 function actor(n){
@@ -1171,9 +1194,6 @@ function runCall(st){
     }
     case "titleoption": case "title_option": { addTitleButton(A()[0]); break; }
 
-    /* ---- lobby ---- */
-    case "share": { const [n] = A(); R.shared[Math.round(n)] = true; break; }
-
     /* ---- Easy only ---- */
     case "gravity": { easyOnly(name, st.n);
                       const a2 = A(), n = a2[0];
@@ -1277,7 +1297,6 @@ function run(){
   R.roomData = project.rooms.map(r => r.slice()); ROOM_EPOCH++;   // games edit a copy, not your saved rooms
   R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false;
   R.title = null; R.buttons = []; R.clicks = []; R.titlesShown = {};
-  R.shared = {}; R.mates = {};
   R.player = 0; R.roles = {}; R.lives = null; R.gameOver = false;
   R.resetting = false; R.homes = {}; R.speed = 3;
   R.solids = []; R.doorTo = {}; R.doorCool = 0;
@@ -1298,7 +1317,7 @@ function doReset(){
   R.player = 0; R.roles = {}; R.lives = null; R.gameOver = false;
   R.resetting = false; R.homes = {}; R.speed = 3;
   R.solids = []; R.doorTo = {}; R.doorCool = 0;
-  R.clicks = []; R.mates = {}; R.vars.coins = 0;
+  R.clicks = []; R.vars.coins = 0;
   render();
 }
 
@@ -1337,7 +1356,7 @@ function loop(){
 
   if (R.hard){
     if (!hardLoop()) return;
-    stepBehaviours(); netTick();
+    stepBehaviours();
     R.frame++; render(); return;
   }
 
@@ -1356,7 +1375,6 @@ function loop(){
   }
   stepBehaviours();
   stepRoles();
-  netTick();
   if (R.resetting){ doReset(); return; }
   R.lastButtons = R.buttons.map(b => b.label);
   R.clicks = [];
@@ -1373,10 +1391,6 @@ function render(){
   const bg = roomCanvas();
   if (bg) sctx.drawImage(bg, 0, 0);
   for (const e of (R.extra || [])) blit(sctx, e.n, Math.round(e.x), Math.round(e.y));
-  for (const n of Object.keys(R.mates)){       // the other player's sprites
-    const m = R.mates[n];
-    blit(sctx, m.s, Math.round(m.x), Math.round(m.y));
-  }
   for (const n of Object.keys(R.actors)){
     const a = R.actors[n];
     if (!a.on) continue;
@@ -1594,94 +1608,6 @@ function hardLoop(){
     stop(); return false;
   }
   return true;
-}
-
-/* =========================================================
-   LOBBY — play together in two browser tabs on this computer
-   ========================================================= */
-let chan = null;
-function makeCode(){
-  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out = ""; for (let i = 0; i < 5; i++) out += A[Math.floor(Math.random()*A.length)];
-  return out;
-}
-function joinChannel(code, me){
-  if (chan) chan.close();
-  chan = new BroadcastChannel("simplepp-" + code);
-  R.lobby = { code, me, players: me === 1 ? 1 : 2, seen: 0 };
-  chan.onmessage = ev => {
-    const d = ev.data;
-    if (d.type === "hello"){ R.lobby.players = 2; if (me === 1) chan.postMessage({ type:"hello", from:me }); }
-    if (d.type === "state" && d.from !== me){
-      R.lobby.players = 2; R.lobby.seen = Date.now();
-      R.mates = {};
-      for (const it of d.sprites) R.mates[it.s] = it;
-    }
-  };
-  chan.postMessage({ type:"hello", from:me });
-  drawLobby();
-}
-function netTick(){
-  if (!chan || !R.lobby) return;
-  if (R.frame % 3) return;                       // ~20 updates a second is plenty
-  const out = [];
-  for (const key of Object.keys(R.shared || {})){
-    const a = R.actors[key];
-    if (a && a.on) out.push({ s:+key, x:a.x, y:a.y });
-  }
-  chan.postMessage({ type:"state", from:R.lobby.me, sprites: out });
-}
-function matePos(n, which){
-  const m = R.mates[Math.round(n)];
-  if (!m) return -100;
-  return String(which || "x").toLowerCase().startsWith("y") ? m.y : m.x;
-}
-
-function openLobby(){ $("lobby-ov").classList.add("on"); drawLobby(); }
-function closeLobby(){ $("lobby-ov").classList.remove("on"); }
-function leaveLobby(){ if (chan) chan.close(); chan = null; R.lobby = null; R.mates = {}; drawLobby(); }
-
-function drawLobby(){
-  $("lobby-note").innerHTML =
-    "Two players, two browser tabs <b>on this same computer</b>. One person makes a lobby, " +
-    "the other opens Simple++ in a second tab and types the code in. " +
-    "<br><br>Playing with someone in another house needs a server on the internet, " +
-    "and a single HTML file with no server behind it can't do that — so this is the honest version.";
-  const box = $("lobby-body");
-  if (R.lobby){
-    box.innerHTML =
-      `<div class="hint">You are <b style="color:var(--accent)">player ${R.lobby.me}</b> in lobby</div>
-       <div class="code-field" style="margin:10px 0">${R.lobby.code}</div>
-       <div class="hint" style="margin-bottom:10px">
-         ${R.lobby.players > 1 ? "✅ another player is here" : "waiting for someone to join…"}
-       </div>`;
-    const copy = document.createElement("button");
-    copy.textContent = "Copy code";
-    copy.onclick = () => { navigator.clipboard?.writeText(R.lobby.code); copy.textContent = "Copied!"; };
-    const leave = document.createElement("button");
-    leave.textContent = "Leave"; leave.onclick = leaveLobby;
-    box.append(copy, " ", leave);
-    return;
-  }
-  box.innerHTML = "";
-  const mk = document.createElement("button");
-  mk.textContent = "Create a lobby";
-  mk.onclick = () => joinChannel(makeCode(), 1);
-  const inp = document.createElement("input");
-  inp.type = "text"; inp.placeholder = "CODE"; inp.style.maxWidth = "120px";
-  inp.style.textTransform = "uppercase";
-  const jn = document.createElement("button");
-  jn.textContent = "Join";
-  jn.onclick = () => { const c = inp.value.trim().toUpperCase(); if (c) joinChannel(c, 2); };
-  const row = document.createElement("div");
-  row.className = "row"; row.style.marginTop = "8px";
-  row.append(inp, jn);
-  box.append(mk, row);
-  const h = document.createElement("div");
-  h.className = "hint"; h.style.marginTop = "12px";
-  h.innerHTML = "In your code: <code>share(1)</code> sends sprite 1 to the other player, " +
-                "<code>me()</code> is 1 or 2, and <code>mate(1, x)</code> reads where their sprite 1 is.";
-  box.append(h);
 }
 
 /* =========================================================
@@ -2246,48 +2172,6 @@ end
 # TRY THIS
 # · playerspeed(6) to go quicker
 # · make sprite 3 a spring instead and see what happens
-`
-  },
-  {
-    em:"👥", name:"Tag (2 players)", mode:"normal",
-    desc:"Two browser tabs, one lobby code. Open the 👥 Lobby button first.",
-    sprites:["face","brick","ship"],
-    rooms:[() => borderRoom(2)],
-    code:`# TAG — for two players
-# 1. press the 👥 Lobby button and make a lobby
-# 2. open this same file in a second tab, join with the code
-# 3. press Run in BOTH tabs
-
-when start
-  room(1)
-  show(1)
-  put(1, 60, 60)
-  share(1)          # the other player can see my sprite 1
-end
-
-every frame
-  print("you are player " + me(), 6, 6)
-  if players() < 2
-    print("waiting for a friend...", 6, 18)
-  end
-end
-
-when key left
-  move(1, -3, 0)
-end
-when key right
-  move(1, 3, 0)
-end
-when key up
-  move(1, 0, -3)
-end
-when key down
-  move(1, 0, 3)
-end
-
-# TRY THIS
-# · mate(1, x) and mate(1, y) tell you where they are
-# · score a point when you get close to them
 `
   },
   {
@@ -3171,6 +3055,7 @@ function libWrite(all){
   try { localStorage.setItem(LIB_KEY, JSON.stringify(all)); return true; }
   catch(e){ log("no room left in this browser's storage", "err"); return false; }
 }
+function libOpen(){ return $("lib-ov") && $("lib-ov").classList.contains("on"); }
 function gameNow(name, author){
   save();
   return {
@@ -3201,9 +3086,9 @@ function libLoad(g){
 
 /* ---------- .simple files ---------- */
 function saveSimple(){
-  const name = (prompt("Name this game:", project.name || "My Game") || "My Game").trim();
-  const author = prompt("Author name? (leave empty to stay anonymous)", project.author || "") || "";
-  project.name = name; project.author = author; save();
+  const { name: typed, author } = libOpen() ? libFields() : { name: project.name, author: project.author };
+  const name = (typed || "My Game").trim();
+  project.name = name; project.author = author || ""; save();
   const blob = new Blob([JSON.stringify(gameNow(name, author))], { type:"application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -3266,9 +3151,9 @@ function unpackGame(txt){
   };
 }
 function shareLink(){
-  const name = (prompt("Name this game:", project.name || "My Game") || "My Game").trim();
-  const author = prompt("Author name? (leave empty to stay anonymous)", project.author || "") || "";
-  project.name = name; project.author = author; save();
+  const { name: typed, author } = libOpen() ? libFields() : { name: project.name, author: project.author };
+  const name = (typed || "My Game").trim();
+  project.name = name; project.author = author || ""; save();
   const link = location.href.split("#")[0] + "#game=" + packGame(gameNow(name, author));
   navigator.clipboard?.writeText(link);
   const kb = Math.round(link.length / 1024);
@@ -3310,44 +3195,50 @@ function changeGame(name, line){
   throw new Stop();      // this program is over; the other one is running now
 }
 
-/* ---------- the My Games window ---------- */
-let libQuery = "";
-function openLib(){ $("lib-ov").classList.add("on"); drawLib(); }
+/* ---------- the Games window ----------
+   The search box used to rebuild the whole panel on every keystroke, which
+   destroyed the input and put the caret back at position 0 — so words came
+   out backwards. Now the panel is built once and only the list is redrawn. */
+function openLib(){
+  $("lib-ov").classList.add("on");
+  $("lib-name").value   = project.name || "";
+  $("lib-author").value = project.author || "";
+  drawLibList();
+  if (!$("lib-search").dataset.wired){
+    $("lib-search").dataset.wired = "1";
+    $("lib-search").addEventListener("input", drawLibList);
+    $("world-search").addEventListener("input", drawWorldList);
+  }
+}
 function closeLib(){ $("lib-ov").classList.remove("on"); }
 
-function drawLib(){
-  const all = libRead();
-  const names = Object.keys(all)
-    .filter(n => !libQuery || (n + " " + (all[n].author || "")).toLowerCase().includes(libQuery.toLowerCase()))
-    .sort((a,b) => (all[b].saved||0) - (all[a].saved||0));
+function libTab(which){
+  const mine = which === "mine";
+  $("lib-mine").style.display  = mine ? "" : "none";
+  $("lib-world").style.display = mine ? "none" : "";
+  $("lt-mine").classList.toggle("on", mine);
+  $("lt-world").classList.toggle("on", !mine);
+  if (!mine) loadGallery();
+}
 
-  const box = $("lib-body");
-  box.innerHTML = `
-    <div class="row" style="margin-bottom:12px">
-      <button onclick="libSaveHere()">💾 Save this game here</button>
-      <button onclick="shareLink()">🔗 Share link</button>
-      <button onclick="saveSimple()">⬇ Save .simple file</button>
-      <button onclick="document.getElementById('simplefile').click()">⬆ Open .simple file</button>
-    </div>
-    <input id="lib-search" type="text" placeholder="search your games by name or author"
-           value="${libQuery.replace(/"/g,"&quot;")}" style="margin-bottom:10px">
-    <div id="lib-list" class="cards"></div>`;
-  $("lib-search").oninput = e => { libQuery = e.target.value; drawLib(); $("lib-search").focus(); };
+/* whatever is typed in the two boxes is the game's name and author */
+function libFields(){
+  const name = ($("lib-name").value || "").trim();
+  const author = ($("lib-author").value || "").trim();
+  project.name = name; project.author = author;
+  return { name, author };
+}
 
-  const list = $("lib-list");
-  if (!names.length){
-    list.innerHTML = `<div class="hint">${Object.keys(all).length ? "nothing matches that search."
-      : "nothing saved yet. Press “Save this game here” and it stays in this browser."}</div>`;
-  }
-  names.forEach(n => {
-    const g = all[n];
-    const d = document.createElement("div");
-    d.className = "card";
-    d.innerHTML = `<b>${escapeHtml(n)}</b>
-      <span>${g.author ? "by " + escapeHtml(g.author) : "anonymous"} · ${MODES[g.mode || "normal"].label} mode
-      · ${(g.sprites||[]).length} sprites · ${(g.rooms||[]).length} rooms</span>`;
+function gameCard(g, name, actions){
+  const d = document.createElement("div");
+  d.className = "card";
+  d.innerHTML = `<b>${escapeHtml(name)}</b>
+    <span>${g.author ? "by " + escapeHtml(g.author) : "anonymous"}` +
+    (g.mode ? " · " + MODES[g.mode].label + " mode" : "") +
+    (g.sprites ? ` · ${g.sprites.length} sprites · ${g.rooms.length} rooms` : "") + `</span>`;
+  if (g.sprites){
     const strip = document.createElement("div"); strip.className = "art";
-    (g.sprites || []).slice(0, 5).forEach(sp => {
+    g.sprites.slice(0, 5).forEach(sp => {
       const cv = document.createElement("canvas"); cv.width = cv.height = SW;
       const c = cv.getContext("2d");
       for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
@@ -3357,23 +3248,163 @@ function drawLib(){
       strip.appendChild(cv);
     });
     d.appendChild(strip);
-    const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "10px";
-    const open = document.createElement("button"); open.textContent = "Open";
-    open.onclick = () => { libLoad(g); project.name = n; project.author = g.author; closeLib(); tab("code"); log("opened “" + n + "”", "ok"); };
-    const del = document.createElement("button"); del.textContent = "Delete";
-    del.onclick = () => { if (confirm("Delete “" + n + "” from this browser?")){ const a2 = libRead(); delete a2[n]; libWrite(a2); drawLib(); } };
-    row.append(open, del);
-    d.appendChild(row);
-    list.appendChild(d);
+  }
+  const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "10px";
+  actions.forEach(([label, fn]) => {
+    const btn = document.createElement("button");
+    btn.textContent = label; btn.onclick = fn; row.appendChild(btn);
+  });
+  d.appendChild(row);
+  return d;
+}
+
+function drawLibList(){
+  const all = libRead();
+  const q = ($("lib-search").value || "").toLowerCase();
+  const names = Object.keys(all)
+    .filter(n => !q || (n + " " + (all[n].author || "")).toLowerCase().includes(q))
+    .sort((a, b) => (all[b].saved || 0) - (all[a].saved || 0));
+
+  const list = $("lib-list");
+  list.innerHTML = "";
+  if (!names.length){
+    list.innerHTML = `<div class="hint">${Object.keys(all).length
+      ? "nothing matches that search."
+      : "nothing saved yet. Type a name above and press “Save here”."}</div>`;
+    return;
+  }
+  names.forEach(n => {
+    const g = all[n];
+    list.appendChild(gameCard(g, n, [
+      ["Open", () => { libLoad(g); project.name = n; project.author = g.author || "";
+                       closeLib(); tab("code"); log("opened \u201c" + n + "\u201d", "ok"); }],
+      ["Delete", () => { if (confirm("Delete \u201c" + n + "\u201d from this browser?")){
+                           const a2 = libRead(); delete a2[n]; libWrite(a2); drawLibList(); } }]
+    ]));
   });
 }
+
 function libSaveHere(){
-  const name = (prompt("Save as:", project.name || "My Game") || "").trim();
-  if (!name) return;
-  const author = prompt("Author name? (leave empty to stay anonymous)", project.author || "") || "";
-  project.name = name; project.author = author;
-  if (libSave(name, author)){ log("saved “" + name + "” to My Games", "ok"); drawLib(); }
+  const { name, author } = libFields();
+  if (!name){ alert("Give the game a name first — the box just above."); $("lib-name").focus(); return; }
+  if (libSave(name, author)){
+    log("saved \u201c" + name + "\u201d to My Games", "ok");
+    drawLibList();
+  }
 }
+
+/* ---------- the global gallery ----------
+   GitHub Pages serves files and nothing else — there is no database behind it.
+   So the gallery IS a file in the repository: games/index.json, which every
+   visitor fetches. Publishing opens a pre-filled GitHub issue containing your
+   game, and merging it puts you in the list for everybody. */
+const GALLERY_REPO = "jakubsenczyszyn2015-netizen/simple-";
+let galleryData = null, galleryState = "idle";
+
+async function loadGallery(){
+  if (galleryState === "loading" || galleryData) { drawWorldList(); return; }
+  galleryState = "loading";
+  $("world-note").innerHTML = "loading the gallery…";
+  try {
+    const res = await fetch("games/index.json", { cache: "no-cache" });
+    if (!res.ok) throw new Error("no index");
+    galleryData = await res.json();
+    galleryState = "ready";
+  } catch(e){
+    galleryState = "failed";
+    galleryData = null;
+  }
+  drawWorldList();
+}
+
+function drawWorldList(){
+  const note = $("world-note"), list = $("world-list");
+  note.innerHTML =
+    "Everyone who opens this page sees the same list. It is a file in the project " +
+    "(<code>games/index.json</code>), because GitHub Pages serves files and has no database — " +
+    "<b>Publish to gallery</b> opens a ready-filled GitHub issue with your game inside it, " +
+    "and once it is added everyone gets it.";
+  list.innerHTML = "";
+
+  if (galleryState === "loading"){ list.innerHTML = '<div class="hint">loading…</div>'; return; }
+  if (!galleryData){
+    list.innerHTML = '<div class="hint">The gallery file isn\'t reachable from here. ' +
+      'It loads when the page is served over the web (GitHub Pages), not when opened straight ' +
+      'off your disk as a file.</div>';
+    return;
+  }
+  const q = ($("world-search").value || "").toLowerCase();
+  const games = (galleryData.games || []).filter(g =>
+    !q || (g.name + " " + (g.author || "") + " " + (g.about || "")).toLowerCase().includes(q));
+
+  if (!games.length){ list.innerHTML = '<div class="hint">nothing matches that search.</div>'; return; }
+
+  games.forEach(g => {
+    const card = gameCard({ author: g.author, mode: g.mode }, g.name, [
+      ["Open", async () => {
+        try {
+          const res = await fetch("games/" + g.file, { cache: "no-cache" });
+          const data = await res.json();
+          libLoad(data);
+          project.name = data.name || g.name; project.author = data.author || g.author || "";
+          closeLib(); tab("code");
+          log("opened \u201c" + project.name + "\u201d" +
+              (project.author ? " by " + project.author : "") + " from the gallery", "ok");
+        } catch(e){ alert("That game wouldn't download."); }
+      }]
+    ]);
+    if (g.about){
+      const p = document.createElement("div");
+      p.className = "hint"; p.style.marginTop = "6px"; p.textContent = g.about;
+      card.insertBefore(p, card.lastChild);
+    }
+    $("world-list").appendChild(card);
+  });
+}
+
+function publishToGallery(){
+  const { name, author } = libFields();
+  if (!name){ alert("Give the game a name first — the box just above."); $("lib-name").focus(); return; }
+  save();
+
+  // the packed form is a few times smaller than raw JSON, and the link itself
+  // IS the game, so the issue stays small enough to travel in the address bar
+  const packed = packGame(gameNow(name, author));
+  const link = location.href.split("#")[0] + "#game=" + packed;
+
+  const body =
+`**Game:** ${name}
+**Author:** ${author || "anonymous"}
+**Mode:** ${MODES[project.mode].label}
+**Sprites:** ${project.sprites.length} · **Rooms:** ${project.rooms.length}
+
+Play it straight away — this link contains the whole game:
+
+${link}
+
+<details><summary>the game, packed (for whoever adds it to the gallery)</summary>
+
+\`\`\`
+${packed}
+\`\`\`
+
+</details>
+`;
+  const base = "https://github.com/" + GALLERY_REPO + "/issues/new?labels=game-submission";
+  const url = base + "&title=" + encodeURIComponent("Game: " + name) +
+                     "&body="  + encodeURIComponent(body);
+
+  if (url.length > 7500){
+    navigator.clipboard?.writeText(body);
+    alert("This game is a big one, so the issue can't be filled in automatically.\n\n" +
+          "Everything has been copied to your clipboard — paste it into the issue that opens.");
+    window.open(base, "_blank");
+    return;
+  }
+  window.open(url, "_blank");
+  log("opened a gallery submission for \u201c" + name + "\u201d on GitHub", "ok");
+}
+
 function escapeHtml(t){ return String(t).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
 /* =========================================================
@@ -3436,13 +3467,6 @@ Title screens:
 <code>if clickbutton("Options")</code>   true on the frame that button is clicked
   print("you clicked it", 100, 200)  <code>click_button()</code> is the same thing.
 <code>end</code>                        Naming a button you never made is an error.
-
-Playing together (see the 👥 Lobby button):
-
-<code>share(1)</code>            send sprite 1 to the other player
-<code>me()</code>                are you player 1 or player 2?
-<code>players()</code>           how many of you are connected
-<code>mate(1, x)</code>          where the other player's sprite 1 is
 
 Notes
 · The screen is 320 x 240 pixels. x grows right, y grows down.
@@ -3637,6 +3661,14 @@ function buildHelp(){
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.6.0", t:"A real global gallery, and no more multiplayer",
+    lines:[
+      "<b>Multiplayer is gone.</b> It only ever worked between two tabs on one computer, which is not what multiplayer means to anyone. <code>share()</code>, <code>me()</code>, <code>players()</code> and <code>mate()</code> are removed along with the Lobby button and the Tag template.",
+      "<b>My Games typed backwards.</b> The search box rebuilt the whole panel on every keystroke, which destroyed the input and put the caret back at the start. The panel is built once now and only the list is redrawn.",
+      "<b>Saving and publishing no longer use pop-up prompts</b> — there are proper Name and Author boxes in the window, so a game can be named, saved, shared and published without a single dialog.",
+      "<b>🌍 Gallery: a genuinely global list of games</b>, the same for everyone who opens the site. GitHub Pages has no database — it serves files — so the gallery is a file in the project, <code>games/index.json</code>, that the page fetches. <b>Publish to gallery</b> opens a GitHub issue already filled in with your whole game; once it is added, everyone has it.",
+      "Three games to start it off: Coin Quest, Maze Runner and Just Ask For It."
+    ] },
   { v:"0.5.0", t:"Many walls, doors, and a much faster screen",
     lines:[
       "<b>More than one collision at a time.</b> <code>solid(2)</code> marks a sprite solid for everything, and you can call it as often as you like; <code>horizontal(1, 2, 5)</code> and <code>gravity(1, 2, 5)</code> take a list too. Before this, a second collision quietly replaced the first — which is exactly what it looked like.",

@@ -3,6 +3,40 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.6.0 — A real global gallery, and no more multiplayer
+
+### Removed
+- **Multiplayer.** It only ever worked between two browser tabs on the same
+  computer, which is not what anyone means by multiplayer. Gone with it:
+  `share()`, `me()`, `players()`, `mate()`, the Lobby button and the Tag
+  template.
+
+### Fixed
+- **My Games typed backwards.** The search box rebuilt the whole panel on every
+  keystroke, so the input was destroyed and recreated with the caret back at
+  position 0 — each new letter landed in front of the last. The panel is now
+  built once and only the list of games is redrawn.
+- **Naming and publishing a game is no longer done with pop-up prompts.** There
+  are Name and Author boxes in the window itself, used by Save, Share link,
+  Save .simple and Publish alike.
+
+### Added
+- **🌍 Gallery** — one list of games, the same for everybody who opens the site.
+
+  GitHub Pages has no database. It serves files, full stop. So the gallery *is*
+  a file in this repository: `games/index.json` lists the games and each one is
+  a `.simple` file beside it, fetched by the page at runtime. **Publish to
+  gallery** opens a GitHub issue already filled in with your entire game (as a
+  share link plus the packed data); once it is added to `games/`, everyone who
+  opens the site can play it.
+
+  That is the honest ceiling of static hosting: publishing goes through a human
+  step, and reading is instant and global. Anything more — instant uploads,
+  accounts, comments — needs a server, and nothing in this project pretends
+  otherwise.
+- Three games to start the gallery: **Coin Quest**, **Maze Runner** and
+  **Just Ask For It**.
+
 ## 0.5.0 — Many walls, doors, and a much faster screen
 
 ### Fixed

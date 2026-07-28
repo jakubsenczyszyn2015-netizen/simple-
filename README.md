@@ -99,18 +99,34 @@ The 🖼 button in the Paint tab imports an image. Colours snap to the nearest o
 the sixteen in the palette. Anything larger than 16×16 asks whether to squash it
 into one sprite or spread it across a grid of sprites.
 
-## Sharing and My Games
+## Sharing, My Games, and the gallery
 
-📚 **My Games** keeps a searchable library in your browser — search by name or
-author, and give each game its own author name or leave it anonymous.
+📚 **My Games** is a library in your browser. Type a name and an author (or
+leave the author blank to stay anonymous), then:
 
-- **Share link** puts the entire game inside a URL. Send it in a chat message
+- **Save here** keeps it in this browser, searchable by name or author.
+- **Share link** puts the entire game inside a URL — send it in a chat message
   and whoever opens it has your sprites, rooms and code.
-- **.simple file** does the same as a file.
+- **Save .simple** writes the same thing as a file.
 
-There is no upload and no global directory of everyone's games: that needs a
-server, and this is one HTML file with nothing behind it. A link does the job
-honestly instead.
+🌍 **Gallery** is one list of games that everybody sees, in `games/`.
+
+### How that works without a database
+
+GitHub Pages has no database. It serves files and nothing else. So the gallery
+*is* a file: [`games/index.json`](games/index.json) lists the games, each one a
+`.simple` file beside it, and the page fetches them when you open the tab.
+
+**Publish to gallery** opens a GitHub issue already filled in with your whole
+game. Once it's added to `games/`, everyone who opens the site can play it.
+Reading is instant and global; publishing goes through a human step. That is
+the honest ceiling of static hosting — instant uploads, accounts and comments
+all need a server, and this project doesn't pretend to have one.
+
+## Putting it on GitHub Pages
+
+Settings → Pages → Deploy from a branch → `main` → `/root`. That's it; the site
+is `index.html` and the `games/` folder next to it.
 
 ## Breaking the fourth wall
 
