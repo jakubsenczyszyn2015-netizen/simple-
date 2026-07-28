@@ -18,8 +18,9 @@ hide(1)
   plain words with the line number. **⛶ Fullscreen** (or the **F** key) blows
   the stage up to fill the monitor, scaled by a whole number so the pixels stay
   sharp; Escape comes back.
-- **Paint** — a 16×16 pixel editor with sixteen colours. Unlimited sprites,
-  numbered 1, 2, 3, and up.
+- **Paint** — a 16×16 pixel editor with pencil, eraser, fill, line, box, circle
+  and eyedropper tools, a colour wheel for adding your own colours, and a slider
+  for how big the drawing area is. Unlimited sprites, numbered 1, 2, 3, and up.
 - **Rooms** — stamp any sprite onto a 20×15 tile grid with the mouse.
   Unlimited rooms, shown from code with `room(2)`.
 - **Learn** — short steps, each with a button that loads and runs the code.
@@ -93,7 +94,26 @@ reset if y(1) > 240    start over when that becomes true
 solid(2)               sprite 2 is a wall for everything (call it per wall)
 door(5)                touch it to go to the next room; door(5, 3) for room 3
 bind("left", "A")      remap any key
+camera(1)              the view follows sprite 1 (camx/camy for one axis)
+resize(1, 10)          ten pixels bigger; size(1, 32) sets it outright
+dialogue("Hi!")        a black box along the bottom with those words
+3dplatformer(1, 2, 3)  experimental: your room, seen from the inside
 ```
+
+`every frame unless <condition> ... end` pauses itself while the condition is
+true and carries on when it stops.
+
+## Exporting
+
+**⬆ Export** writes a single `.html` file containing the whole game with no
+editor around it — double-click and it plays, anywhere, offline.
+
+`.exe`, `.apk` and `.ipa` are compiled programs, and a web page cannot build
+one; that needs a compiler and a signing key on your own machine. The exported
+`.html` is exactly what the tools that *can* build them take as input: Electron
+or Tauri for Windows, Capacitor for Android, and Capacitor plus a Mac and an
+Apple developer account for iPhone. On a phone, "add to home screen" gets you an
+icon that opens straight into the game without any of that.
 
 ## Sprites from PNGs
 

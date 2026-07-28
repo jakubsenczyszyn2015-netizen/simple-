@@ -3,6 +3,69 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.7.0 — Camera, 3D, export, paint tools
+
+### Fixed
+- **Holding jump against a ceiling stuck you to it.** Upward movement was being
+  resolved with the downward landing code, so bonking your head set
+  "standing on something" and the held jump key fired again immediately. Going
+  up now stops you dead without counting as ground.
+
+### Added — blocks
+- `camera(1)` follows a sprite with the whole view; `camx(1)` and `camy(1)`
+  follow it in one direction only. Text, the life counter and dialogue stay put.
+- `resize(1, 10)` grows a sprite by ten pixels (negative shrinks it);
+  `size(1, 32)` sets it outright. Collision boxes follow the new size.
+- `dialogue("Hello World!")` / `say("Hello World!")` — a black box across the
+  bottom of the screen, words wrapped to fit. (The old `say()` that printed to
+  the console is now `note()`.)
+- `every frame unless <condition>` — the block pauses itself while the
+  condition holds and resumes on its own afterwards.
+- `3dplatformer(1, 2, 3)` — **experimental**. The room you painted becomes a
+  maze seen from the inside: solid tiles are walls textured from sprite 2's
+  picture, tiles painted with sprite 3 float in it as coins, and the arrow keys
+  walk and turn. Runs at about 2 ms a frame.
+- `solid()`, `door()` and the other Easy commands now all report correctly when
+  used outside Easy mode.
+
+### Added — paint
+- **Tools:** pencil, eraser, flood fill, line, box, circle and an eyedropper.
+  Hold **Shift** while dragging a box or circle to fill it in. Shapes preview
+  as you drag.
+- **A colour wheel.** Pick any colour and add it to the palette; the palette is
+  saved with the project, and ↺ puts back the original sixteen.
+- **A canvas size slider** for how big the drawing area is on screen. The sprite
+  is still 16×16 — this is zoom, not resolution.
+
+### Added — export
+- **Export to `.html`**: one file with the whole game inside it and no editor
+  around it. Double-click and it plays; about 200 KB.
+- **Export to `.simple`** for carrying on later.
+- The window explains `.exe`, `.apk` and `.ipa` honestly: a web page cannot
+  compile a binary, and no browser-based engine does. It names what does —
+  Electron or Tauri for Windows, Capacitor for Android, Capacitor plus a Mac and
+  an Apple developer account for iPhone — all of which take the exported
+  `.html` as their input. On a phone, "add to home screen" gets you an icon
+  without any of that.
+
+### Added — AI mode
+- **It remembers.** Each Run carries on from the last description, so you can
+  add one line at a time. "start over" or unticking 🧠 remember clears it.
+- **It can be a real model.** Paste an Anthropic API key and Claude writes the
+  program instead of the built-in reader. The key is kept in your browser and
+  sent only to Anthropic; if the call fails for any reason the built-in reader
+  takes over, so Run always does something.
+- New vocabulary: cameras, resizing, dialogue, 3D and pausing.
+- Fixed: "falls" was being typo-corrected into "walls"; "a camera that follows
+  the player" also created a chaser; "bigger by 16" read the sprite number as
+  the amount; an exclamation mark was stripped off dialogue.
+
+### Still to do
+- **Sprites bigger than 16×16 ("high quality" mode).** The canvas slider only
+  changes how big the editor looks. Real higher-resolution sprites change the
+  room grid and every project already saved, so it needs its own pass rather
+  than being bolted onto this one.
+
 ## 0.6.1 — Fullscreen
 
 ### Added

@@ -83,11 +83,11 @@
     background-size:10px 10px;background-position:0 0,5px 5px}
 
   /* ---- template gallery ---- */
-  #overlay,#png-ov,#lib-ov{
+  #overlay,#png-ov,#lib-ov,#export-ov{
     position:fixed; inset:0; background:rgba(8,10,14,.82); z-index:50;
     display:none; align-items:center; justify-content:center; padding:24px;
   }
-  #overlay.on,#png-ov.on,#lib-ov.on{display:flex}
+  #overlay.on,#png-ov.on,#lib-ov.on,#export-ov.on{display:flex}
   .modal{
     background:var(--panel); border:1px solid var(--line); border-radius:12px;
     max-width:900px; width:100%; max-height:100%; overflow:auto; padding:20px;
@@ -140,6 +140,15 @@
   .rel ul b{color:var(--fg);font-weight:400}
   .rel code{color:var(--accent2)}
 
+  /* an exported game shows the game and nothing else */
+  body.play-only header, body.play-only #modeline, body.play-only #console,
+  body.play-only #stage-info, body.play-only .pane, body.play-only #v-code > .col:first-child{
+    display:none !important;
+  }
+  body.play-only main{background:#000}
+  body.play-only #v-code{justify-content:center;align-items:center}
+  body.play-only #stage-wrap{background:#000;flex:1;justify-content:center}
+
   label{color:var(--dim);font-size:12px}
   input[type=text],input[type=number]{
     background:#0c0e13;color:var(--fg);border:1px solid var(--line);
@@ -170,10 +179,15 @@
     <button id="m-ai"     onclick="setMode('ai')">AI</button>
   </div>
   <div class="spacer"></div>
+  <button onclick="openExport()" style="background:#1f4f6b;border-color:#2d6f95">⬆ Export</button>
   <button onclick="openLib()" style="background:#5a4020;border-color:#8a6330">📚 My Games</button>
   <button onclick="openGallery()" style="background:#4a3a80;border-color:#6a55b8">✦ Templates</button>
   <button onclick="run()" style="background:#2e7d32;border-color:#2e7d32">▶ Run</button>
   <button onclick="stop()">■ Stop</button>
+  <label id="ai-remember-wrap" style="display:none;align-items:center;gap:4px">
+    <input id="ai-remember" type="checkbox" checked style="width:auto">🧠 remember
+  </label>
+  <button id="ai-key-btn" onclick="setAIKey()" style="display:none">⚡ Real AI</button>
   <button id="ai-show" onclick="showAICode()" style="display:none;background:#4a3a80;border-color:#6a55b8">Show me the code</button>
   <button onclick="saveFile()">Save</button>
   <button onclick="document.getElementById('load').click()">Load</button>
@@ -219,9 +233,23 @@
       <canvas id="paint" width="512" height="512" style="width:512px;height:512px"></canvas>
     </div>
 
-    <div class="pane col" style="width:180px;flex:none">
+    <div class="pane col" style="width:196px;flex:none">
+      <h3>Tools</h3>
+      <div id="tools" class="row" style="margin-bottom:12px"></div>
+
       <h3>Colours</h3>
       <div id="palette"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="colourwheel" type="color" value="#ff004d"
+               style="width:44px;height:30px;padding:0;background:none;border:1px solid var(--line);border-radius:5px;cursor:pointer">
+        <button onclick="addColour()">+ Add</button>
+        <button onclick="resetPalette()" title="back to the sixteen">↺</button>
+      </div>
+
+      <h3 style="margin-top:14px">Canvas size</h3>
+      <input id="zoom" type="range" min="256" max="800" step="32" value="512"
+             oninput="setPaintZoom(this.value)" style="width:100%">
+      <div id="zoom-label" class="hint"></div>
       <h3 style="margin-top:14px">Sprite <span id="p-id">1</span></h3>
       <div class="hint">
         left-drag paints<br>right-drag erases<br><br>
@@ -304,6 +332,39 @@
   </div>
 </div>
 
+<div id="export-ov" onclick="if(event.target===this) closeExport()">
+  <div class="modal" style="max-width:640px">
+    <h2>Export your game</h2>
+    <p class="sub">Turn the project into something you can send to anyone.</p>
+    <div class="cards">
+      <div class="card" onclick="exportHtml()">
+        <div class="em">🌐</div><b>Web page (.html)</b>
+        <span>One file with the whole game inside it — no editor, no internet needed.
+        Double-click it and it plays. Works on any computer, phone or tablet.</span>
+      </div>
+      <div class="card" onclick="saveSimple()">
+        <div class="em">💾</div><b>Project file (.simple)</b>
+        <span>For carrying on later, or sending to a friend to edit. Open it again
+        from the My Games window.</span>
+      </div>
+    </div>
+    <h3 style="margin-top:18px">What about .exe, .apk and .ipa?</h3>
+    <div class="hint" style="max-width:560px">
+      Those are compiled programs, and a web page cannot build one — it would need a
+      compiler and a signing key on your computer, not in a browser tab. Nobody's engine
+      does it from inside the browser either; they all hand the job to a tool you run
+      yourself. The good news is the <b>.html</b> above is exactly what those tools take:
+      <br><br>
+      · <b>.exe</b> (Windows) — drop the .html into <a href="https://www.electronjs.org/docs/latest/tutorial/quick-start" target="_blank" style="color:var(--accent)">Electron</a> or Tauri and build.<br>
+      · <b>.apk</b> (Android) — <a href="https://capacitorjs.com/docs/getting-started" target="_blank" style="color:var(--accent)">Capacitor</a> wraps it; Android Studio makes the .apk.<br>
+      · <b>.ipa</b> (iPhone) — Capacitor again, but it also needs a Mac and a paid Apple developer account. That part is Apple's rule, not ours.<br><br>
+      On a phone, the .html can also be added to the home screen from the browser menu,
+      which gets you an icon that opens straight into the game without any of that.
+    </div>
+    <div style="margin-top:16px;text-align:right"><button onclick="closeExport()">Close</button></div>
+  </div>
+</div>
+
 <div id="png-ov" onclick="if(event.target===this) closePngMenu()">
   <div class="modal" style="max-width:620px">
     <h2>That image is too big for one sprite</h2>
@@ -369,12 +430,13 @@ const SW = 16, SH = 16;                 // sprite size
 const VW = 320, VH = 240;               // screen size
 const COLS = VW / SW, ROWS = VH / SH;   // room grid = 20 x 15
 
-const PALETTE = [
+const BASE_PALETTE = [
   "#000000","#1d2b53","#7e2553","#008751",
   "#ab5236","#5f574f","#c2c3c7","#fff1e8",
   "#ff004d","#ffa300","#ffec27","#00e436",
   "#29adff","#83769c","#ff77a8","#ffccaa"
 ];
+let PALETTE = BASE_PALETTE.slice();      // a project can add its own colours
 
 /* ---------- project data ---------- */
 const blankSprite = () => new Array(SW * SH).fill(-1);   // -1 = transparent
@@ -528,25 +590,159 @@ function drawPaint(){
     paintCtx.beginPath();
     paintCtx.moveTo(0, i*PZ + .5); paintCtx.lineTo(paintCv.width, i*PZ + .5); paintCtx.stroke();
   }
+  if (dragFrom && dragTo){
+    paintCtx.fillStyle = painting === 2 ? "rgba(255,255,255,.35)" : PALETTE[curColor];
+    paintCtx.globalAlpha = .75;
+    shapePixels(curTool, dragFrom, dragTo, false).forEach(([x, y]) => {
+      if (x >= 0 && y >= 0 && x < SW && y < SH) paintCtx.fillRect(x*PZ, y*PZ, PZ, PZ);
+    });
+    paintCtx.globalAlpha = 1;
+  }
   $("p-id").textContent = $("p-id2").textContent = curSprite + 1;
 }
 
-let painting = 0;
-function paintAt(e, erase){
-  const r = paintCv.getBoundingClientRect();
-  const x = Math.floor((e.clientX - r.left) / r.width  * SW);
-  const y = Math.floor((e.clientY - r.top ) / r.height * SH);
-  if (x < 0 || y < 0 || x >= SW || y >= SH) return;
-  ensureSprite(curSprite + 1)[y*SW+x] = erase ? -1 : curColor;
-  drawPaint(); drawSpriteList(); save();
+/* ---------- drawing tools ---------- */
+const TOOLS = [
+  { id:"pencil", label:"✏️", tip:"Pencil — drag to draw" },
+  { id:"eraser", label:"🧽", tip:"Eraser" },
+  { id:"fill",   label:"🪣", tip:"Fill — flood the colour under the cursor" },
+  { id:"line",   label:"／",  tip:"Line — drag from one point to another" },
+  { id:"box",    label:"▭",  tip:"Box — hold Shift to fill it in" },
+  { id:"circle", label:"◯",  tip:"Circle — hold Shift to fill it in" },
+  { id:"pick",   label:"💧", tip:"Pick up the colour under the cursor" }
+];
+let curTool = "pencil";
+let painting = 0, dragFrom = null, dragTo = null;
+
+function buildTools(){
+  const box = $("tools"); box.innerHTML = "";
+  TOOLS.forEach(t => {
+    const b = document.createElement("button");
+    b.textContent = t.label; b.title = t.tip;
+    b.className = t.id === curTool ? "on" : "";
+    b.style.minWidth = "38px";
+    b.onclick = () => { curTool = t.id; buildTools(); };
+    box.appendChild(b);
+  });
 }
+
+function cellAt(e){
+  const r = paintCv.getBoundingClientRect();
+  return { x: Math.floor((e.clientX - r.left) / r.width  * SW),
+           y: Math.floor((e.clientY - r.top ) / r.height * SH) };
+}
+function put(x, y, colour){
+  if (x < 0 || y < 0 || x >= SW || y >= SH) return;
+  ensureSprite(curSprite + 1)[y*SW+x] = colour;
+}
+function floodFill(x, y, colour){
+  const s = ensureSprite(curSprite + 1);
+  const from = s[y*SW+x];
+  if (from === colour) return;
+  const queue = [[x, y]];
+  while (queue.length){
+    const [cx, cy] = queue.pop();
+    if (cx < 0 || cy < 0 || cx >= SW || cy >= SH) continue;
+    if (s[cy*SW+cx] !== from) continue;
+    s[cy*SW+cx] = colour;
+    queue.push([cx+1,cy], [cx-1,cy], [cx,cy+1], [cx,cy-1]);
+  }
+}
+function shapePixels(tool, a, b, filled){
+  const out = [];
+  const x0 = a.x, y0 = a.y, x1 = b.x, y1 = b.y;
+  if (tool === "line"){
+    const dx = Math.abs(x1-x0), dy = Math.abs(y1-y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy, x = x0, y = y0;
+    for (let guard = 0; guard < 2048; guard++){
+      out.push([x, y]);
+      if (x === x1 && y === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy){ err -= dy; x += sx; }
+      if (e2 <  dx){ err += dx; y += sy; }
+    }
+  } else if (tool === "box"){
+    const lx = Math.min(x0,x1), hx = Math.max(x0,x1);
+    const ly = Math.min(y0,y1), hy = Math.max(y0,y1);
+    for (let y = ly; y <= hy; y++)
+      for (let x = lx; x <= hx; x++)
+        if (filled || x === lx || x === hx || y === ly || y === hy) out.push([x, y]);
+  } else if (tool === "circle"){
+    const cx = (x0+x1)/2, cy = (y0+y1)/2;
+    const rx = Math.abs(x1-x0)/2, ry = Math.abs(y1-y0)/2;
+    for (let y = 0; y < SH; y++)
+      for (let x = 0; x < SW; x++){
+        const d = ((x-cx)/(rx||.5))**2 + ((y-cy)/(ry||.5))**2;
+        if (filled ? d <= 1 : (d <= 1 && d >= 0.45)) out.push([x, y]);
+      }
+  }
+  return out;
+}
+
 paintCv.addEventListener("mousedown", e => {
-  painting = e.button === 2 ? 2 : 1;
-  paintAt(e, painting === 2);
+  const c = cellAt(e);
+  const erase = e.button === 2;
+  painting = erase ? 2 : 1;
+  const colour = erase ? -1 : curColor;
+
+  if (curTool === "pick" && !erase){
+    const v = ensureSprite(curSprite + 1)[c.y*SW+c.x];
+    if (v >= 0){ curColor = v; refreshPalette(); }
+    painting = 0; return;
+  }
+  if (curTool === "fill"){ floodFill(c.x, c.y, colour); painting = 0; afterPaint(); return; }
+  if (curTool === "line" || curTool === "box" || curTool === "circle"){
+    dragFrom = c; dragTo = c; drawPaint(); return;
+  }
+  put(c.x, c.y, colour); afterPaint();
 });
-paintCv.addEventListener("mousemove", e => { if (painting) paintAt(e, painting === 2); });
-window.addEventListener("mouseup", () => painting = 0);
+paintCv.addEventListener("mousemove", e => {
+  if (!painting) return;
+  const c = cellAt(e);
+  if (dragFrom){ dragTo = c; drawPaint(); return; }
+  put(c.x, c.y, painting === 2 ? -1 : curColor);
+  afterPaint();
+});
+window.addEventListener("mouseup", e => {
+  if (dragFrom && dragTo){
+    const colour = painting === 2 ? -1 : curColor;
+    shapePixels(curTool, dragFrom, dragTo, e.shiftKey).forEach(([x,y]) => put(x, y, colour));
+    afterPaint();
+  }
+  painting = 0; dragFrom = dragTo = null;
+});
 paintCv.addEventListener("contextmenu", e => e.preventDefault());
+
+function afterPaint(){ drawPaint(); drawSpriteList(); save(); }
+
+/* ---------- colours you choose yourself ---------- */
+function addColour(){
+  const hex = $("colourwheel").value.toLowerCase();
+  let i = PALETTE.indexOf(hex);
+  if (i < 0){ PALETTE.push(hex); i = PALETTE.length - 1; project.palette = PALETTE.slice(); }
+  curColor = i;
+  buildPalette(); save(); drawPaint(); drawSpriteList();
+}
+function resetPalette(){
+  if (PALETTE.length <= BASE_PALETTE.length) return;
+  if (!confirm("Drop the colours you added and go back to the sixteen?\n\n" +
+               "Anything already painted in them turns see-through.")) return;
+  PALETTE = BASE_PALETTE.slice();
+  delete project.palette;
+  if (curColor >= PALETTE.length) curColor = 8;
+  buildPalette(); save(); drawPaint(); drawSpriteList();
+}
+
+/* ---------- how big the drawing area is on screen ---------- */
+function setPaintZoom(px){
+  px = Math.round(+px);
+  project.zoom = px;
+  paintCv.style.width = paintCv.style.height = px + "px";
+  $("zoom").value = px;
+  $("zoom-label").textContent = px + " × " + px + " on screen · still " + SW + " × " + SH + " pixels";
+  save();
+}
 
 function drawSpriteList(){
   drawStageInfo();
@@ -567,16 +763,17 @@ function copySprite(){ project.sprites.push(sprite(curSprite + 1).slice()); curS
 function clearSprite(){ project.sprites[curSprite] = blankSprite(); drawPaint(); drawSpriteList(); save(); }
 
 /* ---------- palette ---------- */
-(function buildPalette(){
-  const box = $("palette");
+function buildPalette(){
+  const box = $("palette"); box.innerHTML = "";
   PALETTE.forEach((c, i) => {
     const d = document.createElement("div");
     d.className = "sw" + (i === curColor ? " on" : "");
     d.style.background = c;
+    d.title = c;
     d.onclick = () => { curColor = i; refreshPalette(); };
     box.appendChild(d);
   });
-})();
+}
 function refreshPalette(){
   [...$("palette").children].forEach((d, i) => d.classList.toggle("on", i === curColor));
 }
@@ -691,6 +888,8 @@ function parse(src){
       else if ((m = text.match(/^reset\s+if\s+(.+)$/i)))
                                                    out.push({ k:"resetif", cond:m[1], n });
       else if (/^when\s+start$/i.test(text))            out.push({ k:"start",  body: block(true), n });
+      else if ((m = text.match(/^every\s+frame\s+unless\s+(.+)$/i)))
+                                                   out.push({ k:"frame", unless:m[1], body: block(true), n });
       else if (/^every\s+frame$/i.test(text))      out.push({ k:"frame",  body: block(true), n });
       else if ((m = text.match(/^when\s+key\s+(\w+)$/i)))
                                                    out.push({ k:"key", key:m[1].toLowerCase(), body: block(true), n });
@@ -816,13 +1015,14 @@ const R = {
   title:null, buttons:[], clicks:[], titlesShown:{},   // title screens
   player:0, roles:{}, lives:null, gameOver:false, resetting:false, homes:{},
   solids:[], doorTo:{}, doorCool:0,
+  cam:{x:VW/2, y:VH/2, fx:0, fy:0}, dialogue:null, three:null,
   hard:null
 };
 
 function actor(n){
   n = Math.round(n);
   if (!R.actors[n]) R.actors[n] = {
-    x:0, y:0, on:false,
+    id:n, x:0, y:0, on:false, w:SW, h:SH,
     grav:null, hor:null, ver:null, anim:null,
     vy:0, vx:0, mvy:0, onGround:false
   };
@@ -831,7 +1031,7 @@ function actor(n){
 function touching(a, b){
   const A = actor(a), B = actor(b);
   if (!A.on || !B.on) return false;
-  return A.x < B.x + SW && A.x + SW > B.x && A.y < B.y + SH && A.y + SH > B.y;
+  return A.x < B.x + B.w && A.x + A.w > B.x && A.y < B.y + B.h && A.y + A.h > B.y;
 }
 
 /* which tile sits at a screen position? 0 = nothing there */
@@ -857,17 +1057,18 @@ function isFree(n, dx, dy){
 
 /* is the 16x16 box at nx,ny blocked by sprite g?
    g counts both as painted room tiles and as the sprite itself */
-function hits(nx, ny, g, self){
+function hits(nx, ny, g, self, box){
   // g may be one sprite or several; solid() adds more for everyone
   const list = [].concat(g || [], R.solids || [])
                  .map(v => Math.round(v))
                  .filter(v => v > 0 && R.roles[v] !== "door");   // you must be able to enter a door
   if (!list.length) return false;
 
+  const w = (box && box.w) || SW, h = (box && box.h) || SH;
   const rm = liveRoom(R.room);
   if (rm){
-    const pts = [[nx+2,ny+1],[nx+SW-3,ny+1],[nx+2,ny+SH-1],[nx+SW-3,ny+SH-1],
-                 [nx+SW/2,ny+SH-1],[nx+SW/2,ny+1]];
+    const pts = [[nx+2,ny+1],[nx+w-3,ny+1],[nx+2,ny+h-1],[nx+w-3,ny+h-1],
+                 [nx+w/2,ny+h-1],[nx+w/2,ny+1]];
     for (const [px,py] of pts){
       const t = tileAtPixel(px, py);
       if (t && list.includes(t)) return true;
@@ -877,7 +1078,7 @@ function hits(nx, ny, g, self){
     if (g2 === self) continue;
     const B = R.actors[g2];
     if (B && B.on &&
-        nx < B.x + SW && nx + SW > B.x && ny < B.y + SH && ny + SH > B.y) return true;
+        nx < B.x + B.w && nx + w > B.x && ny < B.y + B.h && ny + h > B.y) return true;
   }
   return false;
 }
@@ -944,7 +1145,7 @@ function stepBehaviours(){
       if (Math.abs(a.vx) < .05) a.vx = 0;
       a.vx = Math.max(-a.hor.speed, Math.min(a.hor.speed, a.vx));
       const nx = a.x + a.vx;
-      if (nx < 0 || nx + SW > VW || hits(nx, a.y, a.hor.wall, n)) a.vx = 0;
+      if (nx < 0 || nx + a.w > VW || hits(nx, a.y, a.hor.wall, n, a)) a.vx = 0;
       else a.x = nx;
     }
     if (a.ver){                                  // smooth up/down
@@ -955,30 +1156,44 @@ function stepBehaviours(){
       if (Math.abs(a.mvy) < .05) a.mvy = 0;
       a.mvy = Math.max(-a.ver.speed, Math.min(a.ver.speed, a.mvy));
       const ny = a.y + a.mvy;
-      if (ny < 0 || ny + SH > VH || hits(a.x, ny, a.ver.wall, n)) a.mvy = 0;
+      if (ny < 0 || ny + a.h > VH || hits(a.x, ny, a.ver.wall, n, a)) a.mvy = 0;
       else a.y = ny;
     }
     if (a.grav){                                 // falling, and landing on things
       a.vy = Math.min(JUMPFALL, a.vy + GRAV);
       let ny = a.y + a.vy, landed = false;
-      const floor = VH - SH;
-      if (ny > floor){ ny = floor; landed = true; }
-      if (hits(a.x, ny, a.grav.ground, n)){
-        // walk back until it fits, so it sits neatly on top
-        let ty = a.y;
-        while (ty < ny && !hits(a.x, ty + 1, a.grav.ground, n)) ty++;
-        while (ty > 0 && hits(a.x, ty, a.grav.ground, n)) ty--;   // sit flush, never overlapping
-        ny = ty; landed = true;
+      const floor = VH - a.h;
+
+      if (a.vy < 0){
+        // going up: bonking your head stops you dead, but does NOT count as
+        // standing on something — holding jump at a ceiling used to stick
+        if (ny < 0 || hits(a.x, ny, a.grav.ground, n, a)){
+          let ty = a.y;
+          while (ty > ny && !hits(a.x, ty - 1, a.grav.ground, n, a) && ty - 1 >= 0) ty--;
+          ny = ty;
+          a.vy = 0;
+        }
+        a.y = ny;
+        a.onGround = false;
+      } else {
+        if (ny > floor){ ny = floor; landed = true; }
+        if (hits(a.x, ny, a.grav.ground, n, a)){
+          // walk back until it fits, so it sits neatly on top
+          let ty = a.y;
+          while (ty < ny && !hits(a.x, ty + 1, a.grav.ground, n, a)) ty++;
+          while (ty > 0 && hits(a.x, ty, a.grav.ground, n, a)) ty--;
+          ny = ty; landed = true;
+        }
+        a.y = ny;
+        if (landed) a.vy = 0;
+        a.onGround = landed;
       }
-      a.y = ny;
-      if (landed) a.vy = 0;
-      a.onGround = landed;
     }
     if (a.ball){                                 // bounces off things, like a pong ball
       if (!a.bvx && !a.bvy){ a.bvx = a.ball.speed; a.bvy = -a.ball.speed; }
       let nx = a.x + a.bvx, ny = a.y + a.bvy;
-      if (nx < 0 || nx + SW > VW || hits(nx, a.y, a.ball.off, n)){ a.bvx = -a.bvx; nx = a.x; beep(3); }
-      if (ny < 0 || ny + SH > VH || hits(a.x, ny, a.ball.off, n)){ a.bvy = -a.bvy; ny = a.y; beep(3); }
+      if (nx < 0 || nx + a.w > VW || hits(nx, a.y, a.ball.off, n, a)){ a.bvx = -a.bvx; nx = a.x; beep(3); }
+      if (ny < 0 || ny + a.h > VH || hits(a.x, ny, a.ball.off, n, a)){ a.bvy = -a.bvy; ny = a.y; beep(3); }
       a.x = nx; a.y = ny;
     }
     if (a.chase){                                // walks straight at its target
@@ -994,8 +1209,8 @@ function stepBehaviours(){
       if (T && T.on){
         const dir = T.x > a.x ? 1 : (T.x < a.x ? -1 : 0);
         const nx = a.x + dir * sp;
-        const wall = hits(nx, a.y, g, n) || nx < 0 || nx + SW > VW;
-        const pit  = !hits(a.x + dir * SW, a.y + SH + 2, g, n) && a.y + SH + 2 < VH;
+        const wall = hits(nx, a.y, g, n, a) || nx < 0 || nx + a.w > VW;
+        const pit  = !hits(a.x + dir * a.w, a.y + a.h + 2, g, n, a) && a.y + a.h + 2 < VH;
         if (!wall) a.x = nx;
         if ((wall || pit || T.y < a.y - SH) && a.onGround){ a.vy = -8; a.onGround = false; }
       }
@@ -1011,6 +1226,13 @@ function stepBehaviours(){
 }
 
 /* the roles you can give a sprite in Easy mode: coin, death, spring */
+function stepCamera(){
+  const fx = R.cam.fx && R.actors[R.cam.fx], fy = R.cam.fy && R.actors[R.cam.fy];
+  if (fx) R.cam.x = fx.x + fx.w / 2;
+  if (fy) R.cam.y = fy.y + fy.h / 2;
+  if (R.dialogue && --R.dialogue.frames <= 0) R.dialogue = null;
+}
+
 function stepRoles(){
   if (R.doorCool > 0) R.doorCool--;
   const p = R.player;
@@ -1148,7 +1370,9 @@ function exec(list){
 }
 
 const EASY_ONLY = ["gravity","jump","horizontal","vertical","animate","playerspeed","player_speed",
-                   "player","coin","death","lives","lifes","spring","boing","bounce","chase","smartchase"];
+                   "player","coin","death","lives","lifes","spring","boing","bounce","chase","smartchase",
+                   "solid","wall","door","nextroom","next_room","camx","camy","camera","resize","size",
+                   "3dplatformer","threedplatformer"];
 /* the player is whoever first got a movement command — or player(1) said so */
 function claimPlayer(n, onlyIfUnset){
   n = Math.round(n);
@@ -1273,6 +1497,36 @@ function runCall(st){
                      a.smart = { target: Math.round(t), ground: Math.round(g || 0), speed: Math.abs(sp) || 1 };
                      break; }
 
+    /* ---- camera ---- */
+    case "camx": { easyOnly(name, st.n); R.cam.fx = Math.round(A()[0]); break; }
+    case "camy": { easyOnly(name, st.n); R.cam.fy = Math.round(A()[0]); break; }
+    case "camera": { easyOnly(name, st.n); const n = Math.round(A()[0]);
+                     R.cam.fx = n; R.cam.fy = n; break; }
+
+    /* ---- size ---- */
+    case "resize": { easyOnly(name, st.n); const [n, by] = A();
+                     const a = actor(n);
+                     a.w = Math.max(2, Math.min(320, a.w + (by || 0)));
+                     a.h = Math.max(2, Math.min(320, a.h + (by || 0)));
+                     break; }
+    case "size": { easyOnly(name, st.n); const [n, to] = A();
+                   const a = actor(n);
+                   a.w = a.h = Math.max(2, Math.min(320, to || SW));
+                   break; }
+
+    /* ---- talking ---- */
+    case "dialogue": case "say": {
+      const [t] = A();
+      R.dialogue = { t: String(t), frames: 150 };
+      break; }
+
+    /* ---- the experimental 3D platformer ---- */
+    case "3dplatformer": case "threedplatformer": {
+      easyOnly(name, st.n);
+      const [pl, ground, coin] = A();
+      start3D(Math.round(pl) || 1, Math.round(ground) || 2, Math.round(coin) || 3);
+      break; }
+
     /* ---- breaking the fourth wall ---- */
     case "closegame": case "close_game": { throw new Stop(); }
     case "importgame": case "import_game": { importGame(A()[0], st.n); break; }
@@ -1282,7 +1536,7 @@ function runCall(st){
 
     case "wait":  { throw new Wait(Math.max(1, Math.round(A()[0] || 1))); }
     case "stop":  { throw new Stop(); }
-    case "say":   { log(String(A()[0])); break; }
+    case "note":  { log(String(A()[0])); break; }
     default: throw new Err("I don't know the command '" + name + "'", st.n);
   }
 }
@@ -1292,14 +1546,30 @@ function run(){
   stop();
   $("console").innerHTML = "";
   project.code = $("code").value; save();
-
-  R.hard = null;
   $("ai-show").style.display = "none";
-  let source = project.code;
+
   if (project.mode === "ai"){
-    try { source = compileAI(); }
-    catch (e){ return log("AI mode tripped over that description — " + (e.msg || e), "err"); }
+    if (aiKey()){                       // a real model is connected — that answer arrives later
+      log("asking the model…", "ok");
+      askRealAI(project.code)
+        .then(src => { R.aiCode = src; log("the model wrote " + src.split("\n").length + " lines.", "ok");
+                       $("ai-show").style.display = "inline-block"; startWith(src); })
+        .catch(err => {
+          log("the model couldn't be reached (" + err.message + ") — using the built-in reader instead", "err");
+          try { startWith(compileAI()); }
+          catch(e){ log("AI mode tripped over that description — " + (e.msg || e), "err"); }
+        });
+      return;
+    }
+    try { startWith(compileAI()); }
+    catch (e){ log("AI mode tripped over that description — " + (e.msg || e), "err"); }
+    return;
   }
+  startWith(project.code);
+}
+
+function startWith(source){
+  R.hard = null;
   if (project.mode !== "hard"){
     try { R.prog = parse(source); }
     catch (e){ return log("Oops — " + e, "err"); }
@@ -1312,6 +1582,7 @@ function run(){
   R.player = 0; R.roles = {}; R.lives = null; R.gameOver = false;
   R.resetting = false; R.homes = {}; R.speed = 3;
   R.solids = []; R.doorTo = {}; R.doorCool = 0;
+  R.cam = { x:VW/2, y:VH/2, fx:0, fy:0 }; R.dialogue = null; R.three = null;
   R.vars.coins = 0;                      // coin() counts into this one
   KEYBIND = {};
   if (project.mode === "hard" && !runHard()){ R.running = false; return; }
@@ -1329,6 +1600,7 @@ function doReset(){
   R.player = 0; R.roles = {}; R.lives = null; R.gameOver = false;
   R.resetting = false; R.homes = {}; R.speed = 3;
   R.solids = []; R.doorTo = {}; R.doorCool = 0;
+  R.cam = { x:VW/2, y:VH/2, fx:0, fy:0 }; R.dialogue = null; R.three = null;
   R.clicks = []; R.vars.coins = 0;
   render();
 }
@@ -1368,7 +1640,7 @@ function loop(){
 
   if (R.hard){
     if (!hardLoop()) return;
-    stepBehaviours();
+    stepBehaviours(); stepCamera();
     R.frame++; render(); return;
   }
 
@@ -1377,7 +1649,16 @@ function loop(){
     for (const b of R.prog) if (b.k === "start") if (!safe(b.body, "when start")) return;
   }
   for (const b of R.prog){
-    if (b.k === "frame"){ if (!safe(b.body, "every frame")) return; }
+    if (b.k === "frame"){
+      // "every frame unless ..." pauses itself while that is true, then carries on
+      if (b.unless){
+        let paused = false;
+        try { paused = !!evalExpr(b.unless, b.n); }
+        catch(e){ log("Oops in every frame unless — " + e, "err"); stop(); return; }
+        if (paused) continue;
+      }
+      if (!safe(b.body, "every frame")) return;
+    }
     else if (b.k === "key" && R.keys[b.key]){ if (!safe(b.body, "when key " + b.key)) return; }
     else if (b.k === "call" || b.k === "if" || b.k === "repeat" ||
              b.k === "resetif" || b.k === "resetblock"){
@@ -1387,6 +1668,8 @@ function loop(){
   }
   stepBehaviours();
   stepRoles();
+  stepCamera();
+  if (R.three) step3D();
   if (R.resetting){ doReset(); return; }
   R.lastButtons = R.buttons.map(b => b.label);
   R.clicks = [];
@@ -1399,27 +1682,199 @@ function render(){
   sctx.fillRect(0, 0, VW, VH);
 
   if (R.title){ drawTitle(); return; }   // nothing else shows behind a title screen
+  if (R.three){ render3D(); drawHUD(); return; }
+
+  // the camera shifts the world, never the writing on top of it
+  const ox = Math.round(VW / 2 - R.cam.x), oy = Math.round(VH / 2 - R.cam.y);
 
   const bg = roomCanvas();
-  if (bg) sctx.drawImage(bg, 0, 0);
-  for (const e of (R.extra || [])) blit(sctx, e.n, Math.round(e.x), Math.round(e.y));
+  if (bg) sctx.drawImage(bg, ox, oy);
+
+  for (const e of (R.extra || [])) blit(sctx, e.n, Math.round(e.x) + ox, Math.round(e.y) + oy);
   for (const n of Object.keys(R.actors)){
     const a = R.actors[n];
     if (!a.on) continue;
     const which = a.anim ? a.anim.list[a.anim.i] : +n;
-    blit(sctx, which, Math.round(a.x), Math.round(a.y));
+    const cv = spriteCanvas(which);
+    if (cv) sctx.drawImage(cv, Math.round(a.x) + ox, Math.round(a.y) + oy,
+                               Math.round(a.w), Math.round(a.h));
   }
+  drawHUD();
+}
+
+/* text, the life counter and the dialogue box sit above everything and
+   never move with the camera */
+function drawHUD(){
   sctx.font = "8px ui-monospace,monospace";
   sctx.textBaseline = "top";
   for (const t of R.texts){
     sctx.fillStyle = "#000";  sctx.fillText(t.t, t.x + 1, t.y + 1);
     sctx.fillStyle = "#fff";  sctx.fillText(t.t, t.x, t.y);
   }
-  if (R.lives !== null){                       // lives() draws its own counter
+  if (R.lives !== null){
     const txt = "lives " + R.lives;
     sctx.fillStyle = "#000"; sctx.fillText(txt, VW - 47, 7);
     sctx.fillStyle = "#ff6b6b"; sctx.fillText(txt, VW - 48, 6);
   }
+  if (R.dialogue) drawDialogue();
+}
+
+/* dialogue("...") — a black box along the bottom, words wrapped to fit */
+function drawDialogue(){
+  const boxH = 52, top = VH - boxH - 6;
+  sctx.fillStyle = "rgba(0,0,0,.88)";
+  sctx.fillRect(6, top, VW - 12, boxH);
+  sctx.strokeStyle = "#e8ecf5"; sctx.lineWidth = 1;
+  sctx.strokeRect(6.5, top + .5, VW - 13, boxH - 1);
+
+  sctx.font = "8px ui-monospace,monospace";
+  sctx.fillStyle = "#fff";
+  const words = R.dialogue.t.split(" ");
+  const maxW = VW - 26;
+  let line = "", y = top + 8;
+  for (const w of words){
+    const test = line ? line + " " + w : w;
+    if (sctx.measureText(test).width > maxW){
+      sctx.fillText(line, 13, y); y += 10; line = w;
+      if (y > top + boxH - 12) break;
+    } else line = test;
+  }
+  if (line) sctx.fillText(line, 13, y);
+}
+
+/* =========================================================
+   3D PLATFORMER (experimental)
+   The room grid you painted becomes a maze seen from the inside.
+   Every solid tile is a wall, textured with the ground sprite;
+   coins float in it as flat pictures that always face you.
+   ========================================================= */
+function start3D(player, ground, coin){
+  ensureSprite(ground); ensureSprite(coin);
+  R.three = {
+    player, ground, coin,
+    px: 1.5, py: 1.5, dir: 0,          // where you are on the tile grid, and which way you face
+    walk: 0.055, turn: 0.045,
+    got: new Set()
+  };
+  R.player = player;
+  // stand in the first empty tile so you never start inside a wall
+  const rm = liveRoom(R.room) || [];
+  for (let i = 0; i < rm.length; i++)
+    if (!rm[i]){ R.three.px = (i % COLS) + 0.5; R.three.py = Math.floor(i / COLS) + 0.5; break; }
+}
+function solid3D(cx, cy){
+  const rm = liveRoom(R.room);
+  if (!rm) return false;
+  if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) return true;   // the world has edges
+  return !!rm[cy * COLS + cx];
+}
+function step3D(){
+  const t = R.three;
+  if (R.keys.left)  t.dir -= t.turn;
+  if (R.keys.right) t.dir += t.turn;
+  let mv = 0;
+  if (R.keys.up)   mv += t.walk;
+  if (R.keys.down) mv -= t.walk;
+  if (mv){
+    const nx = t.px + Math.cos(t.dir) * mv, ny = t.py + Math.sin(t.dir) * mv;
+    if (!solid3D(Math.floor(nx), Math.floor(t.py))) t.px = nx;    // slide along walls
+    if (!solid3D(Math.floor(t.px), Math.floor(ny))) t.py = ny;
+  }
+  // coins are the tiles painted with the coin sprite
+  const rm = liveRoom(R.room);
+  if (rm){
+    const cx = Math.floor(t.px), cy = Math.floor(t.py);
+    const key = cy * COLS + cx;
+    if (rm[key] === t.coin && !t.got.has(key)){
+      t.got.add(key);
+      R.vars.coins = (+R.vars.coins || 0) + 1;
+      beep(1);
+    }
+  }
+}
+function render3D(){
+  const t = R.three;
+  const tex = spriteCanvas(t.ground);
+  const texData = tex ? tex.getContext("2d").getImageData(0, 0, SW, SH).data : null;
+
+  sctx.fillStyle = "#1d2b53"; sctx.fillRect(0, 0, VW, VH / 2);        // sky
+  sctx.fillStyle = "#5f574f"; sctx.fillRect(0, VH / 2, VW, VH / 2);   // ground
+
+  const fov = 0.85, step = 2;             // 2px columns: plenty at this size, twice the speed
+  const zbuf = new Array(VW).fill(99);
+
+  for (let sx = 0; sx < VW; sx += step){
+    const camx = (2 * sx) / VW - 1;
+    const ang = t.dir + Math.atan(camx * fov);
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+
+    // step tile by tile until something solid is in the way
+    let mx = Math.floor(t.px), my = Math.floor(t.py);
+    const ddx = Math.abs(1 / (dx || 1e-6)), ddy = Math.abs(1 / (dy || 1e-6));
+    let sxs = dx < 0 ? -1 : 1, sys = dy < 0 ? -1 : 1;
+    let sdx = dx < 0 ? (t.px - mx) * ddx : (mx + 1 - t.px) * ddx;
+    let sdy = dy < 0 ? (t.py - my) * ddy : (my + 1 - t.py) * ddy;
+    let side = 0, guard = 0;
+    while (guard++ < 64){
+      if (sdx < sdy){ sdx += ddx; mx += sxs; side = 0; }
+      else          { sdy += ddy; my += sys; side = 1; }
+      if (solid3D(mx, my)) break;
+    }
+    const dist = side === 0 ? (mx - t.px + (1 - sxs) / 2) / (dx || 1e-6)
+                            : (my - t.py + (1 - sys) / 2) / (dy || 1e-6);
+    const d = Math.max(0.08, Math.abs(dist));
+    for (let k = 0; k < step; k++) zbuf[sx + k] = d;
+
+    const hgt = Math.min(VH * 4, VH / d);
+    const top = (VH - hgt) / 2;
+
+    // which column of the texture this ray landed on
+    let wallX = side === 0 ? t.py + dist * dy : t.px + dist * dx;
+    wallX -= Math.floor(wallX);
+    const tx = Math.min(SW - 1, Math.max(0, Math.floor(wallX * SW)));
+
+    if (texData){
+      const rows = 8;                       // a few bands is enough at this resolution
+      for (let r = 0; r < rows; r++){
+        const ty = Math.floor((r / rows) * SH);
+        const i = (ty * SW + tx) * 4;
+        const shade = (side === 1 ? 0.62 : 1) * Math.max(0.25, Math.min(1, 2.6 / d));
+        if (texData[i+3] < 40){ continue; }
+        sctx.fillStyle = `rgb(${texData[i]*shade|0},${texData[i+1]*shade|0},${texData[i+2]*shade|0})`;
+        sctx.fillRect(sx, top + (hgt * r) / rows, step, hgt / rows + 1);
+      }
+    } else {
+      sctx.fillStyle = side === 1 ? "#444" : "#777";
+      sctx.fillRect(sx, top, step, hgt);
+    }
+  }
+
+  // coins, drawn as flat pictures that always face you
+  const rm = liveRoom(R.room);
+  if (rm){
+    const seen = [];
+    for (let i = 0; i < rm.length; i++){
+      if (rm[i] !== t.coin || t.got.has(i)) continue;
+      const wx = (i % COLS) + 0.5 - t.px, wy = Math.floor(i / COLS) + 0.5 - t.py;
+      seen.push({ i, wx, wy, d: wx*wx + wy*wy });
+    }
+    seen.sort((a, b) => b.d - a.d);
+    for (const sp of seen){
+      const ca = Math.cos(-t.dir), sa = Math.sin(-t.dir);
+      const rx = sp.wx * ca - sp.wy * sa;      // forward
+      const ry = sp.wx * sa + sp.wy * ca;      // sideways
+      if (rx <= 0.15) continue;
+      const size = Math.min(VH, VH / rx * 0.7);
+      const sx = VW / 2 + (ry / rx) * (VW / 2) / 0.85 - size / 2;
+      if (sx + size < 0 || sx > VW) continue;
+      if (zbuf[Math.max(0, Math.min(VW - 1, Math.round(sx + size / 2)))] < rx) continue;
+      blitBox(t.coin, sx, VH / 2 - size / 2 + size * 0.2, size, size);
+    }
+  }
+}
+function blitBox(n, x, y, w, h){
+  const cv = spriteCanvas(n);
+  if (cv) sctx.drawImage(cv, x, y, w, h);
 }
 
 function drawTitle(){
@@ -1470,6 +1925,10 @@ function setMode(m, quiet){
   project.mode = m;
   for (const k of Object.keys(MODES)) $("m-" + k).classList.toggle("on", k === m);
   $("modeline").innerHTML = "<b>" + MODES[m].label + " mode</b> — " + MODES[m].blurb;
+  const ai = m === "ai";
+  $("ai-remember-wrap").style.display = ai ? "flex" : "none";
+  $("ai-key-btn").style.display = ai ? "inline-block" : "none";
+  if (ai) $("ai-key-btn").textContent = aiKey() ? "⚡ Real AI: on" : "⚡ Real AI";
   buildHelp(); buildLessons();
   if (changed && !quiet){
     stop();
@@ -1620,6 +2079,41 @@ function hardLoop(){
     stop(); return false;
   }
   return true;
+}
+
+/* =========================================================
+   EXPORT
+   The whole engine is one file, so an exported game is that same
+   file with your project baked into it and the editor hidden.
+   ========================================================= */
+function exportHtml(){
+  const { name, author } = libOpen() ? libFields()
+                                     : { name: project.name || "My Game", author: project.author || "" };
+  save();
+  const game = gameNow(name || "My Game", author);
+
+  // the page is self-contained, so its own markup is the player
+  const source = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+  const inject = "<script>window.SIMPLE_GAME=" + JSON.stringify(game).replace(/</g, "\\u003c") + ";<\/script>";
+  const out = source.replace("</head>", inject + "\n</head>");
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([out], { type:"text/html" }));
+  a.download = (name || "my-game").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + ".html";
+  a.click();
+  log("exported " + a.download + " — " + Math.round(out.length/1024) + " KB, opens in any browser", "ok");
+  closeExport();
+}
+
+function openExport(){ $("export-ov").classList.add("on"); }
+function closeExport(){ $("export-ov").classList.remove("on"); }
+
+/* start up as a finished game rather than the editor */
+function bootStandalone(g){
+  document.body.classList.add("play-only");
+  libLoad(g);
+  document.title = (g.name || "A Simple++ game") + (g.author ? " — " + g.author : "");
+  setTimeout(() => { run(); stage.focus(); }, 60);
 }
 
 /* =========================================================
@@ -2471,7 +2965,8 @@ const SYNONYMS = [
   [/\bthird sprite\b/g, "sprite 3"], [/\bfourth sprite\b/g, "sprite 4"]
 ];
 /* words worth repairing when they are one keystroke out */
-const KEYWORDS = ("collision collide collides player sprite ground floor wall walls solid " +
+const KEYWORDS = ("falls fall fell ball balls call calls tall small pass past all wallpaper " +
+  "collision collide collides player sprite ground floor wall walls solid " +
   "gravity jump jumps platformer coin coins collect kills killed enemy enemies spring bounce " +
   "bounces chase chases follow lives life room rooms level title screen button option speed " +
   "fast slow left right down space animate hide door exit portal next restart reset bottom " +
@@ -2526,7 +3021,7 @@ function isBindish(l){
   return /\b(bind|rebind|remap|wasd)\b|\binstead of\b/.test(l) ||
          /\b(left|right|up|down|space|z|x|c|enter)\b\s*(?:key|button)?\s*(?:=|to|is|as|be|becomes?)\s*(?:the\s+)?"?[a-z0-9]\b/.test(l);
 }
-function tidy(t){ return String(t || "").trim().replace(/^["'\u201c]+|["'\u201d.,!]+$/g, "").trim(); }
+function tidy(t){ return String(t || "").trim().replace(/^["'\u201c]+|["'\u201d.,]+$/g, "").trim(); }
 function quoted(line){
   const m = line.match(/"([^"]*)"|'([^']*)'|“([^”]*)”/);
   return m ? (m[1] ?? m[2] ?? m[3]) : null;
@@ -2661,7 +3156,8 @@ const AI_RULES = [
     } },
 
   { id:"chase", perClause:true,
-    test: l => /\b(chase|chases|follow|follows|hunt|hunts|after you)\b/.test(l),
+    test: l => /\b(chase|chases|follow|follows|hunt|hunts|after you)\b/.test(l) &&
+               !/\bcamera\b|\bview\b|\bscroll\w*\b/.test(l),
     apply: (l, P) => {
       const all = [...l.matchAll(/sprite\s*#?\s*(\d+)/g)].map(m => +m[1]);
       const who = all[0] ?? 4, whom = all[1] ?? P.player;
@@ -2689,6 +3185,68 @@ const AI_RULES = [
       if (list.length < 2) list = [who, who + 1];
       P.anims.push({ who, list });
       return "sprite " + who + " animates through " + list.join(", ");
+    } },
+
+  { id:"camera", perClause:true,
+    test: l => /\bcamera\b|\bscroll\w*\b|\bfollows? (?:the )?player\b|\bview\b/.test(l),
+    apply: (l, P) => {
+      const n = spriteIn(l, P.player);
+      P.camera = { n, x: !/\bonly ?y\b|\bvertical\b/.test(l), y: !/\bonly ?x\b|\bhorizontal\b|\bsideways\b/.test(l) };
+      return "a camera following sprite " + n;
+    } },
+
+  { id:"resize", perClause:true,
+    test: l => /\b(bigger|smaller|larger|tiny|huge|giant|grow|shrink|resize|size|scale)\b/.test(l),
+    apply: (l, P) => {
+      const n = spriteIn(l, P.player);
+      const rest = l.replace(/sprite\s*#?\s*\d+/g, " ");   // don't read the sprite number as the amount
+      const m = rest.match(/\b(\d+)\b/);
+      let by = m ? +m[1] : 8;
+      if (/\bsmaller|tiny|shrink\b/.test(l)) by = -Math.abs(by);
+      if (/\bhuge|giant\b/.test(l)) by = Math.abs(by) * 2;
+      P.resizes.push({ n, by });
+      return "sprite " + n + " is " + (by > 0 ? "bigger" : "smaller") + " by " + Math.abs(by) + " pixels";
+    } },
+
+  { id:"dialogue",
+    test: l => /\b(dialogue|dialog|speech|talks?|speaks?|tells? me|greets?)\b/.test(l),
+    apply: (l, P, raw) => {
+      const t = tidy(quoted(raw) || raw.match(/(?:dialogue|dialog|says?|tells? me|speaks?)\s+(.+)$/i)?.[1] || "Hello!");
+      P.dialogue = t;
+      return "a dialogue box saying \u201c" + t + "\u201d";
+    } },
+
+  { id:"threed",
+    test: l => /\b3d\b|\bthree ?d\b|\bfirst person\b|\bdoom\b|\bmaze in 3d\b/.test(l),
+    apply: (l, P) => {
+      const all = [...l.matchAll(/sprite\s*#?\s*(\d+)/g)].map(m => +m[1]);
+      // "sprite 2 walls and sprite 3 coins" says which is which; otherwise take them in order
+      const named = t => {
+        const m = l.match(new RegExp("sprite\\s*#?\\s*(\\d+)[^.]{0,18}?\\b" + t)) ||
+                  l.match(new RegExp("\\b" + t + "[^.]{0,18}?sprite\\s*#?\\s*(\\d+)"));
+        return m ? +m[1] : 0;
+      };
+      const ground = named("wall|ground|floor|block") || all[1] || P.grounds[0] || 2;
+      const coin   = named("coin|treasure|gold|star")  || all[2] || P.coins[0] || 3;
+      const player = all.find(v => v !== ground && v !== coin) || P.player;
+      P.threeD = { player, ground, coin };
+      return "an experimental 3D platformer (walls from sprite " + P.threeD.ground +
+             ", coins from sprite " + P.threeD.coin + ")";
+    } },
+
+  { id:"pause",
+    test: l => /\b(unless|pause|paused|freeze|stop moving|while)\b/.test(l),
+    apply: (l, P) => {
+      const m = l.match(/(?:unless|while|when)\s+(.+)$/);
+      if (!m) return null;
+      const cond = m[1];
+      const spr = spriteIn(cond, P.player);
+      if (/\bbottom\b|\bfalls?\b/.test(cond)) P.unless = "y(" + spr + ") > 200";
+      else if (/\bright\b/.test(cond))          P.unless = "x(" + spr + ") > 280";
+      else if (/\bleft\b/.test(cond))           P.unless = "x(" + spr + ") < 20";
+      else if (/\btop\b/.test(cond))            P.unless = "y(" + spr + ") < 20";
+      else return null;
+      return "the game pauses while " + cond.trim();
     } },
 
   { id:"difficulty",
@@ -2759,11 +3317,31 @@ function addSolid(P, n){
   if (n > 0 && !P.grounds.includes(n)) P.grounds.push(n);
 }
 
+let aiMemory = null;          // what the last description added up to
+
+function clonePlan(P){ return JSON.parse(JSON.stringify(P)); }
+function mergePlans(old, add){
+  const out = clonePlan(old);
+  for (const k of Object.keys(add)){
+    const v = add[k];
+    if (Array.isArray(v)){
+      const seen = new Set((out[k] || []).map(x => JSON.stringify(x)));
+      out[k] = (out[k] || []).concat(v.filter(x => !seen.has(JSON.stringify(x))));
+    } else if (v && typeof v === "object"){
+      out[k] = Object.assign({}, out[k] || {}, v);
+    } else if (v !== null && v !== false && v !== undefined){
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 function aiPlan(text){
   const P = { title:null, options:[], player:1, playerSaid:false, grounds:[], doors:[],
               gravity:false, sideways:false, updown:false, needsMovement:false,
               speed:3, jumpPower:8, lives:null, coins:[], deaths:[], springs:[], chasers:[],
               bounces:[], anims:[], texts:[], binds:[], places:{}, hidden:[], chaseSpeed:1,
+              camera:null, resizes:[], dialogue:null, threeD:null, unless:null,
               room:0, resetOnFall:false, wasd:false };
   const did = [], missed = [];
 
@@ -2885,6 +3463,11 @@ function aiCode(P){
   if (P.sideways) L.push(`  horizontal(${P.player})`);
   if (P.updown && !P.gravity) L.push(`  vertical(${P.player})`);
   P.doors.forEach(d => L.push(d.to ? `  door(${d.n}, ${d.to})` : `  door(${d.n})`));
+  if (P.camera) L.push(P.camera.x && P.camera.y ? `  camera(${P.camera.n})`
+                       : (P.camera.x ? `  camx(${P.camera.n})` : `  camy(${P.camera.n})`));
+  P.resizes.forEach(r => L.push(`  resize(${r.n}, ${r.by})`));
+  if (P.dialogue) L.push(`  dialogue("${P.dialogue}")`);
+  if (P.threeD) L.push(`  3dplatformer(${P.threeD.player}, ${P.threeD.ground}, ${P.threeD.coin})`);
   if (P.lives !== null) L.push(`  lives(${P.lives})`);
   P.coins.forEach(n   => L.push(`  coin(${n})`));
   P.deaths.forEach(n  => L.push(`  death(${n})`));
@@ -2920,7 +3503,7 @@ function aiCode(P){
   }
   if (P.resetOnFall) L.push(`reset if y(${P.player}) > 240`, "");
 
-  L.push("every frame");
+  L.push(P.unless ? `every frame unless ${P.unless}` : "every frame");
   if (P.coins.length) L.push(`  print("coins: " + coins, 6, 6)`);
   P.texts.forEach(t => L.push(`  print("${t.t}", ${t.x}, ${t.y})`));
   if (!P.coins.length && !P.texts.length) L.push(`  print("made by AI mode", 6, 6)`);
@@ -2937,6 +3520,107 @@ Show room 1.
 The game restarts if I fall off the bottom.
 Add a title screen called My First AI Game.
 `;
+
+/* =========================================================
+   OPTIONAL: a real model
+   The built-in reader is rules I wrote, and it always works.
+   If you have an Anthropic API key you can hand the job to Claude
+   instead: the key is kept in this browser only, sent straight to
+   the API and nowhere else, and the built-in reader takes over if
+   anything at all goes wrong.
+   ========================================================= */
+const AI_KEY_STORE = "simplepp-aikey";
+function aiKey(){ try { return localStorage.getItem(AI_KEY_STORE) || ""; } catch(e){ return ""; } }
+function setAIKey(){
+  const now = aiKey();
+  const msg = now
+    ? "A key is set. Paste a new one to replace it, or clear the box and press OK to switch back to the built-in reader."
+    : "AI mode works fine without this.\n\nIf you have an Anthropic API key, paste it here and Claude will " +
+      "write your game instead of the built-in reader. The key stays in this browser and goes " +
+      "only to Anthropic. Leave it empty to keep using the built-in one.";
+  const v = prompt(msg, now);
+  if (v === null) return;
+  try {
+    if (v.trim()) localStorage.setItem(AI_KEY_STORE, v.trim());
+    else localStorage.removeItem(AI_KEY_STORE);
+  } catch(e){}
+  $("ai-key-btn").textContent = aiKey() ? "⚡ Real AI: on" : "⚡ Real AI";
+  log(aiKey() ? "a real model will write your games now" : "back to the built-in reader", "ok");
+}
+
+/* what the model is told about the language */
+function aiSystemPrompt(){
+  return `You write programs in Simple++ Easy mode, a tiny language for children learning to code.
+Reply with ONLY the program. No explanation, no markdown fences.
+
+The screen is 320x240. Sprites are 16x16 and are referred to by number: sprite 1, 2, 3...
+This project has ${project.sprites.length} sprites and ${project.rooms.length} rooms already drawn.
+
+Blocks:
+  when start ... end          runs once
+  every frame ... end         runs 60 times a second
+  every frame unless COND ... end   pauses itself while COND is true
+  when key left ... end       left right up down space z x
+  repeat 5 ... end
+  if COND ... end
+  reset if COND              restarts the game when COND becomes true
+
+Commands:
+  show(n) hide(n) move(n,dx,dy) put(n,x,y) print(text,x,y) room(n)
+  set(v,0) add(v,1) wait(30) sound(1..6) settile(x,y,n) stop()
+  title("Name") titleoption("Button")
+  solid(n) door(n) door(n,room)
+  gravity(n, ground) jump(n, power) horizontal(n) vertical(n)
+  playerspeed(n) player(n) coin(n) death(n) spring(n) lives(n)
+  bounce(n, off) chase(n, target) smartchase(n, target, ground)
+  animate(n, "1, 2, 3") resize(n, pixels) camera(n) camx(n) camy(n)
+  dialogue("words") bind("left","A") 3dplatformer(player, ground, coin)
+
+Values you can ask about:
+  x(n) y(n) visible(n) touching(a,b) free(n,dx,dy) tile(x,y) random(n)
+  key(space) clickbutton("Button")  and the variable coins
+
+Rules: one command per line, two spaces of indent inside a block, every block
+ends with "end". Comments start with #. Keep it short and readable — a child is
+going to read this and change it.`;
+}
+
+async function askRealAI(description){
+  const key = aiKey();
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-5",
+      max_tokens: 2000,
+      system: aiSystemPrompt(),
+      messages: [
+        ...(aiChat.length ? aiChat : []),
+        { role: "user", content: description }
+      ]
+    })
+  });
+  if (!res.ok){
+    const t = await res.text().catch(() => "");
+    throw new Error(res.status + (t.slice(0, 120) ? " " + t.slice(0, 120) : ""));
+  }
+  const data = await res.json();
+  let code = (data.content || []).map(c => c.text || "").join("").trim();
+  code = code.replace(/^```[a-z]*\n?/i, "").replace(/```$/, "").trim();
+  if (!code) throw new Error("the model sent nothing back");
+
+  // remember this exchange, so the next line carries on from it
+  aiChat.push({ role: "user", content: description });
+  aiChat.push({ role: "assistant", content: code });
+  if (aiChat.length > 8) aiChat = aiChat.slice(-8);
+  return code;
+}
+let aiChat = [];
 
 /* Everything AI mode understands, in the words it expects to see.
    Used to suggest something when a line lands nowhere. */
@@ -2979,7 +3663,23 @@ function aiSuggest(line){
 
 /* what Run does in AI mode */
 function compileAI(){
-  const { P, did, missed } = aiPlan(project.code);
+  const startOver = /\b(start over|start again|new game|forget|clear it|from scratch|reset it)\b/i
+                      .test(project.code);
+  if (startOver){ aiMemory = null; aiChat = []; }
+
+  let { P, did, missed } = aiPlan(project.code);
+
+  // it remembers what you asked for last time, so you can add one line at a time
+  const remember = $("ai-remember") ? $("ai-remember").checked : true;
+  if (remember && aiMemory && !startOver){
+    const merged = mergePlans(aiMemory, P);
+    const added = did.length;
+    P = merged;
+    did = did.concat("(carried on from your last description)");
+    if (!added) did.unshift("(nothing new — this is still your last game)");
+  }
+  if (remember) aiMemory = clonePlan(P);
+
   R.aiPlan = P;
   const code = aiCode(P);
   R.aiCode = code;
@@ -3137,6 +3837,9 @@ function libLoad(g){
   if (!project.sprites.length) project.sprites = [blankSprite()];
   if (!project.rooms.length)   project.rooms   = [blankRoom()];
   curSprite = 0; curRoom = 0; curTile = 1;
+  PALETTE = (project.palette && project.palette.length) ? project.palette.slice() : BASE_PALETTE.slice();
+  if (curColor >= PALETTE.length) curColor = 8;
+  buildPalette(); SPRITE_EPOCH++;
   setMode(project.mode, true);
   $("code").value = project.code;
   drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
@@ -3493,6 +4196,11 @@ Blocks (a block ends with <code>end</code>):
   move(1, -2, 0)                keys: left right up down space z x
 <code>end</code>
 
+<code>every frame unless x(1) > 200</code>
+                            pauses itself while that is true,
+                            then carries on by itself
+<code>end</code>
+
 <code>every frame</code>           runs 60 times a second
   print("score: " + score, 4, 4)
 <code>end</code>
@@ -3582,6 +4290,18 @@ the screen stop you.
 <code>door(5, 3)</code>          ...or to room 3 exactly
                           (<code>nextroom()</code> / <code>next_room()</code> are the same)
 
+<code>camera(1)</code>           the view follows sprite 1 everywhere
+<code>camx(1)</code>  <code>camy(1)</code>     ...or only sideways / only up and down
+<code>resize(1, 10)</code>       sprite 1 gets 10 pixels bigger (a minus makes
+                          it smaller). <code>size(1, 32)</code> sets it exactly.
+<code>dialogue("Hi!")</code>     a black box along the bottom with those words.
+                          (<code>say("Hi!")</code> is the same)
+<code>3dplatformer(1, 2, 3)</code>
+                          EXPERIMENTAL. Turns the room you painted into a
+                          maze seen from the inside: sprite 2's picture
+                          covers the walls, sprite 3's tiles become coins,
+                          arrows walk and turn.
+
 <code>reset if y(1) > 240</code>   start the game over when that becomes true
 
 <code>reset if</code>              the block version — any true line resets
@@ -3645,6 +4365,10 @@ Try lines like these:
   Say "collect them all!" at 6 30
   Animate sprite 1 with sprites 1, 2, 3
   Bind left to the A key
+  Add a camera that follows the player
+  Make sprite 1 bigger by 16
+  The game says "watch out!"
+  I want a 3d platformer with sprite 2 walls and sprite 3 coins
   Sprite 1 has collision with sprite 2 and sprite 5
   Sprite 5 is a door to the next room
   Sprite 7 is an exit to room 3
@@ -3667,7 +4391,16 @@ Then press <b>Show me the code</b>. It hands you the finished program in Easy
 mode, and from then on it is yours — that is the whole point. AI mode is a
 starting pistol, not a wall.
 
-<b>How it works, honestly:</b> this is not a chatbot and nothing leaves your
+<b>It remembers.</b> Each Run carries on from your last description, so you can
+add one line at a time and watch the game grow. Untick <b>🧠 remember</b> to start
+each Run from a blank sheet, or just write "start over".
+
+<b>⚡ Real AI</b> — if you own an Anthropic API key you can paste it in and have
+Claude write the program instead of the built-in reader. The key stays in this
+browser and goes only to Anthropic. If it fails for any reason, the built-in
+reader takes over so Run always does something.
+
+<b>How the built-in one works, honestly:</b> it is not a chatbot and nothing leaves your
 computer. It is a parser I wrote by hand: about twenty rules that look for
 words like "coin", "gravity", "lives" or "chases", pull out the sprite numbers,
 and assemble the program. That is why it works offline on GitHub Pages, needs
@@ -3720,6 +4453,20 @@ function buildHelp(){
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.7.0", t:"Camera, 3D, export, paint tools",
+    lines:[
+      "<b>Camera:</b> <code>camera(1)</code> follows a sprite everywhere, <code>camx(1)</code> and <code>camy(1)</code> follow it one way only. Writing on screen stays put.",
+      "<b><code>resize(1, 10)</code></b> makes a sprite ten pixels bigger, minus numbers make it smaller, and <code>size(1, 32)</code> sets it outright. Collisions use the new size.",
+      "<b><code>dialogue(\"Hello World!\")</code></b> (or <code>say()</code>) drops a black box along the bottom with the words wrapped to fit.",
+      "<b><code>every frame unless …</code></b> — the block pauses itself while that is true and carries on when it stops.",
+      "<b><code>3dplatformer(1, 2, 3)</code></b>, experimental: the room you painted becomes a maze seen from the inside, walls textured with sprite 2, sprite 3's tiles floating in it as coins. About 2 ms a frame.",
+      "<b>Fixed the ceiling bug:</b> holding jump against a roof used to leave you stuck to it. Bonking your head now stops you dead but no longer counts as standing on something.",
+      "<b>Paint tools:</b> pencil, eraser, fill, line, box, circle (hold Shift to fill a shape) and an eyedropper — plus a colour wheel that adds your own colours to the palette, and a slider for how big the drawing area is.",
+      "<b>Export</b> to a single <code>.html</code> file that plays anywhere with no editor around it, or to <code>.simple</code> to keep working on. The window is honest about .exe/.apk/.ipa: a browser cannot compile those, but it names the tools that turn the .html into each one.",
+      "<b>AI mode remembers.</b> Every Run carries on from your last description, so you can add a line at a time. \u201cstart over\u201d or the 🧠 toggle clears it.",
+      "<b>AI mode can be a real model.</b> Paste an Anthropic API key and Claude writes the program instead; the key never leaves your browser, and the built-in reader takes over if anything goes wrong.",
+      "AI mode also learned cameras, resizing, dialogue, 3D and pausing — and stopped reading \u201cfalls\u201d as \u201cwalls\u201d."
+    ] },
   { v:"0.6.1", t:"Fullscreen",
     lines:[
       "<b>⛶ Fullscreen</b> under the stage, or just press <b>F</b> (unless you are typing). Escape comes back.",
@@ -3817,6 +4564,8 @@ load();
 if (project.sprites.every(s => s.every(p => p < 0))) defaultArt();
 $("code").value = project.code || "";
 $("code").addEventListener("input", save);
+PALETTE = (project.palette && project.palette.length) ? project.palette.slice() : BASE_PALETTE.slice();
+buildPalette(); buildTools(); setPaintZoom(project.zoom || 512);
 buildLessons(); buildReleases(); buildHelp();
 setMode(project.mode || "normal", true);
 drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
@@ -3824,10 +4573,11 @@ drawStageInfo();
 render();
 log("press ▶ Run to start. New here? Open ✦ Templates, or the ★ Learn tab.", "ok");
 
-const cameFromLink = loadFromHash();
+if (window.SIMPLE_GAME){ bootStandalone(window.SIMPLE_GAME); }
+const cameFromLink = !window.SIMPLE_GAME && loadFromHash();
 
 // first ever visit: show off the templates straight away
-if (!cameFromLink && !localStorage.getItem("simplepp-seen")){
+if (!cameFromLink && !window.SIMPLE_GAME && !localStorage.getItem("simplepp-seen")){
   try { localStorage.setItem("simplepp-seen", "1"); } catch(e){}
   setTimeout(openGallery, 350);
 }
