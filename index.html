@@ -4371,6 +4371,7 @@ function libOpen(){ return $("lib-ov") && $("lib-ov").classList.contains("on"); 
 function gameNow(name, author){
   save();
   return {
+    v: 2,
     name, author: author || "",
     mode: project.mode, code: project.code,
     sprites: project.sprites, rooms: project.rooms,
@@ -4384,20 +4385,53 @@ function libSave(name, author){
   all[name] = gameNow(name, author);
   return libWrite(all);
 }
+/* Older files were saved before palettes were stored, so they can carry
+   colour numbers with nothing to look them up in. Rather than paint those
+   pixels black or bright pink, extend the palette with readable colours and
+   say what happened. */
+function repairPalette(g){
+  let highest = -1;
+  for (const s of g.sprites || [])
+    for (const v of s) if (v > highest) highest = v;
+  for (const r of g.rooms || []) void r;
+
+  const pal = (g.palette && g.palette.length) ? g.palette.slice() : BASE_PALETTE.slice();
+  if (highest < pal.length) return { pal, guessed: 0 };
+
+  const missing = highest - pal.length + 1;
+  for (let i = 0; i < missing; i++){
+    const hue = (i * 47) % 360;                       // spread them out so they stay tellable apart
+    const light = 45 + ((i * 13) % 30);
+    pal.push(hslToHex(hue, 65, light));
+  }
+  return { pal, guessed: missing };
+}
+function hslToHex(h, s, l){
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))));
+  return "#" + [f(0), f(8), f(4)].map(v => v.toString(16).padStart(2, "0")).join("");
+}
+
 function libLoad(g){
   stop();
+  const fixed = repairPalette(g);
   project = { mode:g.mode || "normal", code:g.code || "",
               sprites:(g.sprites||[]).map(a => a.slice()),
               rooms:(g.rooms||[]).map(a => a.slice()),
-              palette:(g.palette && g.palette.length) ? g.palette.slice() : null,
+              palette: fixed.pal.slice(),
               fps: g.fps || 60, zoom: g.zoom || 512 };
-  if (!project.palette) delete project.palette;
+  if (fixed.guessed)
+    log("this game was saved before colours travelled with the file — " +
+        fixed.guessed + " of them had to be guessed", "err");
   if (!project.sprites.length) project.sprites = [blankSprite()];
   if (!project.rooms.length)   project.rooms   = [blankRoom()];
   curSprite = 0; curRoom = 0; curTile = 1;
-  PALETTE = (project.palette && project.palette.length) ? project.palette.slice() : BASE_PALETTE.slice();
+  PALETTE = project.palette.slice();
   if (curColor >= PALETTE.length) curColor = 8;
   buildPalette(); SPRITE_EPOCH++; ROOM_EPOCH++;
+  spriteCache.clear(); texCache.clear(); roomPaint = { key:null, cv:null };
   setMode(project.mode, true);
   setFps(project.fps || 60); setPaintZoom(project.zoom || 512);
   $("code").value = project.code;
@@ -4434,28 +4468,49 @@ function openSimple(input){
 
 /* ---------- share links ----------
    sprites squash well with run-length coding: they are mostly one colour  */
+/* Sprites squash well because they are mostly one colour: store runs of
+   "this colour, this many times". They used to be packed into a string of
+   two characters per run, which quietly broke the moment a palette went
+   past sixteen colours — a colour index of 16 is "10" in hex, two
+   characters where one was expected, and everything after it shifted.
+   Pairs of numbers cannot be misread that way. */
 function packSprite(s){
-  let out = "", run = 1;
+  const runs = [];
+  let run = 1;
   for (let i = 1; i <= s.length; i++){
-    if (i < s.length && s[i] === s[i-1] && run < 35){ run++; continue; }
-    out += (s[i-1] < 0 ? "z" : s[i-1].toString(16)) + run.toString(36);
+    if (i < s.length && s[i] === s[i-1]){ run++; continue; }
+    runs.push([s[i-1], run]);
     run = 1;
   }
+  return runs;
+}
+function unpackSprite(packed){
+  const out = [];
+  if (typeof packed === "string") return unpackSpriteOld(packed);   // links sent before the fix
+  for (const [colour, n] of packed || [])
+    for (let k = 0; k < n && out.length < SW*SH; k++) out.push(colour);
+  while (out.length < SW*SH) out.push(-1);
   return out;
 }
-function unpackSprite(str){
+/* the old two-characters-per-run form, so older links still open */
+function unpackSpriteOld(str){
   const out = [];
-  for (let i = 0; i < str.length; i += 2){
+  for (let i = 0; i + 1 < str.length; i += 2){
     const c = str[i] === "z" ? -1 : parseInt(str[i], 16);
     const n = parseInt(str[i+1], 36);
-    for (let k = 0; k < n; k++) out.push(c);
+    if (!(n > 0) || out.length + n > SW*SH * 4) break;
+    for (let k = 0; k < n; k++) out.push(isNaN(c) ? -1 : c);
   }
   while (out.length < SW*SH) out.push(-1);
   return out.slice(0, SW*SH);
 }
+
 function packGame(g){
   const packed = {
+    v: 2,
     n: g.name, a: g.author, m: g.mode, c: g.code,
+    p: g.palette || PALETTE.slice(),
+    f: g.fps || 60,
     s: g.sprites.map(packSprite),
     r: g.rooms.map(r => r.join(","))
   };
@@ -4467,6 +4522,8 @@ function unpackGame(txt){
   const p = JSON.parse(decodeURIComponent(escape(atob(b))));
   return {
     name: p.n, author: p.a, mode: p.m, code: p.c,
+    palette: (p.p && p.p.length) ? p.p : null,
+    fps: p.f || 60,
     sprites: p.s.map(unpackSprite),
     rooms: p.r.map(r => r.split(",").map(Number))
   };
@@ -5132,6 +5189,13 @@ function buildHelp(){
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.8.1", t:"Sprites survive the round trip",
+    lines:[
+      "<b>Shared links and gallery games destroyed the artwork.</b> Sprites were squashed into a string of two characters per run of colour, which works only while every colour number is a single hex digit. The moment a project had more than sixteen colours, a number like 16 became \u201c10\u201d — two characters where one was expected — and everything after it shifted along. With enough colours it did not merely look wrong, it threw an error. Runs are stored as pairs of numbers now, which cannot be misread. Links made before this still open.",
+      "<b>Games saved before colours travelled with the file</b> now get a working palette rebuilt for them, with distinct readable colours, and the console says how many had to be guessed. The drawings themselves come back exactly — it is only the colours that were never written down.",
+      "Share links and exported files now carry the palette and the frame rate too, and every saved game is stamped with a version.",
+      "Checked end to end on a project with 79 colours: My Games, .simple files, share links and exported .html all come back pixel for pixel identical."
+    ] },
   { v:"0.8.0", t:"Live gallery, twenty new blocks, four bug fixes",
     lines:[
       "<b>Fixed: a saved game came back black.</b> The palette was never written into the file, so any colour you had added yourself was missing when it loaded. Games now carry their palette, their speed and their canvas size.",

@@ -3,6 +3,38 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.8.1 — Sprites survive the round trip
+
+### Fixed
+- **Shared links and gallery games came back with wrecked sprites.** Each sprite
+  was run-length coded into a string of exactly two characters per run: one hex
+  digit for the colour, one base-36 digit for the length. That holds only while
+  every colour number is a single digit. As soon as a project had more than
+  sixteen colours, index 16 encoded as `"10"` — two characters where the decoder
+  expected one — and every run after it was read one character out of step. Past
+  a certain point it stopped merely corrupting the picture and threw
+  *Invalid array length*.
+
+  Runs are now stored as pairs of numbers, which cannot be misread however large
+  the palette gets. Links and submissions made before this still open: the old
+  string form is still understood on the way in.
+- **Files saved before palettes were stored** (anything from 0.7.0 or earlier)
+  now load with a rebuilt palette instead of black or magenta squares. The
+  drawings themselves were never lost — only the list of what the colour numbers
+  meant — so the shapes come back exactly and the missing colours are filled with
+  distinct, readable ones. The console says how many were guessed.
+
+### Changed
+- Share links and exported games now carry the palette and the frame rate.
+- Every saved game is stamped with a format version.
+- The sprite, texture and room caches are cleared on load, so nothing from the
+  previous project can linger.
+
+### Checked
+On a project with **79 colours**, transparency and two rooms, all four routes —
+My Games, `.simple` files, share links and exported `.html` — return sprite,
+room and palette data **identical byte for byte** to what went in.
+
 ## 0.8.0 — Live gallery, twenty new blocks, four bug fixes
 
 ### Fixed
