@@ -169,6 +169,7 @@
   }
   .hint{color:var(--dim);font-size:12px;line-height:1.6}
   .hint code{color:var(--accent2)}
+  mark{background:#ffd166;color:#1b1405;border-radius:2px;padding:0 1px}
   .list{display:flex;flex-direction:column;gap:4px}
   .list button{text-align:left}
 </style>
@@ -5466,20 +5467,149 @@ back with the JavaScript message, not a friendly one — you asked for Hard.
 The Paint and Rooms tabs work exactly the same in every mode.
 `;
 
+let helpText = "";
+
+/* every mode's reference, so a search finds a command even when you are
+   standing in a different mode — and says which mode it belongs to */
+function helpForMode(m){
+  return m === "hard" ? HELP_HARD
+       : m === "ai"   ? HELP_AI
+       : (m === "easy" ? HELP_EASY_EXTRA + HELP_CORE : HELP_CORE);
+}
+
 function buildHelp(){
   const m = project.mode || "normal";
-  const head = `<h3>${MODES[m].label} mode — every command</h3>`;
-  const body = m === "hard" ? HELP_HARD
-             : m === "ai"   ? HELP_AI
-             : (m === "easy" ? HELP_EASY_EXTRA + HELP_CORE : HELP_CORE);
-  $("helpbox").innerHTML = head +
-    `<div class="hint" style="max-width:820px;font-size:13px"><pre style="white-space:pre-wrap">${body}</pre></div>`;
+  helpText = helpForMode(m);
+
+  $("helpbox").innerHTML =
+    `<h3>${MODES[m].label} mode — every command</h3>
+     <div class="row" style="max-width:820px;margin-bottom:12px">
+       <input id="help-search" type="text" autocomplete="off"
+              placeholder="search — try coin, jump, room, click…" style="flex:1">
+       <button onclick="clearHelpSearch()">Clear</button>
+     </div>
+     <div id="help-count" class="hint" style="margin-bottom:8px"></div>
+     <div class="hint" style="max-width:820px;font-size:13px">
+       <pre id="help-body" style="white-space:pre-wrap"></pre>
+     </div>`;
+  $("help-search").addEventListener("input", showHelp);
+  showHelp();
 }
+
+function clearHelpSearch(){
+  const box = $("help-search");
+  if (!box) return;
+  box.value = "";
+  showHelp();
+  box.focus();
+}
+
+/* One line of the reference is one entry. The lines under it that are only
+   indentation are part of the same entry, so a search keeps them together
+   instead of cutting an explanation in half. */
+function helpEntries(text){
+  const lines = (text === undefined ? helpText : text).split("\n");
+  const out = [];
+  let cur = null;
+  for (const line of lines){
+    const starts = /^<code>|^<b>/.test(line);
+    if (starts || cur === null || line.trim() === ""){
+      cur = { lines: [line] };
+      out.push(cur);
+      if (line.trim() === "") cur = null;
+    } else {
+      cur.lines.push(line);
+    }
+  }
+  return out;
+}
+
+function markMatches(text, query){
+  if (!query) return text;
+  // only outside the tags, so the highlight never lands inside <code>
+  return text.replace(/>([^<]+)</g, (whole, inner) => {
+    const marked = inner.replace(new RegExp("(" + escapeRe(query) + ")", "ig"),
+                                 '<mark>$1</mark>');
+    return ">" + marked + "<";
+  });
+}
+function escapeRe(t){ return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+function showHelp(){
+  const box = $("help-search");
+  const q = box ? box.value.trim() : "";
+  const body = $("help-body"), count = $("help-count");
+  if (!body) return;
+
+  if (!q){
+    body.innerHTML = helpText;
+    count.textContent = "";
+    return;
+  }
+
+  const needle = q.toLowerCase();
+  const hunt = text => helpEntries(text).filter(e =>
+    e.lines.join(" ").replace(/<[^>]+>/g, "").toLowerCase().includes(needle));
+
+  const here = project.mode || "normal";
+  const mine = hunt(helpText);
+
+  // then look through the other modes, so nothing stays hidden just because
+  // you happen to be standing somewhere else
+  const elsewhere = [];
+  for (const m of ["easy", "normal", "hard", "ai"]){
+    if (m === here) continue;
+    const found = hunt(helpForMode(m)).filter(e =>
+      !mine.some(k => k.lines.join("") === e.lines.join("")));
+    if (found.length) elsewhere.push({ mode:m, found });
+  }
+
+  const total = mine.length + elsewhere.reduce((n, g) => n + g.found.length, 0);
+  if (!total){
+    body.innerHTML = "";
+    count.innerHTML = "nothing anywhere matches <b>" + escapeHtml(q) + "</b>. " +
+                      "The ★ Learn tab might be a better place to start.";
+    return;
+  }
+
+  let out = mine.map(e => e.lines.join("\n")).join("\n");
+  for (const g of elsewhere){
+    const same = MODES[g.mode].label;
+    out += (out ? "\n\n" : "") +
+           "<b style=\"color:var(--accent2)\">— " + same + " mode " +
+           (g.mode === "easy" && here === "normal"
+              ? "(switch modes at the top to use these)"
+              : "") + " —</b>\n" +
+           g.found.map(e => e.lines.join("\n")).join("\n");
+  }
+
+  count.innerHTML = total + (total === 1 ? " line" : " lines") +
+                    " with <b>" + escapeHtml(q) + "</b>" +
+                    (mine.length ? "" : " — none in " + MODES[here].label + " mode");
+  body.innerHTML = markMatches(out, q);
+}
+
+/* pressing / jumps to the search box, as long as you are not typing */
+window.addEventListener("keydown", e => {
+  if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const box = $("help-search");
+  if (!box || !$("v-help").classList.contains("on")) return;
+  e.preventDefault();
+  box.focus();
+  box.select();
+});
 
 /* =========================================================
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.9.3", t:"A search box in Help",
+    lines:[
+      "The Help tab has a search box. Type <b>coin</b>, <b>jump</b>, <b>click</b> — the list narrows to the lines that mention it and the word is highlighted, with an explanation kept together with the command it explains.",
+      "It looks through <b>every mode</b>, not only the one you are in, and says which mode anything it finds belongs to. Searching \u201ccoin\u201d from Normal mode now points you at Easy rather than saying there is nothing.",
+      "Press <b>/</b> to jump to the box, and Clear to go back to the whole list."
+    ] },
   { v:"0.9.2", t:"Flips, vehicles, endings",
     lines:[
       "<b>Flip buttons in the Paint tab</b> — ⇋ mirrors a sprite left to right, ⇅ top to bottom. This changes the drawing itself, unlike <code>fliphorizontal()</code> which only changes how it is shown while the game runs.",

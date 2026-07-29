@@ -25,6 +25,8 @@ hide(1)
   1, 2, 3, and up.
 - **Rooms** — stamp any sprite onto a 20×15 tile grid with the mouse.
   Unlimited rooms, shown from code with `room(2)`.
+- **Help** — every command, with a search box that looks through all four modes
+  and tells you which one each answer belongs to. Press **/** to jump to it.
 - **Learn** — short steps, each with a button that loads and runs the code.
 - **Templates** — ten complete games to open, run and take apart.
 - **Changelog** — see [CHANGELOG.md](CHANGELOG.md).

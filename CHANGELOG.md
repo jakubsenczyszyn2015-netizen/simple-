@@ -3,6 +3,20 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.9.3 — A search box in Help
+
+### Added
+- **The Help tab can be searched.** Typing narrows the reference to the lines
+  that mention what you asked for, highlights the word, and keeps each
+  explanation attached to the command it explains rather than cutting it in
+  half.
+- **It searches every mode, not just the one you are in.** Anything found
+  elsewhere is grouped under a heading naming that mode — so looking up "coin"
+  from Normal mode points you at Easy instead of claiming there is nothing,
+  which is what the first version of this did and was worse than useless.
+- **`/`** jumps to the box when the Help tab is open, and **Clear** restores the
+  whole list.
+
 ## 0.9.2 — Flips, vehicles, endings
 
 ### Added
