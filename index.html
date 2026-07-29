@@ -254,6 +254,8 @@
         <button onclick="addSprite()">+ New</button>
         <button onclick="copySprite()">Copy</button>
         <button onclick="clearSprite()">Clear</button>
+        <button onclick="flipSpriteH()" title="Flip left to right">⇋</button>
+        <button onclick="flipSpriteV()" title="Flip top to bottom">⇅</button>
         <button onclick="document.getElementById('pngfile').click()">🖼 PNG</button>
       </div>
       <label class="row" style="gap:5px;margin-bottom:10px;flex-wrap:nowrap">
@@ -819,6 +821,28 @@ function drawSpriteList(){
 
 function addSprite(){ project.sprites.push(blankSprite()); curSprite = project.sprites.length - 1; drawPaint(); drawSpriteList(); save(); }
 function copySprite(){ project.sprites.push(sprite(curSprite + 1).slice()); curSprite = project.sprites.length - 1; drawPaint(); drawSpriteList(); save(); }
+/* mirror the drawing itself, not just how it is shown */
+function flipSpriteH(){
+  if (project.secret) return;
+  const s = ensureSprite(curSprite + 1);
+  for (let y = 0; y < SH; y++)
+    for (let x = 0; x < SW / 2; x++){
+      const a = y*SW + x, b = y*SW + (SW - 1 - x);
+      const t = s[a]; s[a] = s[b]; s[b] = t;
+    }
+  drawPaint(); drawSpriteList(); drawRoom(); save();
+}
+function flipSpriteV(){
+  if (project.secret) return;
+  const s = ensureSprite(curSprite + 1);
+  for (let y = 0; y < SH / 2; y++)
+    for (let x = 0; x < SW; x++){
+      const a = y*SW + x, b = (SH - 1 - y)*SW + x;
+      const t = s[a]; s[a] = s[b]; s[b] = t;
+    }
+  drawPaint(); drawSpriteList(); drawRoom(); save();
+}
+
 function clearSprite(){ project.sprites[curSprite] = blankSprite(); drawPaint(); drawSpriteList(); save(); }
 
 /* ---------- palette ---------- */
@@ -1088,6 +1112,7 @@ function evalExpr(src, line){
         return R.spriteClicks.includes(Math.round(args[0]));
       case "room_changed": case "roomchanged":
         return args.length ? R.roomChanged === Math.round(args[0]) : R.roomChanged > 0;
+      case "pressed": return !!R.keyHits[String(args[0]).toLowerCase()];
       case "mousex": return R.mouse.x;
       case "mousey": return R.mouse.y;
       case "tile": return tileAtPixel(args[0], args[1]);
@@ -1122,6 +1147,7 @@ const R = {
   cam:{x:VW/2, y:VH/2, fx:0, fy:0}, dialogue:null, three:null,
   fps:60, fpsReal:0, acc:0, lastT:undefined,
   textMoves:{}, uiButtons:{}, uiClicks:[], spriteClicks:[], flips:{},
+  vehicles:[], riding:null, ending:null, lastKeys:{}, keyHits:{},
   roomChanged:0, coinSpots:[], chat:null, mouse:{x:0,y:0},
   hard:null
 };
@@ -1413,6 +1439,56 @@ function stepCoinSpots(){
   }
 }
 
+/* vehicle(1, 2): stand on it, press E to get on, E again to get off.
+   While you are aboard, whatever moved you now moves the vehicle. */
+function stepVehicles(){
+  if (!R.vehicles.length) return;
+  const pressedE = !!R.keyHits.e;                 // the moment it went down, however brief
+
+  if (R.riding){
+    const { rider, vehicle } = R.riding;
+    const a = R.actors[rider], v = R.actors[vehicle];
+    if (a && v){ a.x = v.x + (v.w - a.w) / 2; a.y = v.y - a.h + 2; }   // sat on top
+    if (pressedE) dismount();
+    return;
+  }
+
+  if (!pressedE) return;
+  for (const pair of R.vehicles){
+    const a = R.actors[pair.rider], v = R.actors[pair.vehicle];
+    if (!a || !v || !a.on || !v.on) continue;
+    const near = a.x < v.x + v.w + 4 && a.x + a.w > v.x - 4 &&
+                 a.y < v.y + v.h + 6 && a.y + a.h > v.y - 6;
+    if (!near) continue;
+    mount(pair.rider, pair.vehicle);
+    return;
+  }
+}
+function mount(rider, vehicle){
+  const a = R.actors[rider], v = R.actors[vehicle];
+  R.riding = { rider, vehicle, saved: { hor:a.hor, ver:a.ver, grav:a.grav } };
+  v.hor = a.hor; v.ver = a.ver; v.grav = a.grav;    // the controls move across
+  a.hor = a.ver = a.grav = null;
+  a.vx = a.vy = a.mvy = 0;
+  if (R.player === rider) R.player = vehicle;       // coins and spikes follow the driver
+  beep(2);
+}
+function dismount(){
+  const { rider, vehicle, saved } = R.riding;
+  const a = R.actors[rider], v = R.actors[vehicle];
+  if (a && v){
+    a.hor = saved.hor; a.ver = saved.ver; a.grav = saved.grav;
+    v.hor = v.ver = v.grav = null;
+    v.vx = v.vy = v.mvy = 0;
+    a.x = v.x + v.w + 2;                            // step off to the side
+    a.y = v.y;
+    if (a.x + a.w > VW) a.x = v.x - a.w - 2;
+  }
+  if (R.player === vehicle) R.player = rider;
+  R.riding = null;
+  beep(3);
+}
+
 function stepRoles(){
   if (R.doorCool > 0) R.doorCool--;
   const p = R.player;
@@ -1513,7 +1589,7 @@ function log(msg, cls){
 let KEYBIND = {};      // bind("left","A") puts entries in here
 const KEYMAP = {
   ArrowLeft:"left", ArrowRight:"right", ArrowUp:"up", ArrowDown:"down",
-  " ":"space", z:"z", x:"x", c:"c", Enter:"enter"
+  " ":"space", z:"z", x:"x", c:"c", e:"e", Enter:"enter"
 };
 function keyNameOf(e){
   const raw = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -1522,7 +1598,11 @@ function keyNameOf(e){
 }
 window.addEventListener("keydown", e => {
   const k = keyNameOf(e);
-  if (k){ R.keys[k] = true; if (R.running && document.activeElement.tagName !== "TEXTAREA") e.preventDefault(); }
+  if (k){
+    if (!R.keys[k]) R.keyHits[k] = true;   // a tap counts even if it ends before the next frame
+    R.keys[k] = true;
+    if (R.running && document.activeElement.tagName !== "TEXTAREA") e.preventDefault();
+  }
 });
 window.addEventListener("keyup", e => {
   const k = keyNameOf(e);
@@ -1558,6 +1638,7 @@ const COMMANDS_TOO = new Set(["button", "room", "size", "speak", "print", "move"
 const EASY_ONLY = ["gravity","jump","horizontal","vertical","animate","playerspeed","player_speed",
                    "player","coin","death","lives","lifes","spring","boing","bounce","chase","smartchase",
                    "solid","wall","door","nextroom","next_room","camx","camy","camera",
+                   "vehicle","ending","theend","the_end",
                    "3dplatformer","threedplatformer"];
 /* the player is whoever first got a movement command — or player(1) said so */
 function claimPlayer(n, onlyIfUnset){
@@ -1792,6 +1873,20 @@ function runCall(st){
       openChat(A()[0]);
       break; }
 
+    /* ---- riding things ---- */
+    case "vehicle": { easyOnly(name, st.n);
+                      const [rider, veh] = A();
+                      ensureSprite(Math.round(veh));
+                      R.vehicles.push({ rider: Math.round(rider), vehicle: Math.round(veh) });
+                      claimPlayer(rider, true);
+                      break; }
+
+    /* ---- the end ---- */
+    case "ending": case "theend": case "the_end": {
+      easyOnly(name, st.n);
+      if (!R.ending) R.ending = { text: String(A()[0]), t: 0 };
+      break; }
+
     /* ---- camera ---- */
     case "camx": { easyOnly(name, st.n); R.cam.fx = Math.round(A()[0]); break; }
     case "camy": { easyOnly(name, st.n); R.cam.fy = Math.round(A()[0]); break; }
@@ -1884,6 +1979,7 @@ function startWith(source){
   R.fps = project.fps || 60; R.acc = 0; R.lastT = undefined;
   R.textMoves = {}; R.uiButtons = {}; R.uiClicks = []; R.spriteClicks = [];
   R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
+  R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
   R.vars.coins = 0;                      // coin() counts into this one
   KEYBIND = {};
   if (project.mode === "hard" && !runHard()){ R.running = false; return; }
@@ -1904,6 +2000,7 @@ function doReset(){
   R.cam = { x:VW/2, y:VH/2, fx:0, fy:0 }; R.dialogue = null; R.three = null;
   R.textMoves = {}; R.uiButtons = {}; R.uiClicks = []; R.spriteClicks = [];
   R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
+  R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
   R.clicks = []; R.vars.coins = 0;
   R.acc = 0; R.lastT = undefined;
   render();
@@ -1963,6 +2060,12 @@ function step(){
   // a title screen freezes the program until a button is pressed
   if (R.title){ R.clicks = []; render(); return true; }
 
+  if (R.ending){                         // the game is over, in the good way
+    R.ending.t++;
+    render();
+    return true;
+  }
+
   if (R.gameOver){                       // out of lives — click to try again
     if (R.clicks.length || R.clickedStage){ R.clickedStage = false; doReset(); return false; }
     R.texts = [{ t:"GAME OVER", x:124, y:104 }, { t:"click to try again", x:104, y:120 }];
@@ -2014,6 +2117,7 @@ function step(){
       if (R.frame === 0 && !safe([b], "your code")) return false;
     }
   }
+  stepVehicles();
   stepBehaviours();
   stepRoles();
   stepCoinSpots();
@@ -2022,6 +2126,8 @@ function step(){
   if (R.resetting){ doReset(); return false; }
   R.lastButtons = R.buttons.map(b => b.label);
   R.clicks = []; R.uiClicks = []; R.spriteClicks = [];
+  R.lastKeys = Object.assign({}, R.keys);
+  R.keyHits = {};
   if (R.roomChanged){ if (R.roomChangedAge++ >= 1) R.roomChanged = 0; }
   R.frame++;
   render();
@@ -2029,6 +2135,8 @@ function step(){
 }
 
 function render(){
+  if (R.ending) return drawEnding();
+
   sctx.fillStyle = "#000";
   sctx.fillRect(0, 0, VW, VH);
 
@@ -2356,6 +2464,27 @@ function render3D(){
                        px, horizon - size / 2 + size * 0.15, 1, size);
       }
     }
+  }
+}
+
+/* everything stops, the picture fades away, and the words are left */
+function drawEnding(){
+  const e = R.ending;
+  const fade = Math.min(1, e.t / 60);            // about a second to black
+  sctx.fillStyle = "rgba(0,0,0," + (0.06 + fade * 0.5) + ")";
+  sctx.fillRect(0, 0, VW, VH);
+
+  if (fade >= 1){
+    sctx.fillStyle = "#000";
+    sctx.fillRect(0, 0, VW, VH);
+    const show = Math.min(1, (e.t - 60) / 40);
+    sctx.textAlign = "center";
+    sctx.font = "bold 22px ui-monospace,monospace";
+    sctx.globalAlpha = show;
+    sctx.fillStyle = "#fff";
+    sctx.fillText(e.text, VW / 2, VH / 2 - 10);
+    sctx.globalAlpha = 1;
+    sctx.textAlign = "left";
   }
 }
 
@@ -5085,6 +5214,8 @@ Things you can ask about:
 <code>room_changed</code>        did the room just change? <code>room_changed(2)</code> asks
                         whether it changed to room 2
 <code>mousex()  mousey()</code>  where the mouse is on the screen
+<code>pressed(e)</code>          was that key just tapped? (a tap counts even
+                        if you let go before the next frame)
 
 Title screens:
 
@@ -5188,6 +5319,12 @@ the screen stop you.
                           disappears when you touch it
 <code>fliphorizontal(1)</code>   flip sprite 1 left-to-right (<code>fliph()</code> too)
 <code>flipvertical(1)</code>     flip it top-to-bottom (<code>flipv()</code> too)
+<code>vehicle(1, 2)</code>       stand next to sprite 2 and press <b>E</b> to climb on.
+                          While you are aboard, the arrow keys drive it and
+                          you ride on top. <b>E</b> again to get off.
+<code>ending("You win!")</code>  everything stops, the picture fades to black,
+                          and those words appear. That is the end.
+                          (<code>theend()</code> is the same)
 <code>chatbot("Hi!")</code>      a dialogue box you can type answers into.
                           With a key set under ⚡ in AI mode, a real
                           model answers; otherwise it answers itself.
@@ -5343,6 +5480,13 @@ function buildHelp(){
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.9.2", t:"Flips, vehicles, endings",
+    lines:[
+      "<b>Flip buttons in the Paint tab</b> — ⇋ mirrors a sprite left to right, ⇅ top to bottom. This changes the drawing itself, unlike <code>fliphorizontal()</code> which only changes how it is shown while the game runs.",
+      "<b><code>vehicle(1, 2)</code></b> — walk up to sprite 2 and press <b>E</b> to get on. Whatever was moving you now moves the vehicle, you ride on top of it, and coins and spikes follow whoever is driving. <b>E</b> again and you step off beside it with your own controls back.",
+      "<b><code>ending(\"You win!\")</code></b> — everything stops where it is, the picture fades to black over about a second, and the words appear.",
+      "A key tap now registers even if you let go before the next frame, which is what made <b>E</b> feel unreliable at first. <code>pressed(e)</code> asks the same question from your own code."
+    ] },
   { v:"0.9.1", t:"Questions explain themselves",
     lines:[
       "Writing a question on a line by itself — <code>room_changed()</code>, <code>touching(1, 2)</code>, <code>whenclick(1)</code> — used to come back with \u201cI don\u2019t know the command\u201d, which is misleading: the engine knows it perfectly well, it just answers a question rather than doing something. It now says so and shows the line you meant: <i>\u201croom_changed()\u201d asks a question, it does not do anything on its own. Use it inside an if, like this: if room_changed</i>",

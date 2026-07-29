@@ -3,6 +3,29 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.9.2 — Flips, vehicles, endings
+
+### Added
+- **Flip buttons in the Paint tab.** ⇋ mirrors the sprite left to right, ⇅ top
+  to bottom. These change the drawing itself and are saved with it — unlike
+  `fliphorizontal()`, which only changes how a sprite is shown while a game
+  runs.
+- **`vehicle(1, 2)`** (Easy). Stand next to sprite 2 and press **E** to climb
+  on. Whatever was moving the player — walking, gravity, jumping — moves the
+  vehicle instead, the rider sits on top and is carried along, and coins,
+  spikes and doors follow whoever is driving. Press **E** again to step off
+  beside it with your own controls back.
+- **`ending("You win!")`** (Easy, also `theend()`). Everything freezes where it
+  is, the picture fades to black over about a second, and the words appear.
+- **`pressed(e)`** — true on the frame a key was tapped.
+
+### Fixed
+- **A quick key tap could be missed entirely.** Keys were only read once per
+  game frame, so pressing and releasing between two frames — easy at thirty
+  frames a second — left no trace at all. A press is now recorded the moment it
+  happens and read by the next frame whatever its length. This is what made
+  mounting a vehicle with **E** feel unreliable.
+
 ## 0.9.1 — Questions explain themselves
 
 ### Fixed

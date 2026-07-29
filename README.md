@@ -19,7 +19,7 @@ hide(1)
   the stage up to fill the monitor, scaled by a whole number so the pixels stay
   sharp; Escape comes back.
 - **Paint** — a pixel editor with pencil, eraser, fill, line, box, circle and
-  eyedropper tools, a colour wheel for adding your own colours, and a slider for
+  eyedropper tools, flip buttons, a colour wheel for adding your own colours, and a slider for
   how big the drawing area is. Sprites are 16×16 by default and can be set to 8,
   24, 32, 48 or 64 — the room grid adjusts to match. Unlimited sprites, numbered
   1, 2, 3, and up.
@@ -111,6 +111,8 @@ whenclick(1)           true on the frame you click sprite 1
 move("Hello!", 10, 0)  moves writing, not just sprites
 chatbot("Hi!")         a dialogue box you can type answers into
 fps(30)                how many times a second the game moves
+vehicle(1, 2)          press E to ride sprite 2; E again to get off
+ending("You win!")     freeze, fade to black, show the words
 ```
 
 `if ... else ... end` and `else if` work in Normal mode and up.
