@@ -3,27 +3,6 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
-## 0.9.2 — Two secrets
-
-Two easter eggs, neither documented anywhere a player would look.
-
-Both are built on the same safety rule as visiting a shared game: your own
-project is stashed untouched before anything happens, autosave is switched off
-for the duration, and nothing either of them does is ever written to storage.
-
-- **cheese** — put the word in your program and run it. Requested by Jakub.
-  The whole page spins on its Z axis, turning yellow as it goes, easing to a
-  stop always square to the front. Then the word appears, letter-spaced, with a
-  Play button, and that leads to a platformer with a wedge of cheese as the
-  player, crusts for ground, a grape to collect and a mouse chasing you. Its
-  four sprites are not in the Paint tab and cannot be edited — opening the tab
-  gets you "no. these sprites belong to the cheese."
-- **Robin's one** — type the two words and every word in your editor grows a
-  tail. The editor locks; typing does nothing. Closing the tab is the only way
-  out, exactly as specified — and when you come back, the program restored is
-  the one you had *before* you typed the magic words, with the half-typed word
-  itself trimmed off the end. The joke never reaches your saved work.
-
 ## 0.9.1 — Questions explain themselves
 
 ### Fixed

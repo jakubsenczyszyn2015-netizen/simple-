@@ -162,30 +162,6 @@
   }
   #visit-bar button{padding:3px 9px;font-size:12px}
 
-  /* the cheese */
-  #cheese-screen{
-    position:fixed; inset:0; z-index:80; display:none;
-    flex-direction:column; align-items:center; justify-content:center; gap:26px;
-    background:radial-gradient(circle at 50% 40%, #4a3c00, #120e00 70%);
-  }
-  #cheese-screen.on{display:flex}
-  #cheese-word{
-    font-size:min(11vw,72px); letter-spacing:min(4vw,26px); font-weight:700;
-    color:#ffe14d; text-shadow:0 0 26px rgba(255,225,77,.55), 0 6px 0 #a37b00;
-    padding-left:min(4vw,26px);
-  }
-  #cheese-screen button{
-    font-size:20px; padding:10px 38px; background:#ffe14d; color:#3a2c00;
-    border:0; border-radius:9px; font-weight:700; cursor:pointer;
-  }
-  #cheese-screen .small{color:#c8b46a;font-size:13px}
-  body.cheesing{ transform-origin:50% 50%; }
-
-  #syboops-bar{
-    background:#7b2ff7; color:#fff; padding:7px 14px; font-size:13px;
-    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-  }
-
   label{color:var(--dim);font-size:12px}
   input[type=text],input[type=number]{
     background:#0c0e13;color:var(--fg);border:1px solid var(--line);
@@ -399,12 +375,6 @@
     <div id="cards" class="cards"></div>
     <div style="margin-top:16px;text-align:right"><button onclick="closeGallery()">Close</button></div>
   </div>
-</div>
-
-<div id="cheese-screen">
-  <div id="cheese-word">c h e e s e</div>
-  <button onclick="playCheese()">Play</button>
-  <div class="small">you found it</div>
 </div>
 
 <div id="export-ov" onclick="if(event.target===this) closeExport()">
@@ -649,18 +619,6 @@ const paintCv = $("paint"), paintCtx = paintCv.getContext("2d");
 function PZnow(){ return paintCv.width / SW; }   // how big one pixel is in the editor
 
 function drawPaint(){
-  if (project.secret){                     // some sprites are not yours to edit
-    paintCtx.fillStyle = "#12100a";
-    paintCtx.fillRect(0, 0, paintCv.width, paintCv.height);
-    paintCtx.fillStyle = "#ffe14d";
-    paintCtx.textAlign = "center";
-    paintCtx.font = "bold 28px ui-monospace,monospace";
-    paintCtx.fillText("no.", paintCv.width/2, paintCv.height/2 - 14);
-    paintCtx.font = "15px ui-monospace,monospace";
-    paintCtx.fillText("these sprites belong to the cheese", paintCv.width/2, paintCv.height/2 + 20);
-    paintCtx.textAlign = "left";
-    return;
-  }
   const s = ensureSprite(curSprite + 1);
   paintCtx.fillStyle = "#0c0e13";
   paintCtx.fillRect(0, 0, paintCv.width, paintCv.height);
@@ -780,7 +738,6 @@ function shapePixels(tool, a, b, filled){
 }
 
 paintCv.addEventListener("mousedown", e => {
-  if (project.secret) return;
   const c = cellAt(e);
   const erase = e.button === 2;
   painting = erase ? 2 : 1;
@@ -814,10 +771,7 @@ window.addEventListener("mouseup", e => {
 });
 paintCv.addEventListener("contextmenu", e => e.preventDefault());
 
-function afterPaint(){
-  if (project.secret) return;
-  drawPaint(); drawSpriteList(); save();
-}
+function afterPaint(){ drawPaint(); drawSpriteList(); save(); }
 
 /* ---------- colours you choose yourself ---------- */
 function addColour(){
@@ -852,11 +806,6 @@ function setPaintZoom(px){
 function drawSpriteList(){
   drawStageInfo();
   const box = $("sprite-list"); box.innerHTML = "";
-  if (project.secret){
-    box.innerHTML = '<div class="hint">the cheese keeps its own sprites.<br>' +
-                    'they are not in here.</div>';
-    return;
-  }
   project.sprites.forEach((_, i) => {
     const d = document.createElement("div");
     d.className = "chip" + (i === curSprite ? " on" : "");
@@ -1897,8 +1846,6 @@ function run(){
   project.code = $("code").value; save();
   $("ai-show").style.display = "none";
 
-  if (!project.secret && isCheese(project.code)) return startCheese();
-
   if (project.mode === "ai"){
     if (aiKey()){                       // a real model is connected — that answer arrives later
       log("asking the model…", "ok");
@@ -2645,191 +2592,6 @@ function hardLoop(){
 }
 
 /* =========================================================
-   SYBOOPS  (Robin's idea)
-   Type "syboops boops" and every word grows a tail. The editor
-   locks. Nothing is written to storage while it lasts, so the
-   moment the tab closes — or you press reload — your real program
-   is exactly where you left it.
-   ========================================================= */
-let syboopsOn = false;
-let lastCleanCode = null;      // the last version with no magic words in it
-function syboopsWord(w){ return w ? w + "syboops" : w; }   // every single one
-function syboopsify(text){
-  return text.replace(/[A-Za-z_][A-Za-z0-9_]*/g, syboopsWord);
-}
-function startSyboops(){
-  if (syboopsOn) return;
-  syboopsOn = true;
-
-  // put back the program as it was before the magic words were typed, so that
-  // closing the tab really does return you to your work and nothing else
-  if (lastCleanCode !== null){
-    try {
-      const saved = JSON.parse(localStorage.getItem("simplepp") || "{}");
-      // drop any half-typed magic word left dangling on the end
-      saved.code = lastCleanCode.replace(/\n?[ \t]*s(y(b(o(o(p(s)?)?)?)?)?)?[ \t]*$/i, "");
-      localStorage.setItem("simplepp", JSON.stringify(saved));
-    } catch(e){}
-  }
-
-  const box = $("code");
-  box.value = syboopsify(box.value);
-  box.readOnly = true;
-  box.style.color = "#d9b3ff";
-  box.style.cursor = "not-allowed";
-
-  const bar = document.createElement("div");
-  bar.id = "syboops-bar";
-  bar.innerHTML = "<b>syboopssyboops</b> — everysyboops wordsyboops hassyboops " +
-                  "asyboops tailsyboops nowsyboops. Thesyboops onlysyboops waysyboops " +
-                  "outsyboops issyboops tosyboops closesyboops thesyboops tabsyboops." +
-                  "<br>(nothing has been saved — your real program is untouched)";
-  document.body.insertBefore(bar, document.body.firstChild);
-
-  log("syboopssyboops boopssyboops", "err");
-}
-
-/* =========================================================
-   THE CHEESE
-   Type the word into your program and the whole thing spins,
-   turns yellow, comes to rest facing the front, and hands you a
-   platformer whose sprites live nowhere you can reach.
-   Your own project is never touched or saved over.
-   ========================================================= */
-const CHEESE_ART = {
-  wedge: art([
-    "................","................",".....aaaaaaa....","....aaaaaaaaa...",
-    "...aa9aaaaaaaa..","..aaaaaaa9aaaaa.",".aaaa9aaaaaaaaa.","aaaaaaaaaaa9aaaa",
-    "aa9aaaaaaaaaaaaa","aaaaaaa9aaaaaaaa","aaaaaaaaaaaa9aaa","a9aaaaaaaaaaaaaa",
-    "aaaaa9aaaaaaaaaa","9999999999999999","................","................"]),
-  crust: art([
-    "9999999999999999","94444444444444a9","94aaaa4444aaaa49","9444444aa4444449",
-    "94aa444444444aa9","944444aaaa4444 9","9aa4444444444449","9444aa44444aa449",
-    "9999999999999999","4444444444444444","44aaaa444444aa44","4444444444444444",
-    "aa44444aaaa44444","4444444444444444","444aa4444444aa44","4444444444444444"]),
-  grape: art([
-    "................","................",".......33.......","......3333......",
-    ".....cc33cc.....","....cccccccc....","....cccccccc....","...cccccccccc...",
-    "...cccccccccc...","....cccccccc....","....cccccccc....",".....cccccc.....",
-    "......cccc......","................","................","................"]),
-  mouse: art([
-    "................","................","..55.......55...",".5555.....5555..",
-    ".555555555555 5.","..5566555665555.","...555555555555.","...55555555555..",
-    "....5550555055..","....555555555...",".....5555555....","......55555.....",
-    ".......555......","................","................","................"])
-};
-
-const CHEESE_CODE = `# THE CHEESE
-# You cannot open these sprites in the Paint tab. They belong to the cheese.
-
-fancytitle("c h e e s e")
-
-when start
-  room(1)
-  put(1, 30, 30)
-  show(1)
-  playerspeed(3)
-  gravity(1, 2)
-  horizontal(1, 2)
-  lives(3)
-  set(coins, 0)
-
-  put(3, 150, 60)
-  show(3)
-  coin(3)
-
-  put(4, 280, 30)
-  show(4)
-  smartchase(4, 1, 2)
-end
-
-when key up
-  jump(1, 8)
-end
-
-reset if y(1) > 240
-
-every frame
-  print("cheese: " + coins, 6, 6)
-end
-`;
-
-function cheeseRoom(){
-  const r = blankRoom();
-  for (let x = 0; x < COLS; x++) r[(ROWS-1)*COLS + x] = 2;
-  for (let x = 2; x < 7; x++)  r[11*COLS + x] = 2;
-  for (let x = 9; x < 15; x++) r[8*COLS + x] = 2;
-  for (let x = 4; x < 9; x++)  r[5*COLS + x] = 2;
-  for (let x = 14; x < 19; x++) r[4*COLS + x] = 2;
-  return r;
-}
-
-let cheesing = false;
-function isCheese(code){ return /(^|[^a-z])cheese([^a-z]|$)/i.test(code || ""); }
-
-/* spin the whole page down to a stop, always facing the front */
-function startCheese(){
-  if (cheesing) return;
-  cheesing = true;
-  stop();
-  log("cheese", "ok");
-  const body = document.body;
-  body.classList.add("cheesing");
-  const t0 = performance.now();
-  const spinFor = 3200;
-
-  (function spin(){
-    const t = Math.min(1, (performance.now() - t0) / spinFor);
-    const eased = 1 - Math.pow(1 - t, 3);              // fast, then slower and slower
-    const turns = 3;
-    const angle = eased * 360 * turns;
-    const yellow = eased;
-    body.style.transform = "rotateZ(" + (angle % 360) + "deg) scale(" + (1 - 0.12 * Math.sin(t * Math.PI)) + ")";
-    body.style.filter = "sepia(" + yellow + ") saturate(" + (1 + yellow * 3) + ") hue-rotate(" + (-12 * yellow) + "deg)";
-    if (t < 1) requestAnimationFrame(spin);
-    else {
-      body.style.transform = "rotateZ(0deg)";           // dead ahead, every time
-      setTimeout(() => {
-        body.style.filter = "";
-        body.style.transform = "";
-        body.classList.remove("cheesing");
-        $("cheese-screen").classList.add("on");
-      }, 260);
-    }
-  })();
-}
-
-function playCheese(){
-  $("cheese-screen").classList.remove("on");
-  // your own work is put aside untouched, exactly as a visited game does it
-  try { localStorage.setItem("simplepp-mine", localStorage.getItem("simplepp") || ""); } catch(e){}
-  visiting = true;
-
-  applySpriteSize(16);
-  PALETTE = BASE_PALETTE.slice();
-  project = {
-    mode: "easy", secret: true, spriteSize: 16,
-    palette: PALETTE.slice(), fps: 60, zoom: 512,
-    name: "cheese", author: "the cheese",
-    sprites: [CHEESE_ART.wedge.slice(), CHEESE_ART.crust.slice(),
-              CHEESE_ART.grape.slice(), CHEESE_ART.mouse.slice()],
-    rooms: [cheeseRoom()],
-    code: CHEESE_CODE
-  };
-  curSprite = 0; curRoom = 0; curTile = 1;
-  spriteCache.clear(); texCache.clear(); roomPaint = { key:null, cv:null };
-  SPRITE_EPOCH++; ROOM_EPOCH++;
-  buildPalette();
-  setMode("easy", true);
-  $("code").value = project.code;
-  drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList(); drawStageInfo();
-  showVisitBar({ name: "cheese", author: "the cheese" });
-  cheesing = false;
-  tab("code");
-  run();
-}
-
-/* =========================================================
    EXPORT
    The whole engine is one file, so an exported game is that same
    file with your project baked into it and the editor hidden.
@@ -2937,14 +2699,7 @@ window.addEventListener("keydown", e => {
    ========================================================= */
 function save(){
   SPRITE_EPOCH++; ROOM_EPOCH++;          // art or tiles may have changed
-  if (syboopsOn) return;                 // the joke never reaches your saved work
   project.code = $("code").value;
-  // Anything part-way through spelling the magic word is not a clean copy, and
-  // the fullest version wins, so a program is never swapped for a fragment of
-  // itself typed on the way to the joke.
-  if (!/syb/i.test(project.code) &&
-      (lastCleanCode === null || project.code.length >= lastCleanCode.length))
-    lastCleanCode = project.code;
   if (visiting) return;                  // a game opened from a link never overwrites yours
   try { localStorage.setItem("simplepp", JSON.stringify(project)); } catch(e){}
 }
@@ -5588,12 +5343,6 @@ function buildHelp(){
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
-  { v:"0.9.2", t:"Two secrets",
-    lines:[
-      "There are two things hidden in Simple++ now. Neither is written down anywhere else, and neither can touch the game you are working on — both put your project aside untouched first, exactly as visiting someone else's game does.",
-      "One of them is <b>cheese</b>.",
-      "The other was Robin's idea, and the only way out of it is to close the tab."
-    ] },
   { v:"0.9.1", t:"Questions explain themselves",
     lines:[
       "Writing a question on a line by itself — <code>room_changed()</code>, <code>touching(1, 2)</code>, <code>whenclick(1)</code> — used to come back with \u201cI don\u2019t know the command\u201d, which is misleading: the engine knows it perfectly well, it just answers a question rather than doing something. It now says so and shows the line you meant: <i>\u201croom_changed()\u201d asks a question, it does not do anything on its own. Use it inside an if, like this: if room_changed</i>",
@@ -5740,11 +5489,7 @@ load();
 applySpriteSize(project.spriteSize || 16);
 if (project.sprites.every(s => s.every(p => p < 0))) defaultArt();
 $("code").value = project.code || "";
-$("code").addEventListener("input", () => {
-  const text = $("code").value;
-  if (!syboopsOn && /syboops\s+boops/i.test(text)) return startSyboops();
-  save();
-});
+$("code").addEventListener("input", save);
 PALETTE = (project.palette && project.palette.length) ? project.palette.slice() : BASE_PALETTE.slice();
 buildPalette(); buildTools(); setPaintZoom(project.zoom || 512);
 $("sprite-size").value = SW;
