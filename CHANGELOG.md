@@ -3,6 +3,49 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.10.0 — Solid collision, room tiles, and less clutter
+
+### Fixed
+- **Jumping while running went straight through blocks.** Horizontal movement
+  was resolved against the old vertical position and vertical movement against
+  the new horizontal one, so a diagonal path could cross a corner that neither
+  check ever saw; a fast fall could also skip past a thin platform in a single
+  step. Movement is now walked in pieces no larger than a quarter of the sprite,
+  testing both directions at each piece and creeping the last pixels so the
+  sprite rests flush. Checked against a floor-to-ceiling pillar at jump powers 6
+  to 20 and speeds 3 to 10 — blocked every time.
+- **More than one wall never worked.** `horizontal(1, 2, 5)` produced a list
+  inside a list, and rounding an array of two numbers gives `NaN`, so those
+  sprites were silently not solid at all. Lists are flattened before use.
+
+### Added
+- **`collision(1, 3)`** — sprite 1 cannot walk into sprite 3, as a sprite or as
+  a room tile. Available in every mode, and plain `move()` respects it too, so
+  it works in Normal mode where you write the movement yourself.
+- **`touchinginroom(1, 3)`** — true when sprite 1 is touching a tile painted
+  with sprite 3, for things drawn into a room rather than shown with `show()`.
+- **`pause()` and `resume()`.** **P** toggles pause as well, and `when key` and
+  button blocks keep running while paused — otherwise the code that resumes you
+  could never run, which is a trap rather than a feature.
+- **`roomhide(12, 3)`** makes every tile painted with sprite 12 look and behave
+  like sprite 3; with one argument they vanish. **`roomshow(12)`** puts them
+  back. Drawing, collision and `touchinginroom()` all follow the swap.
+- **`room_number()`** and **`paused()`**.
+- **✨ Draw me** in the Paint tab. Describe a sprite and it draws one: hearts,
+  stars, bricks, trees, flowers, swords, keys, ghosts, faces and monsters, in
+  whatever colour you name. Each shape is assembled from rules rather than
+  copied from a library, so it works offline and monsters come out different
+  every time. With a key set under ⚡ in AI mode it asks that model for a grid
+  of colours instead and uses what comes back.
+- **New template — Room to Room:** a three-room platformer where walking off the
+  right-hand edge starts the next room and the left edge takes you back.
+
+### Removed
+- **`.simple` files, share links and the online gallery**, along with the
+  `games/` folder and publishing through GitHub issues. Games are kept in
+  **My Games** in this browser, and **⬆ Export** writes a web page that plays
+  anywhere — which is the part people actually used.
+
 ## 0.9.3 — A search box in Help
 
 ### Added

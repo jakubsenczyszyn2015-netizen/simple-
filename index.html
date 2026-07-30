@@ -207,7 +207,6 @@
   <button onclick="document.getElementById('load').click()">Load</button>
   <input id="load" type="file" accept=".json" style="display:none" onchange="loadFile(this)">
   <input id="pngfile" type="file" accept="image/*" style="display:none" onchange="importPng(this)">
-  <input id="simplefile" type="file" accept=".simple,.json" style="display:none" onchange="openSimple(this)">
 </header>
 
 <main>
@@ -258,6 +257,7 @@
         <button onclick="flipSpriteH()" title="Flip left to right">⇋</button>
         <button onclick="flipSpriteV()" title="Flip top to bottom">⇅</button>
         <button onclick="document.getElementById('pngfile').click()">🖼 PNG</button>
+        <button onclick="drawSomething()" style="background:#4a3a80;border-color:#6a55b8">✨ Draw me</button>
       </div>
       <label class="row" style="gap:5px;margin-bottom:10px;flex-wrap:nowrap">
         <input id="png-limited" type="checkbox" checked style="width:auto">
@@ -390,11 +390,6 @@
         <span>One file with the whole game inside it — no editor, no internet needed.
         Double-click it and it plays. Works on any computer, phone or tablet.</span>
       </div>
-      <div class="card" onclick="saveSimple()">
-        <div class="em">💾</div><b>Project file (.simple)</b>
-        <span>For carrying on later, or sending to a friend to edit. Open it again
-        from the My Games window.</span>
-      </div>
     </div>
     <h3 style="margin-top:18px">What about .exe, .apk and .ipa?</h3>
     <div class="hint" style="max-width:560px">
@@ -425,17 +420,14 @@
   <div class="modal">
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <h2 style="margin:0">Games</h2>
-      <div class="tabs">
-        <button id="lt-mine" class="on" onclick="libTab('mine')">📚 My games</button>
-        <button id="lt-world" onclick="libTab('world')">🌍 Gallery</button>
-      </div>
     </div>
 
     <!-- ============ my games ============ -->
     <div id="lib-mine">
       <p class="sub" style="margin-top:10px">
-        Saved in this browser. Name it, then save it, share it as a link, or send it as a
-        <b>.simple</b> file.
+        Saved in this browser. Name it and save it, and open it again whenever you like.
+        To give a game to somebody else use <b>⬆ Export</b> at the top: that writes a web
+        page they can just open.
       </p>
       <div class="row" style="margin-bottom:10px">
         <label style="flex:1;min-width:170px">Game name
@@ -447,22 +439,10 @@
       </div>
       <div class="row" style="margin-bottom:12px">
         <button onclick="libSaveHere()">💾 Save here</button>
-        <button onclick="shareLink()">🔗 Copy share link</button>
-        <button onclick="saveSimple()">⬇ Save .simple</button>
-        <button onclick="document.getElementById('simplefile').click()">⬆ Open .simple</button>
-        <button onclick="publishToGallery()" style="background:#2c5c34;border-color:#3d7d47">🌍 Publish to gallery</button>
       </div>
       <input id="lib-search" type="text" placeholder="search your games by name or author"
              style="margin-bottom:10px" autocomplete="off">
       <div id="lib-list" class="cards"></div>
-    </div>
-
-    <!-- ============ the global gallery ============ -->
-    <div id="lib-world" style="display:none">
-      <p class="sub" style="margin-top:10px" id="world-note"></p>
-      <input id="world-search" type="text" placeholder="search the gallery"
-             style="margin-bottom:10px" autocomplete="off">
-      <div id="world-list" class="cards"></div>
     </div>
 
     <div style="margin-top:16px;text-align:right"><button onclick="closeLib()">Close</button></div>
@@ -528,7 +508,6 @@ end
 };
 
 let curSprite = 0, curColor = 8, curRoom = 0, curTile = 1;
-let visiting = false;      // true while looking at a game someone sent you
 
 /* ---------- tiny helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -594,14 +573,16 @@ let roomPaint = { key:null, cv:null };
 function roomCanvas(){
   const rm = liveRoom(R.room);
   if (!rm) return null;
-  const key = R.room + ":" + SPRITE_EPOCH + ":" + ROOM_EPOCH;
+  const key = R.room + ":" + SPRITE_EPOCH + ":" + ROOM_EPOCH + ":" + JSON.stringify(R.roomSwaps || {});
   if (roomPaint.key === key) return roomPaint.cv;
   const cv = roomPaint.cv || document.createElement("canvas");
   cv.width = VW; cv.height = VH;
   const c = cv.getContext("2d");
   c.clearRect(0, 0, VW, VH);
-  for (let i = 0; i < rm.length; i++)
-    if (rm[i]) blit(c, rm[i], (i % COLS) * SW, Math.floor(i / COLS) * SH);
+  for (let i = 0; i < rm.length; i++){
+    const t = swapped(rm[i]);
+    if (t) blit(c, t, (i % COLS) * SW, Math.floor(i / COLS) * SH);
+  }
   roomPaint = { key, cv };
   return cv;
 }
@@ -1111,6 +1092,12 @@ function evalExpr(src, line){
         return R.uiClicks.includes(String(args[0]));
       case "whenclick": case "when_click": case "clickedsprite":
         return R.spriteClicks.includes(Math.round(args[0]));
+      case "touchinginroom": case "touching_in_room": case "touchingroom": {
+        const A2 = actor(args[0]);
+        return A2.on ? touchingTile(A2, Math.round(args[1])) : false;
+      }
+      case "paused": return !!R.paused;
+      case "room_number": case "roomnumber": case "which_room": return R.room;
       case "room_changed": case "roomchanged":
         return args.length ? R.roomChanged === Math.round(args[0]) : R.roomChanged > 0;
       case "pressed": return !!R.keyHits[String(args[0]).toLowerCase()];
@@ -1149,6 +1136,7 @@ const R = {
   fps:60, fpsReal:0, acc:0, lastT:undefined,
   textMoves:{}, uiButtons:{}, uiClicks:[], spriteClicks:[], flips:{},
   vehicles:[], riding:null, ending:null, lastKeys:{}, keyHits:{},
+  paused:false, roomSwaps:{},
   roomChanged:0, coinSpots:[], chat:null, mouse:{x:0,y:0},
   hard:null
 };
@@ -1156,7 +1144,7 @@ const R = {
 function actor(n){
   n = Math.round(n);
   if (!R.actors[n]) R.actors[n] = {
-    id:n, x:0, y:0, on:false, w:SW, h:SH,
+    id:n, x:0, y:0, on:false, w:SW, h:SH, mySolids:[],
     grav:null, hor:null, ver:null, anim:null,
     vy:0, vx:0, mvy:0, onGround:false
   };
@@ -1178,7 +1166,7 @@ function touchingTile(A, n){
   const y0 = Math.floor(A.y / SH), y1 = Math.floor((A.y + A.h - 1) / SH);
   for (let y = Math.max(0, y0); y <= Math.min(ROWS - 1, y1); y++)
     for (let x = Math.max(0, x0); x <= Math.min(COLS - 1, x1); x++)
-      if (rm[y * COLS + x] === n) return true;
+      if (swapped(rm[y * COLS + x]) === n) return true;
   return false;
 }
 
@@ -1192,7 +1180,13 @@ function tileAtPixel(px, py){
   if (!rm) return 0;
   const x = Math.floor(px / SW), y = Math.floor(py / SH);
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return 0;
-  return rm[y * COLS + x];
+  return swapped(rm[y * COLS + x]);
+}
+/* roomhide(12, 3) makes every 12 in the room behave and look like a 3 */
+function swapped(t){
+  if (!t) return t;
+  const to = R.roomSwaps[t];
+  return to === undefined ? t : to;
 }
 /* could sprite n move by dx,dy without bumping into a wall tile? */
 function isFree(n, dx, dy){
@@ -1207,7 +1201,8 @@ function isFree(n, dx, dy){
    g counts both as painted room tiles and as the sprite itself */
 function hits(nx, ny, g, self, box){
   // g may be one sprite or several; solid() adds more for everyone
-  const list = [].concat(g || [], R.solids || [])
+  const list = [].concat(g || [], R.solids || [], (box && box.mySolids) || [])
+                 .flat(4)                       // a list of lists is still a list
                  .map(v => Math.round(v))
                  .filter(v => v > 0 && R.roles[v] !== "door");   // you must be able to enter a door
   if (!list.length) return false;
@@ -1325,6 +1320,10 @@ function stepBehaviours(){
   for (const key of Object.keys(R.actors)){
     const n = +key, a = R.actors[n];
 
+    // Work out how far this sprite wants to go this frame...
+    let wantX = 0, wantY = 0;
+    const walls = [];
+
     if (a.hor){                                  // smooth left/right
       const acc = a.hor.speed / 6;
       if (R.keys.left)  a.vx -= acc;
@@ -1332,9 +1331,8 @@ function stepBehaviours(){
       a.vx *= 0.82;
       if (Math.abs(a.vx) < .05) a.vx = 0;
       a.vx = Math.max(-a.hor.speed, Math.min(a.hor.speed, a.vx));
-      const nx = a.x + a.vx;
-      if (nx < 0 || nx + a.w > VW || hits(nx, a.y, a.hor.wall, n, a)) a.vx = 0;
-      else a.x = nx;
+      wantX += a.vx;
+      walls.push(a.hor.wall);
     }
     if (a.ver){                                  // smooth up/down
       const acc = a.ver.speed / 6;
@@ -1343,40 +1341,28 @@ function stepBehaviours(){
       a.mvy *= 0.82;
       if (Math.abs(a.mvy) < .05) a.mvy = 0;
       a.mvy = Math.max(-a.ver.speed, Math.min(a.ver.speed, a.mvy));
-      const ny = a.y + a.mvy;
-      if (ny < 0 || ny + a.h > VH || hits(a.x, ny, a.ver.wall, n, a)) a.mvy = 0;
-      else a.y = ny;
+      wantY += a.mvy;
+      walls.push(a.ver.wall);
     }
     if (a.grav){                                 // falling, and landing on things
       a.vy = Math.min(JUMPFALL, a.vy + GRAV);
-      let ny = a.y + a.vy, landed = false;
-      const floor = VH - a.h;
-
-      if (a.vy < 0){
-        // going up: bonking your head stops you dead, but does NOT count as
-        // standing on something — holding jump at a ceiling used to stick
-        if (ny < 0 || hits(a.x, ny, a.grav.ground, n, a)){
-          let ty = a.y;
-          while (ty > ny && !hits(a.x, ty - 1, a.grav.ground, n, a) && ty - 1 >= 0) ty--;
-          ny = ty;
-          a.vy = 0;
-        }
-        a.y = ny;
-        a.onGround = false;
-      } else {
-        if (ny > floor){ ny = floor; landed = true; }
-        if (hits(a.x, ny, a.grav.ground, n, a)){
-          // walk back until it fits, so it sits neatly on top
-          let ty = a.y;
-          while (ty < ny && !hits(a.x, ty + 1, a.grav.ground, n, a)) ty++;
-          while (ty > 0 && hits(a.x, ty, a.grav.ground, n, a)) ty--;
-          ny = ty; landed = true;
-        }
-        a.y = ny;
-        if (landed) a.vy = 0;
-        a.onGround = landed;
-      }
+      wantY += a.vy;
+      walls.push(a.grav.ground);
     }
+
+    // ...then go there in small steps, both directions together, so a jump
+    // across a corner cannot slip through it and a fast fall cannot skip a
+    // platform. Moving X first and Y afterwards is what let that happen.
+    if (a.hor || a.ver || a.grav){
+      const r = slideActor(a, n, wantX, wantY, walls);
+      if (r.blockedX) a.vx = 0;
+      if (r.blockedY){
+        if (a.ver) a.mvy = 0;
+        if (a.grav) a.vy = 0;
+      }
+      if (a.grav) a.onGround = r.landed;
+    }
+
     if (a.ball){                                 // bounces off things, like a pong ball
       if (!a.bvx && !a.bvy){ a.bvx = a.ball.speed; a.bvy = -a.ball.speed; }
       let nx = a.x + a.bvx, ny = a.y + a.bvy;
@@ -1411,6 +1397,46 @@ function stepBehaviours(){
       }
     }
   }
+}
+
+/* Move a sprite by (dx, dy) without ever passing through anything, by walking
+   the distance in pieces no bigger than a quarter of the sprite and testing
+   both directions at each piece. When a direction is blocked it creeps the
+   last pixels so the sprite comes to rest flush against the surface. */
+function slideActor(a, n, dx, dy, walls){
+  const out = { blockedX:false, blockedY:false, landed:false, bonked:false };
+  if (!dx && !dy) return out;
+
+  const grain = Math.max(1, Math.min(4, Math.floor(Math.min(a.w, a.h) / 4)));
+  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / grain));
+  const sx = dx / steps, sy = dy / steps;
+
+  const blockedAt = (x, y) =>
+    x < 0 || y < 0 || x + a.w > VW || y + a.h > VH || hits(x, y, walls, n, a);
+
+  for (let i = 0; i < steps; i++){
+    if (!out.blockedX && sx){
+      const nx = a.x + sx;
+      if (blockedAt(nx, a.y)){
+        out.blockedX = true;
+        const dir = sx > 0 ? 1 : -1;                 // ease up to the wall
+        for (let k = 0; k < grain && !blockedAt(a.x + dir, a.y); k++) a.x += dir;
+      } else a.x = nx;
+    }
+    if (!out.blockedY && sy){
+      const ny = a.y + sy;
+      if (blockedAt(a.x, ny)){
+        out.blockedY = true;
+        if (sy > 0) out.landed = true; else out.bonked = true;
+        const dir = sy > 0 ? 1 : -1;
+        for (let k = 0; k < grain && !blockedAt(a.x, a.y + dir); k++) a.y += dir;
+      } else a.y = ny;
+    }
+    if (out.blockedX && out.blockedY) break;
+  }
+  // standing on the floor of the screen counts as standing on something
+  if (sy > 0 && a.y + a.h >= VH - 0.001) out.landed = true;
+  return out;
 }
 
 /* the roles you can give a sprite in Easy mode: coin, death, spring */
@@ -1590,7 +1616,7 @@ function log(msg, cls){
 let KEYBIND = {};      // bind("left","A") puts entries in here
 const KEYMAP = {
   ArrowLeft:"left", ArrowRight:"right", ArrowUp:"up", ArrowDown:"down",
-  " ":"space", z:"z", x:"x", c:"c", e:"e", Enter:"enter"
+  " ":"space", z:"z", x:"x", c:"c", e:"e", p:"p", Enter:"enter"
 };
 function keyNameOf(e){
   const raw = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -1708,7 +1734,31 @@ function runCall(st){
                       if (btn){ btn.x += dx||0; btn.y += dy||0; }
                       break;
                     }
-                    const a = actor(n); a.x += dx||0; a.y += dy||0; break; }
+                    const a = actor(n);
+                    const stopped = a.mySolids.length || (R.solids && R.solids.length);
+                    if (!stopped){ a.x += dx||0; a.y += dy||0; break; }
+
+                    // with collision declared, walk as far as it can and no further
+                    const stepX = dx || 0, stepY = dy || 0;
+                    if (stepX){
+                      const nx = a.x + stepX;
+                      if (!hits(nx, a.y, null, n, a)) a.x = nx;
+                      else {
+                        const dir = stepX > 0 ? 1 : -1;
+                        while (!hits(a.x + dir, a.y, null, n, a) &&
+                               Math.abs(a.x + dir - (a.x - stepX)) <= Math.abs(stepX) + 1) a.x += dir;
+                      }
+                    }
+                    if (stepY){
+                      const ny = a.y + stepY;
+                      if (!hits(a.x, ny, null, n, a)) a.y = ny;
+                      else {
+                        const dir = stepY > 0 ? 1 : -1;
+                        while (!hits(a.x, a.y + dir, null, n, a) &&
+                               Math.abs(a.y + dir - (a.y - stepY)) <= Math.abs(stepY) + 1) a.y += dir;
+                      }
+                    }
+                    break; }
     case "put":   { const [n,x,y]  = A(); const a = actor(n); a.x = x||0; a.y = y||0; break; }
     case "print": { const [t,x,y]  = A();
                     const key = String(t);
@@ -1775,6 +1825,16 @@ function runCall(st){
       }
       break; }
 
+    /* ---- collision(1, 3): sprite 1 cannot walk into sprite 3 ---- */
+    case "collision": case "collide": case "blocks": {
+      const args = A();
+      const a = actor(args[0]);
+      args.slice(1).forEach(v => {
+        const k = Math.round(v);
+        if (k > 0 && !a.mySolids.includes(k)){ ensureSprite(k); a.mySolids.push(k); }
+      });
+      break; }
+
     /* ---- Easy: give a sprite a job ---- */
     case "solid": case "wall": { easyOnly(name, st.n);
                      A().forEach(v => { const k = Math.round(v);
@@ -1808,6 +1868,25 @@ function runCall(st){
     case "fps": case "framerate": case "frame_rate": {
       R.fps = Math.max(1, Math.min(240, Math.round(A()[0]) || 60));
       setFps(R.fps, true);
+      break; }
+
+    /* ---- stopping and starting again ---- */
+    case "pause": { R.paused = true; break; }
+    case "resume": case "unpause": { R.paused = false; break; }
+
+    /* ---- swapping one room tile for another ---- */
+    case "roomhide": case "room_hide": {
+      const [which, instead] = A();
+      const k = Math.round(which);
+      ensureSprite(k);
+      if (instead) ensureSprite(Math.round(instead));
+      R.roomSwaps[k] = instead ? Math.round(instead) : 0;   // 0 means nothing at all
+      ROOM_EPOCH++;
+      break; }
+    case "roomshow": case "room_show": {
+      const k = Math.round(A()[0]);
+      delete R.roomSwaps[k];
+      ROOM_EPOCH++;
       break; }
 
     /* ---- rooms ---- */
@@ -1981,6 +2060,7 @@ function startWith(source){
   R.textMoves = {}; R.uiButtons = {}; R.uiClicks = []; R.spriteClicks = [];
   R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
   R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
+  R.paused = false; R.roomSwaps = {};
   R.vars.coins = 0;                      // coin() counts into this one
   KEYBIND = {};
   if (project.mode === "hard" && !runHard()){ R.running = false; return; }
@@ -2002,6 +2082,7 @@ function doReset(){
   R.textMoves = {}; R.uiButtons = {}; R.uiClicks = []; R.spriteClicks = [];
   R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
   R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
+  R.paused = false; R.roomSwaps = {};
   R.clicks = []; R.vars.coins = 0;
   R.acc = 0; R.lastT = undefined;
   render();
@@ -2061,6 +2142,28 @@ function step(){
   // a title screen freezes the program until a button is pressed
   if (R.title){ R.clicks = []; render(); return true; }
 
+  if (R.keyHits.p) R.paused = !R.paused;      // P always works, so nobody gets stuck
+
+  if (R.paused){
+    // Nothing moves, but "when key" and button blocks still run — otherwise the
+    // code that calls resume() could never reach you.
+    for (const b of R.prog || []){
+      if (b.k === "key" && R.keys[b.key]){ if (!safe(b.body, "when key " + b.key)) return false; }
+      else if (b.k === "button"){
+        let label = "";
+        try { label = String(evalExpr(b.label, b.n)); } catch(e){ label = b.label.replace(/"/g, ""); }
+        if (R.uiClicks.includes(label) && !safe(b.body, "when button clicked")) return false;
+      }
+    }
+    R.texts = R.pausedTexts || [];
+    render();
+    sctx.font = "8px ui-monospace,monospace";
+    sctx.fillStyle = "#000"; sctx.fillText("paused — press P", VW/2 - 34, 7);
+    sctx.fillStyle = "#fff"; sctx.fillText("paused — press P", VW/2 - 35, 6);
+    R.uiClicks = []; R.spriteClicks = []; R.keyHits = {};
+    return true;
+  }
+
   if (R.ending){                         // the game is over, in the good way
     R.ending.t++;
     render();
@@ -2074,6 +2177,7 @@ function step(){
   }
 
   if (R.waitFrames > 0){ R.waitFrames--; render(); return true; }
+  R.pausedTexts = R.texts;
   R.texts = [];
 
   R.extra = [];
@@ -2830,7 +2934,6 @@ window.addEventListener("keydown", e => {
 function save(){
   SPRITE_EPOCH++; ROOM_EPOCH++;          // art or tiles may have changed
   project.code = $("code").value;
-  if (visiting) return;                  // a game opened from a link never overwrites yours
   try { localStorage.setItem("simplepp", JSON.stringify(project)); } catch(e){}
 }
 function load(){
@@ -3447,6 +3550,85 @@ end
 # TRY THIS
 # · playerspeed(6) to go quicker
 # · make sprite 3 a spring instead and see what happens
+`
+  },
+  {
+    em:"🚪", name:"Room to Room", mode:"easy",
+    desc:"A platformer across three rooms. Walk off the right-hand edge and the next room begins.",
+    sprites:["face","brick","coin","rock"],
+    rooms:[
+      () => { const r = blankRoom();
+              for (let x = 0; x < COLS; x++) r[(ROWS-1)*COLS + x] = 2;
+              for (let x = 4; x < 9; x++)  r[11*COLS + x] = 2;
+              for (let x = 12; x < 17; x++) r[8*COLS + x] = 2;
+              r[10*COLS + 6] = 3; r[7*COLS + 14] = 3;
+              return r; },
+      () => { const r = blankRoom();
+              for (let x = 0; x < COLS; x++) r[(ROWS-1)*COLS + x] = 2;
+              for (let x = 2; x < 6; x++)  r[10*COLS + x] = 2;
+              for (let x = 8; x < 12; x++) r[7*COLS + x] = 2;
+              for (let x = 14; x < 19; x++) r[10*COLS + x] = 2;
+              r[9*COLS + 3] = 3; r[6*COLS + 9] = 3; r[13*COLS + 12] = 4;
+              return r; },
+      () => { const r = blankRoom();
+              for (let x = 0; x < COLS; x++) r[(ROWS-1)*COLS + x] = 2;
+              for (let x = 3; x < 7; x++)   r[9*COLS + x] = 2;
+              for (let x = 10; x < 14; x++) r[6*COLS + x] = 2;
+              for (let y = 6; y < 14; y++)  r[y*COLS + 17] = 2;
+              r[8*COLS + 5] = 3; r[5*COLS + 11] = 3; r[13*COLS + 8] = 4;
+              return r; }
+    ],
+    code:`# ROOM TO ROOM
+# Three rooms are drawn in the Rooms tab. Walk off the right and
+# the next one begins; walk off the left and you go back.
+
+when start
+  room(1)
+  put(1, 20, 180)
+  show(1)
+  playerspeed(3)
+  solid(2)
+  gravity(1, 2)
+  horizontal(1, 2)
+  lives(3)
+  death(4)          # the rocks hurt
+  set(coins, 0)
+end
+
+when key up
+  jump(1, 8)
+end
+
+every frame
+  print("room " + room_number() + "   coins " + coins, 6, 6)
+
+  # the coins are painted into the room, so ask the room about them.
+  # settile takes out the one you are standing on — roomhide would
+  # take out every coin in the game at once.
+  if touchinginroom(1, 3)
+    add(coins, 1)
+    settile(x(1) + 8, y(1) + 8, 0)
+    sound(1)
+  end
+
+  # off the right-hand edge: next room, and come in from the left
+  if x(1) > 300
+    changeroomby(1)
+    put(1, 4, y(1))
+  end
+
+  # off the left-hand edge: back the way you came
+  if x(1) < 0
+    changeroomby(-1)
+    put(1, 296, y(1))
+  end
+end
+
+reset if y(1) > 240
+
+# TRY THIS
+# · draw a fourth room in the Rooms tab — it joins the loop by itself
+# · put a door(5) somewhere instead of walking off the edge
 `
   },
   {
@@ -4502,6 +4684,219 @@ function showAICode(){
 }
 
 /* =========================================================
+   DRAW ME SOMETHING
+   Describe a sprite and it draws one. There is no picture library
+   here: each shape is assembled from rules — a body, then whatever
+   the words ask for on top — so it works offline and gives you
+   something different every time you press it. If a real model is
+   connected in AI mode it asks that instead and uses the grid it
+   sends back.
+   ========================================================= */
+const ART_COLOURS = {
+  red:8, crimson:8, blood:8, orange:9, gold:10, yellow:10, green:11, lime:11,
+  blue:12, sky:12, cyan:12, purple:13, violet:13, pink:14, magenta:14,
+  white:7, grey:6, gray:6, silver:6, black:0, brown:4, tan:15, skin:15,
+  dark:5, navy:1, teal:3
+};
+function colourFrom(words, dflt){
+  for (const w of words) if (ART_COLOURS[w] !== undefined) return ART_COLOURS[w];
+  return dflt;
+}
+
+/* the shapes it knows how to build */
+const ART_SHAPES = {
+  heart: (g, c) => {
+    forEach(g, (x, y, w, h) => {
+      const fx = (x + .5) / w * 2 - 1, fy = (y + .5) / h * 2 - 1;
+      const v = Math.pow(fx*fx + fy*fy - 0.34, 3) - fx*fx * Math.pow(fy*fy, 3) * 1.2;
+      if (fy < 0.85 && v < 0) g.set(x, y, c);
+    });
+  },
+  star: (g, c) => {
+    forEach(g, (x, y, w, h) => {
+      const fx = (x + .5) / w * 2 - 1, fy = (y + .5) / h * 2 - 1;
+      const a = Math.atan2(fy, fx), r = Math.hypot(fx, fy);
+      const spike = 0.42 + 0.42 * Math.abs(Math.cos(a * 2.5));
+      if (r < spike) g.set(x, y, c);
+    });
+  },
+  ball: (g, c) => {
+    forEach(g, (x, y, w, h) => {
+      const fx = (x + .5) / w * 2 - 1, fy = (y + .5) / h * 2 - 1;
+      if (fx*fx + fy*fy < 0.82) g.set(x, y, c);
+    });
+  },
+  block: (g, c) => {
+    forEach(g, (x, y, w, h) => g.set(x, y, c));
+    forEach(g, (x, y, w, h) => { if (x === 0 || y === 0 || x === w-1 || y === h-1) g.set(x, y, 5); });
+  },
+  tree: (g, c) => {
+    const w = g.w, h = g.h;
+    forEach(g, (x, y) => {
+      if (y > h * 0.62 && Math.abs(x - w/2 + 0.5) < w * 0.09) g.set(x, y, 4);
+    });
+    forEach(g, (x, y) => {
+      const fx = (x + .5) / w * 2 - 1, fy = (y + .5) / (h * 0.7) * 2 - 1;
+      if (fx*fx * 1.1 + fy*fy < 0.9) g.set(x, y, c);
+    });
+  },
+  flower: (g, c) => {
+    const w = g.w, h = g.h;
+    forEach(g, (x, y) => { if (y > h*0.55 && Math.abs(x - w/2 + 0.5) < 1) g.set(x, y, 11); });
+    const cx = w/2 - .5, cy = h*0.33;
+    for (let i = 0; i < 6; i++){
+      const a = i / 6 * Math.PI * 2;
+      g.blob(cx + Math.cos(a) * w*0.22, cy + Math.sin(a) * h*0.18, w*0.13, c);
+    }
+    g.blob(cx, cy, w*0.11, 10);
+  },
+  sword: (g, c) => {
+    const w = g.w, h = g.h;
+    forEach(g, (x, y) => {
+      if (Math.abs(x - w/2 + 0.5) < w*0.08 && y < h*0.72) g.set(x, y, c);        // blade
+      if (y > h*0.62 && y < h*0.72 && Math.abs(x - w/2 + 0.5) < w*0.3) g.set(x, y, 9);  // guard
+      if (Math.abs(x - w/2 + 0.5) < w*0.07 && y >= h*0.72) g.set(x, y, 4);       // grip
+    });
+  },
+  key: (g, c) => {
+    const w = g.w, h = g.h;
+    g.ring(w*0.32, h*0.32, w*0.2, c);
+    forEach(g, (x, y) => {
+      if (Math.abs(y - h*0.55) < h*0.07 && x > w*0.35) g.set(x, y, c);
+      if (x > w*0.72 && y > h*0.55 && y < h*0.75 && (x % 3 === 0)) g.set(x, y, c);
+    });
+  },
+  ghost: (g, c) => {
+    const w = g.w, h = g.h;
+    forEach(g, (x, y) => {
+      const fx = (x + .5) / w * 2 - 1;
+      if (y < h*0.55 && fx*fx + Math.pow((y/h - 0.3) * 3, 2) < 1) g.set(x, y, c);
+      if (y >= h*0.5 && y < h*0.85 && Math.abs(fx) < 0.86) g.set(x, y, c);
+      if (y >= h*0.85 && Math.abs(fx) < 0.86 && (Math.floor(x / Math.max(1, w/5)) % 2 === 0)) g.set(x, y, c);
+    });
+    g.eyes(0);
+  },
+  face: (g, c) => {
+    const w = g.w, h = g.h;
+    forEach(g, (x, y) => {
+      const fx = (x + .5) / w * 2 - 1, fy = (y + .5) / h * 2 - 1;
+      if (fx*fx + fy*fy < 0.8) g.set(x, y, c);
+    });
+    g.eyes(0);
+    g.mouth(0);
+  },
+  creature: (g, c) => {
+    const w = g.w, h = g.h;
+    // a symmetrical body, different every time
+    for (let y = Math.floor(h*0.15); y < h*0.9; y++)
+      for (let x = 0; x < Math.ceil(w/2); x++){
+        const edge = Math.abs(x - w*0.28) / w + Math.abs(y - h*0.5) / h;
+        if (Math.random() > edge * 2.2){ g.set(x, y, c); g.set(w-1-x, y, c); }
+      }
+    g.eyes(7);
+  }
+};
+function forEach(g, fn){
+  for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) fn(x, y, g.w, g.h);
+}
+
+function newGrid(){
+  const px = blankSprite();
+  return {
+    w: SW, h: SH, px,
+    set(x, y, c){ x = Math.round(x); y = Math.round(y);
+                  if (x >= 0 && y >= 0 && x < SW && y < SH) px[y*SW+x] = c; },
+    blob(cx, cy, r, c){
+      for (let y = Math.floor(cy-r); y <= cy+r; y++)
+        for (let x = Math.floor(cx-r); x <= cx+r; x++)
+          if ((x-cx)**2 + (y-cy)**2 <= r*r) this.set(x, y, c);
+    },
+    ring(cx, cy, r, c){
+      for (let y = Math.floor(cy-r); y <= cy+r; y++)
+        for (let x = Math.floor(cx-r); x <= cx+r; x++){
+          const d = Math.hypot(x-cx, y-cy);
+          if (d <= r && d >= r - Math.max(1, r*0.4)) this.set(x, y, c);
+        }
+    },
+    eyes(c){
+      const ey = Math.floor(this.h * 0.4);
+      this.blob(this.w * 0.34, ey, Math.max(0.6, this.w*0.07), c);
+      this.blob(this.w * 0.66, ey, Math.max(0.6, this.w*0.07), c);
+    },
+    mouth(c){
+      const my = Math.floor(this.h * 0.62);
+      for (let x = Math.floor(this.w*0.36); x <= this.w*0.64; x++) this.set(x, my, c);
+    }
+  };
+}
+
+const ART_WORDS = [
+  [/heart|love/, "heart", 8], [/star|sparkle/, "star", 10],
+  [/coin|ball|circle|dot|moon|sun|gem|orb|bubble/, "ball", 10],
+  [/block|brick|crate|box|wall|stone|ground|platform|tile/, "block", 4],
+  [/tree|bush/, "tree", 11], [/flower|rose|daisy|plant/, "flower", 14],
+  [/sword|blade|knife|dagger/, "sword", 6], [/key/, "key", 10],
+  [/ghost|spirit|slime|blob/, "ghost", 7],
+  [/face|player|guy|person|hero|smiley|head|character/, "face", 9]
+];
+
+async function drawSomething(){
+  const wish = prompt(
+    "What should I draw?\n\n" +
+    "Try: a red heart · gold star · brick block · green tree · pink flower ·\n" +
+    "a sword · a key · a blue ghost · a face · a monster", "a red heart");
+  if (wish === null || !wish.trim()) return;
+
+  const words = wish.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+
+  if (aiKey()){                       // a real model is connected — let it draw
+    try {
+      const px = await askModelForArt(wish);
+      project.sprites[curSprite] = px;
+      afterDrawn(wish, "the model");
+      return;
+    } catch(e){ log("the model would not draw that (" + e.message + ") — drawing it here instead", "err"); }
+  }
+
+  let shape = "creature", base = 12;
+  for (const [re, name, colour] of ART_WORDS)
+    if (re.test(wish.toLowerCase())){ shape = name; base = colour; break; }
+
+  const g = newGrid();
+  ART_SHAPES[shape](g, colourFrom(words, base));
+  project.sprites[curSprite] = g.px;
+  afterDrawn(wish, shape);
+}
+
+function afterDrawn(wish, how){
+  spriteCache.delete(curSprite + 1);
+  SPRITE_EPOCH++;
+  drawPaint(); drawSpriteList(); drawRoom(); save();
+  log("drew \u201c" + wish + "\u201d into sprite " + (curSprite + 1) + " (" + how + ")", "ok");
+}
+
+/* if a key is set, ask the model for a grid of palette numbers */
+async function askModelForArt(wish){
+  const list = PALETTE.map((c, i) => i + "=" + c).join(" ");
+  const out = await callModel(
+    "You draw tiny pixel art. Reply with ONLY " + SH + " lines of " + SW +
+    " numbers separated by spaces — nothing else, no words, no code fence. " +
+    "Each number is a colour: " + list + ", or -1 for see-through. " +
+    "Fill most of the square and keep it recognisable at this size.",
+    [{ role:"user", content: "Draw: " + wish }], 1500);
+
+  const rows = out.trim().split("\n").map(r => r.trim().split(/[\s,]+/).map(Number));
+  const px = blankSprite();
+  for (let y = 0; y < SH; y++)
+    for (let x = 0; x < SW; x++){
+      const v = (rows[y] || [])[x];
+      px[y*SW+x] = (typeof v === "number" && !isNaN(v) && v >= 0 && v < PALETTE.length) ? v : -1;
+    }
+  if (px.every(v => v < 0)) throw new Error("nothing usable came back");
+  return px;
+}
+
+/* =========================================================
    IMPORT A PNG
    the palette is 16 colours and sprites are 16x16, so an
    imported picture gets squashed into both
@@ -4610,8 +5005,7 @@ function afterPng(msg){
 }
 
 /* =========================================================
-   MY GAMES — a library in this browser, .simple files,
-   and share links that carry a whole game in the URL
+   MY GAMES — a library kept in this browser
    ========================================================= */
 const LIB_KEY = "simplepp-library";
 
@@ -4698,158 +5092,6 @@ function libLoad(g){
   save(); render();
 }
 
-/* ---------- .simple files ---------- */
-function saveSimple(){
-  const { name: typed, author } = libOpen() ? libFields() : { name: project.name, author: project.author };
-  const name = (typed || "My Game").trim();
-  project.name = name; project.author = author || ""; save();
-  const blob = new Blob([JSON.stringify(gameNow(name, author))], { type:"application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name.replace(/[^\w\- ]+/g, "") + ".simple";
-  a.click();
-  log("saved " + a.download, "ok");
-}
-function openSimple(input){
-  const f = input.files[0]; if (!f) return;
-  const r = new FileReader();
-  r.onload = () => {
-    try {
-      const g = JSON.parse(r.result);
-      if (!g.sprites || !g.rooms) throw 0;
-      libLoad(g);
-      project.name = g.name || f.name; project.author = g.author || "";
-      log("opened “" + (g.name || f.name) + "”" + (g.author ? " by " + g.author : ""), "ok");
-    } catch(e){ log("that isn't a Simple++ game file", "err"); }
-  };
-  r.readAsText(f); input.value = "";
-}
-
-/* ---------- share links ----------
-   sprites squash well with run-length coding: they are mostly one colour  */
-/* Sprites squash well because they are mostly one colour: store runs of
-   "this colour, this many times". They used to be packed into a string of
-   two characters per run, which quietly broke the moment a palette went
-   past sixteen colours — a colour index of 16 is "10" in hex, two
-   characters where one was expected, and everything after it shifted.
-   Pairs of numbers cannot be misread that way. */
-function packSprite(s){
-  const runs = [];
-  let run = 1;
-  for (let i = 1; i <= s.length; i++){
-    if (i < s.length && s[i] === s[i-1]){ run++; continue; }
-    runs.push([s[i-1], run]);
-    run = 1;
-  }
-  return runs;
-}
-function unpackSprite(packed){
-  const out = [];
-  if (typeof packed === "string") return unpackSpriteOld(packed);   // links sent before the fix
-  for (const [colour, n] of packed || [])
-    for (let k = 0; k < n && out.length < SW*SH; k++) out.push(colour);
-  while (out.length < SW*SH) out.push(-1);
-  return out;
-}
-/* the old two-characters-per-run form, so older links still open */
-function unpackSpriteOld(str){
-  const out = [];
-  for (let i = 0; i + 1 < str.length; i += 2){
-    const c = str[i] === "z" ? -1 : parseInt(str[i], 16);
-    const n = parseInt(str[i+1], 36);
-    if (!(n > 0) || out.length + n > SW*SH * 4) break;
-    for (let k = 0; k < n; k++) out.push(isNaN(c) ? -1 : c);
-  }
-  while (out.length < SW*SH) out.push(-1);
-  return out.slice(0, SW*SH);
-}
-
-function packGame(g){
-  const packed = {
-    v: 3,
-    n: g.name, a: g.author, m: g.mode, c: g.code, z: g.spriteSize || SW,
-    p: g.palette || PALETTE.slice(),
-    f: g.fps || 60,
-    s: g.sprites.map(packSprite),
-    r: g.rooms.map(r => r.join(","))
-  };
-  return btoa(unescape(encodeURIComponent(JSON.stringify(packed))))
-         .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-function unpackGame(txt){
-  const b = txt.replace(/-/g, "+").replace(/_/g, "/");
-  const p = JSON.parse(decodeURIComponent(escape(atob(b))));
-  applySpriteSize(p.z || 16);        // so the sprites unpack to the right length
-  return {
-    name: p.n, author: p.a, mode: p.m, code: p.c,
-    spriteSize: p.z || 16,
-    palette: (p.p && p.p.length) ? p.p : null,
-    fps: p.f || 60,
-    sprites: p.s.map(unpackSprite),
-    rooms: p.r.map(r => r.split(",").map(Number))
-  };
-}
-function shareLink(){
-  const { name: typed, author } = libOpen() ? libFields() : { name: project.name, author: project.author };
-  const name = (typed || "My Game").trim();
-  project.name = name; project.author = author || ""; save();
-  const link = location.href.split("#")[0] + "#game=" + packGame(gameNow(name, author));
-  navigator.clipboard?.writeText(link);
-  const kb = Math.round(link.length / 1024);
-  alert("Link copied!\n\nAnyone who opens it gets your whole game — sprites, rooms and code.\n" +
-        "It is " + (kb < 1 ? "under 1" : kb) + " KB long, so it travels in a chat message.\n\n" +
-        "The game rides inside the link itself. Nothing was uploaded anywhere, because a single\n" +
-        "HTML file has no server behind it to upload to.");
-}
-function loadFromHash(){
-  const m = location.hash.match(/^#game=(.+)$/);
-  if (!m) return false;
-  try {
-    const g = unpackGame(m[1]);
-    // keep whatever you were working on: a link is a visit, not a takeover
-    try { localStorage.setItem("simplepp-mine", localStorage.getItem("simplepp") || ""); } catch(e){}
-    visiting = true;
-    libLoad(g);
-    showVisitBar(g);
-    project.name = g.name; project.author = g.author;
-    log("opened “" + (g.name || "a shared game") + "”" +
-        (g.author ? " by " + g.author : " (anonymous)") + " from a link", "ok");
-    return true;
-  } catch(e){ log("that share link is damaged", "err"); return false; }
-}
-
-/* ---------- visiting someone else's game ---------- */
-function showVisitBar(g){
-  let bar = $("visit-bar");
-  if (!bar){
-    bar = document.createElement("div");
-    bar.id = "visit-bar";
-    document.body.insertBefore(bar, document.body.firstChild);
-  }
-  bar.innerHTML =
-    `you are looking at <b>${escapeHtml(g.name || "a shared game")}</b>` +
-    (g.author ? " by <b>" + escapeHtml(g.author) + "</b>" : "") +
-    ` — your own project is safe. `;
-  const keep = document.createElement("button");
-  keep.textContent = "Keep this one";
-  keep.onclick = () => { visiting = false; save(); bar.remove();
-                         log("this game is yours now — it will be saved as you work", "ok"); };
-  const back = document.createElement("button");
-  back.textContent = "Back to my game";
-  back.onclick = backToMine;
-  bar.append(keep, " ", back);
-}
-function backToMine(){
-  let mine = null;
-  try { mine = JSON.parse(localStorage.getItem("simplepp-mine") || "null"); } catch(e){}
-  visiting = false;
-  location.hash = "";
-  if (mine){
-    try { localStorage.setItem("simplepp", JSON.stringify(mine)); } catch(e){}
-  }
-  location.reload();
-}
-
 /* ---------- fourth wall: pull another saved game into this one ---------- */
 function importGame(name, line){
   const all = libRead();
@@ -4882,19 +5124,9 @@ function openLib(){
   if (!$("lib-search").dataset.wired){
     $("lib-search").dataset.wired = "1";
     $("lib-search").addEventListener("input", drawLibList);
-    $("world-search").addEventListener("input", drawWorldList);
   }
 }
 function closeLib(){ $("lib-ov").classList.remove("on"); }
-
-function libTab(which){
-  const mine = which === "mine";
-  $("lib-mine").style.display  = mine ? "" : "none";
-  $("lib-world").style.display = mine ? "none" : "";
-  $("lt-mine").classList.toggle("on", mine);
-  $("lt-world").classList.toggle("on", !mine);
-  if (!mine) loadGallery();
-}
 
 /* whatever is typed in the two boxes is the game's name and author */
 function libFields(){
@@ -4959,6 +5191,10 @@ function drawLibList(){
   });
 }
 
+function escapeHtml(t){
+  return String(t).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+}
+
 function libSaveHere(){
   const { name, author } = libFields();
   if (!name){ alert("Give the game a name first — the box just above."); $("lib-name").focus(); return; }
@@ -4967,185 +5203,6 @@ function libSaveHere(){
     drawLibList();
   }
 }
-
-/* ---------- the global gallery ----------
-   GitHub Pages serves files and nothing else — there is no database behind it.
-   So the gallery IS a file in the repository: games/index.json, which every
-   visitor fetches. Publishing opens a pre-filled GitHub issue containing your
-   game, and merging it puts you in the list for everybody. */
-const GALLERY_REPO = "jakubsenczyszyn2015-netizen/simple-";
-let galleryData = null, galleryState = "idle", galleryTimer = null, galleryLastFetch = 0;
-let galleryError = "";
-
-/* Games arrive two ways: the games/ folder in the repo, and any issue
-   labelled game-submission — the issue body carries the packed game, so
-   posting one is publishing it. */
-function gameFromIssue(issue){
-  const body = issue.body || "";
-  let packed = null;
-
-  // a game can be in the body as a link, in a fenced block, or just sitting there:
-  // take the longest run of link-safe characters, whatever surrounds it
-  const link = body.match(/#game=([A-Za-z0-9_\-]+)/);
-  if (link) packed = link[1];
-  if (!packed){
-    const runs = body.match(/[A-Za-z0-9_\-]{200,}/g);
-    if (runs) packed = runs.sort((a, b) => b.length - a.length)[0];
-  }
-  if (!packed) return null;
-
-  const nameLine = body.match(/\*\*Game:\*\*\s*(.+)/);
-  const authLine = body.match(/\*\*Author:\*\*\s*(.+)/);
-  return {
-    name: (nameLine ? nameLine[1] : issue.title.replace(/^Game:\s*/i, "")).trim(),
-    author: (authLine ? authLine[1].trim() : (issue.user && issue.user.login) || ""),
-    about: "posted as issue #" + issue.number,
-    packed, issue: issue.number
-  };
-}
-
-async function fetchGallery(){
-  const found = [];
-  try {
-    const res = await fetch("games/index.json", { cache:"no-cache" });
-    if (res.ok){ const j = await res.json(); (j.games || []).forEach(g => found.push(g)); }
-  } catch(e){}
-  // Every issue, not only the labelled ones: GitHub quietly drops the label
-  // from a pre-filled link unless the person posting can write to the repo,
-  // so filtering by label hid almost every real submission.
-  galleryError = "";
-  try {
-    const res = await fetch("https://api.github.com/repos/" + GALLERY_REPO +
-                            "/issues?state=all&per_page=100&sort=created&direction=desc",
-                            { headers: { accept:"application/vnd.github+json" } });
-    if (res.ok){
-      const issues = await res.json();
-      if (Array.isArray(issues))
-        issues.forEach(it => {
-          if (it.pull_request) return;                 // pull requests are not games
-          const g = gameFromIssue(it);
-          if (g) found.push(g);
-        });
-    } else if (res.status === 403){
-      galleryError = "GitHub is not answering just now — it only allows sixty " +
-                     "requests an hour from one address. It will come back by itself.";
-    } else {
-      galleryError = "GitHub answered " + res.status + ".";
-    }
-  } catch(e){
-    galleryError = "Could not reach GitHub from here.";
-  }
-  return found;
-}
-
-/* keeps itself up to date while the window is open, quietly */
-function loadGallery(){
-  drawWorldList();
-  if (!galleryTimer){
-    galleryTimer = setInterval(() => {
-      if (!$("lib-ov").classList.contains("on")) return;
-      if ($("lib-world").style.display === "none") return;
-      pollGallery();
-    }, 5000);
-  }
-  pollGallery(true);
-}
-async function pollGallery(force){
-  // the list refreshes on a five second beat; the network is asked less often
-  // than that, because GitHub allows only sixty calls an hour from one address
-  const now = Date.now();
-  if (!force && now - galleryLastFetch < 60000) return;
-  galleryLastFetch = now;
-  const games = await fetchGallery();
-  if (!games.length && galleryData) return;          // a failed call never empties the list
-  const before = JSON.stringify((galleryData || []).map(g => g.name + g.author));
-  galleryData = games;
-  galleryState = "ready";
-  if (JSON.stringify(games.map(g => g.name + g.author)) !== before) drawWorldList();
-}
-
-function drawWorldList(){
-  const note = $("world-note"), list = $("world-list");
-  note.innerHTML =
-    "Everything here is what everybody sees: the games in the project's <code>games/</code> " +
-    "folder, plus every game posted as an issue. <b>Publish to gallery</b> posts yours." +
-    (galleryError ? '<br><span style="color:var(--bad)">' + galleryError + "</span>" : "");
-  list.innerHTML = "";
-
-  if (!galleryData){ list.innerHTML = '<div class="hint">nothing to show yet.</div>'; return; }
-
-  const q = ($("world-search").value || "").toLowerCase();
-  const games = galleryData.filter(g =>
-    !q || ((g.name || "") + " " + (g.author || "") + " " + (g.about || "")).toLowerCase().includes(q));
-  if (!games.length){ list.innerHTML = '<div class="hint">nothing matches that search.</div>'; return; }
-
-  games.forEach(g => {
-    const card = gameCard({ author: g.author, mode: g.mode }, g.name, [
-      ["Open", async () => {
-        try {
-          const data = g.packed ? unpackGame(g.packed)
-                                : await (await fetch("games/" + g.file, { cache:"no-cache" })).json();
-          try { localStorage.setItem("simplepp-mine", localStorage.getItem("simplepp") || ""); } catch(e){}
-          visiting = true;
-          libLoad(data);
-          project.name = data.name || g.name; project.author = data.author || g.author || "";
-          showVisitBar({ name: project.name, author: project.author });
-          closeLib(); tab("code");
-          log("opened \u201c" + project.name + "\u201d" +
-              (project.author ? " by " + project.author : "") + " from the gallery", "ok");
-        } catch(e){ alert("That game wouldn't open."); }
-      }]
-    ]);
-    if (g.about){
-      const note2 = document.createElement("div");
-      note2.className = "hint"; note2.style.marginTop = "6px"; note2.textContent = g.about;
-      card.insertBefore(note2, card.lastChild);
-    }
-    list.appendChild(card);
-  });
-}
-
-function publishToGallery(){
-  const { name, author } = libFields();
-  if (!name){ alert("Give the game a name first — the box just above."); $("lib-name").focus(); return; }
-  save();
-
-  // the packed form is a few times smaller than raw JSON, and the link itself
-  // IS the game, so the issue stays small enough to travel in the address bar
-  const packed = packGame(gameNow(name, author));
-  const link = location.href.split("#")[0] + "#game=" + packed;
-
-  const body =
-`**Game:** ${name}
-**Author:** ${author || "anonymous"}
-**Mode:** ${MODES[project.mode].label}
-**Sprites:** ${project.sprites.length} · **Rooms:** ${project.rooms.length}
-
-Play it straight away — this link contains the whole game:
-
-${link}
-
-The whole game is on the line below — leave it alone and it will appear in the
-gallery by itself.
-
-${packed}
-`;
-  const base = "https://github.com/" + GALLERY_REPO + "/issues/new";
-  const url = base + "&title=" + encodeURIComponent("Game: " + name) +
-                     "&body="  + encodeURIComponent(body);
-
-  if (url.length > 7500){
-    navigator.clipboard?.writeText(body);
-    alert("This game is a big one, so the issue can't be filled in automatically.\n\n" +
-          "Everything has been copied to your clipboard — paste it into the issue that opens.");
-    window.open(base, "_blank");
-    return;
-  }
-  window.open(url, "_blank");
-  log("opened a gallery submission for \u201c" + name + "\u201d on GitHub", "ok");
-}
-
-function escapeHtml(t){ return String(t).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
 /* =========================================================
    HELP — different for each mode
@@ -5211,6 +5268,13 @@ Things you can ask about:
 <code>random(10)</code>          a surprise number from 0 to 9
 <code>key(space)</code>          is a key held down right now?
 <code>whenclick(1)</code>        did you just click sprite 1? (<code>when_click()</code> too)
+<code>touchinginroom(1, 3)</code>  is sprite 1 touching a tile painted with
+                        sprite 3? (for things drawn into the room
+                        rather than shown with show())
+<code>collision(1, 3)</code>     sprite 1 can no longer walk into sprite 3,
+                        whether it is a sprite or a room tile
+<code>room_number()</code>       which room you are in
+<code>paused()</code>            is the game paused?
 <code>clicked("Play")</code>     did you just click that button?
 <code>room_changed</code>        did the room just change? <code>room_changed(2)</code> asks
                         whether it changed to room 2
@@ -5326,6 +5390,12 @@ the screen stop you.
 <code>ending("You win!")</code>  everything stops, the picture fades to black,
                           and those words appear. That is the end.
                           (<code>theend()</code> is the same)
+<code>pause()</code>  <code>resume()</code>     stop the game where it is, and start it again.
+                          <b>P</b> always works too, so you can never get stuck.
+<code>roomhide(12, 3)</code>    every tile painted with sprite 12 behaves and
+                          looks like sprite 3 instead. Leave the second
+                          number out and they vanish altogether.
+<code>roomshow(12)</code>       puts them back as they were
 <code>chatbot("Hi!")</code>      a dialogue box you can type answers into.
                           With a key set under ⚡ in AI mode, a real
                           model answers; otherwise it answers itself.
@@ -5604,6 +5674,18 @@ window.addEventListener("keydown", e => {
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.10.0", t:"Solid collision, room tiles, and less clutter",
+    lines:[
+      "<b>Fixed: jumping while running went straight through blocks.</b> Sideways movement was worked out at the old height and falling at the new width, so a diagonal path could cross a corner that neither check saw. Movement is now walked in small pieces with both directions tested at each one — verified against a floor-to-ceiling pillar at every speed and jump height, including a jump of 20 at speed 10.",
+      "<b>Fixed: more than one wall never worked.</b> <code>horizontal(1, 2, 5)</code> built a list inside a list, which quietly became nothing at all, so those sprites were not solid. Lists are flattened now.",
+      "<b><code>collision(1, 3)</code></b> — sprite 1 cannot walk into sprite 3. Works in every mode, including with plain <code>move()</code>, which now stops at the wall instead of going through it.",
+      "<b><code>touchinginroom(1, 3)</code></b> — is the player touching a tile you painted into the room?",
+      "<b><code>pause()</code> and <code>resume()</code></b>. <b>P</b> also toggles it, and <code>when key</code> blocks keep running while paused, so the code that unpauses you can always reach you.",
+      "<b><code>roomhide(12, 3)</code> and <code>roomshow(12)</code></b> — swap every tile of one sprite for another, or hide them, then put them back.",
+      "<b>✨ Draw me</b> in the Paint tab: describe a sprite and it draws one — hearts, stars, bricks, trees, flowers, swords, keys, ghosts, faces, monsters, in whatever colour you name. With a key set under ⚡ it asks the real model instead.",
+      "<b>New template: Room to Room</b> — a platformer over three rooms where walking off the right edge begins the next one.",
+      "<b>Removed:</b> .simple files, share links and the online gallery. Games live in My Games in this browser, and <b>⬆ Export</b> makes a web page to give to anybody."
+    ] },
   { v:"0.9.3", t:"A search box in Help",
     lines:[
       "The Help tab has a search box. Type <b>coin</b>, <b>jump</b>, <b>click</b> — the list narrows to the lines that mention it and the word is highlighted, with an explanation kept together with the command it explains.",
@@ -5777,10 +5859,9 @@ render();
 log("press ▶ Run to start. New here? Open ✦ Templates, or the ★ Learn tab.", "ok");
 
 if (window.SIMPLE_GAME){ bootStandalone(window.SIMPLE_GAME); }
-const cameFromLink = !window.SIMPLE_GAME && loadFromHash();
 
 // first ever visit: show off the templates straight away
-if (!cameFromLink && !window.SIMPLE_GAME && !localStorage.getItem("simplepp-seen")){
+if (!window.SIMPLE_GAME && !localStorage.getItem("simplepp-seen")){
   try { localStorage.setItem("simplepp-seen", "1"); } catch(e){}
   setTimeout(openGallery, 350);
 }

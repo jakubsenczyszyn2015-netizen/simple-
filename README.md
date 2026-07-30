@@ -115,6 +115,10 @@ chatbot("Hi!")         a dialogue box you can type answers into
 fps(30)                how many times a second the game moves
 vehicle(1, 2)          press E to ride sprite 2; E again to get off
 ending("You win!")     freeze, fade to black, show the words
+collision(1, 3)        sprite 1 cannot walk into sprite 3 (any mode)
+touchinginroom(1, 3)   touching a tile painted into the room?
+pause()  resume()      stop and start; P toggles it too
+roomhide(12, 3)        every sprite-12 tile acts like a 3; roomshow(12) undoes it
 ```
 
 `if ... else ... end` and `else if` work in Normal mode and up.
@@ -137,47 +141,29 @@ or Tauri for Windows, Capacitor for Android, and Capacitor plus a Mac and an
 Apple developer account for iPhone. On a phone, "add to home screen" gets you an
 icon that opens straight into the game without any of that.
 
-## Sprites from PNGs
+## Drawing sprites
+
+**✨ Draw me** asks what you want and draws it — a red heart, a gold star, a
+brick block, a green tree, a sword, a ghost, a monster. If you have connected a
+model under ⚡ in AI mode it asks that instead.
 
 The 🖼 button in the Paint tab imports an image. With **Limited colours** ticked
 the colours snap to the nearest in the palette; untick it and the picture keeps
 its own, which get added to the palette. Anything larger than 16×16 asks whether to squash it
 into one sprite or spread it across a grid of sprites.
 
-## Sharing, My Games, and the gallery
+## My Games
 
-📚 **My Games** is a library in your browser. Type a name and an author (or
-leave the author blank to stay anonymous), then:
+📚 **My Games** is a library kept in this browser. Give a game a name and an
+author, save it, and open it again whenever you like — searchable by either.
 
-- **Save here** keeps it in this browser, searchable by name or author.
-- **Share link** puts the entire game inside a URL — send it in a chat message
-  and whoever opens it has your sprites, rooms and code.
-- **Save .simple** writes the same thing as a file.
-
-🌍 **Gallery** is one list of games that everybody sees: the ones in `games/`
-plus every game posted as an issue. It keeps itself up to date while it's open.
-
-### How that works without a database
-
-GitHub Pages has no database. It serves files and nothing else. So the gallery
-*is* a file: [`games/index.json`](games/index.json) lists the games, each one a
-`.simple` file beside it, and the page fetches them when you open the tab.
-
-**Publish to gallery** opens a GitHub issue already filled in with your whole
-game — and that is the publishing step, because the gallery reads submitted
-issues directly. It also lists anything in `games/`.
-
-The list refreshes every five seconds while open. The network behind it is
-asked about once a minute, because GitHub allows sixty calls an hour from one
-address and a five-second poll would use that up in five minutes.
-Reading is instant and global; publishing goes through a human step. That is
-the honest ceiling of static hosting — instant uploads, accounts and comments
-all need a server, and this project doesn't pretend to have one.
+To give a game to somebody else, use **⬆ Export**: it writes a single `.html`
+file that plays anywhere, with no editor around it and nothing to install.
 
 ## Putting it on GitHub Pages
 
-Settings → Pages → Deploy from a branch → `main` → `/root`. That's it; the site
-is `index.html` and the `games/` folder next to it.
+Settings → Pages → Deploy from a branch → `main` → `/root`. That's it — the
+site is just `index.html`.
 
 ## Breaking the fourth wall
 
