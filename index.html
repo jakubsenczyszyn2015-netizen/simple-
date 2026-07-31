@@ -83,11 +83,11 @@
     background-size:10px 10px;background-position:0 0,5px 5px}
 
   /* ---- template gallery ---- */
-  #overlay,#png-ov,#lib-ov,#export-ov{
+  #overlay,#png-ov,#lib-ov,#export-ov,#packs-ov{
     position:fixed; inset:0; background:rgba(8,10,14,.82); z-index:50;
     display:none; align-items:center; justify-content:center; padding:24px;
   }
-  #overlay.on,#png-ov.on,#lib-ov.on,#export-ov.on{display:flex}
+  #overlay.on,#png-ov.on,#lib-ov.on,#export-ov.on,#packs-ov.on{display:flex}
   .modal{
     background:var(--panel); border:1px solid var(--line); border-radius:12px;
     max-width:900px; width:100%; max-height:100%; overflow:auto; padding:20px;
@@ -182,6 +182,7 @@
     <button id="t-code" class="on" onclick="tab('code')">1 · Code</button>
     <button id="t-paint" onclick="tab('paint')">2 · Paint</button>
     <button id="t-rooms" onclick="tab('rooms')">3 · Rooms</button>
+    <button id="t-music" onclick="tab('music')">4 · Music</button>
     <button id="t-learn" onclick="tab('learn')">★ · Learn</button>
     <button id="t-help" onclick="tab('help')">? · Help</button>
     <button id="t-changes" onclick="tab('changes')">≡ · Changelog</button>
@@ -206,6 +207,7 @@
   <button onclick="saveFile()">Save</button>
   <button onclick="document.getElementById('load').click()">Load</button>
   <input id="load" type="file" accept=".json" style="display:none" onchange="loadFile(this)">
+  <input id="musicfile" type="file" accept="audio/*" style="display:none" onchange="importMusic(this)">
   <input id="pngfile" type="file" accept="image/*" style="display:none" onchange="importPng(this)">
 </header>
 
@@ -257,7 +259,8 @@
         <button onclick="flipSpriteH()" title="Flip left to right">⇋</button>
         <button onclick="flipSpriteV()" title="Flip top to bottom">⇅</button>
         <button onclick="document.getElementById('pngfile').click()">🖼 PNG</button>
-        <button onclick="drawSomething()" style="background:#4a3a80;border-color:#6a55b8">✨ Draw me</button>
+        <button onclick="openPacks()" style="background:#4a3a80;border-color:#6a55b8">📦 Pre-made</button>
+        <button onclick="exportSpritePng()" title="Save this sprite as a picture">⬇ PNG</button>
       </div>
       <label class="row" style="gap:5px;margin-bottom:10px;flex-wrap:nowrap">
         <input id="png-limited" type="checkbox" checked style="width:auto">
@@ -319,6 +322,9 @@
     </div>
 
     <div class="pane col" style="width:190px;flex:none">
+      <h3>Tools</h3>
+      <div id="room-tools" class="row" style="margin-bottom:12px"></div>
+
       <h3>Rooms</h3>
       <div class="row" style="margin-bottom:8px">
         <button onclick="addRoom()">+ New</button>
@@ -331,6 +337,46 @@
         Right-click erases.<br><br>
         Show a room from code:<br><code>room(2)</code>
       </div>
+    </div>
+  </section>
+
+  <!-- ================= MUSIC ================= -->
+  <section id="v-music" class="view">
+    <div class="pane col" style="width:210px;flex:none">
+      <h3>Songs</h3>
+      <div class="row" style="margin-bottom:8px">
+        <button onclick="addSong()">+ New</button>
+        <button onclick="copySong()">Copy</button>
+        <button onclick="clearSong()">Clear</button>
+      </div>
+      <div id="song-list" class="list"></div>
+      <h3 style="margin-top:14px">From a file</h3>
+      <button onclick="document.getElementById('musicfile').click()">🎵 Import mp3 / wav</button>
+      <div class="hint" style="margin-top:6px">
+        An imported track replaces the written notes for that song number and plays as it is.
+      </div>
+    </div>
+
+    <div class="col" style="flex:1;min-width:0;padding:12px;overflow:auto">
+      <div class="row" style="margin-bottom:10px">
+        <button id="song-play" onclick="toggleSong()">▶ Play</button>
+        <button onclick="stopSong()">■ Stop</button>
+        <label style="flex:1;min-width:170px">Speed <span id="tempo-label"></span>
+          <input id="tempo" type="range" min="60" max="240" step="5" value="120"
+                 oninput="setTempo(this.value)" style="width:100%">
+        </label>
+        <label style="min-width:130px">Sound
+          <select id="wave" onchange="setWave(this.value)"
+                  style="width:100%;background:#0c0e13;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+            <option value="square">beepy</option>
+            <option value="triangle">soft</option>
+            <option value="sawtooth">buzzy</option>
+            <option value="sine">smooth</option>
+          </select>
+        </label>
+      </div>
+      <canvas id="song" width="768" height="384" style="width:100%;max-width:768px"></canvas>
+      <div id="song-note" class="hint" style="margin-top:8px"></div>
     </div>
   </section>
 
@@ -408,6 +454,18 @@
   </div>
 </div>
 
+<div id="packs-ov" onclick="if(event.target===this) closePacks()">
+  <div class="modal">
+    <h2>Pre-made sprites</h2>
+    <p class="sub">
+      Drawn for Simple++ and free to use in anything you make. Adding one puts it at the
+      end of your sprite list — nothing you have drawn is replaced.
+    </p>
+    <div id="packs-body"></div>
+    <div style="margin-top:16px;text-align:right"><button onclick="closePacks()">Close</button></div>
+  </div>
+</div>
+
 <div id="png-ov" onclick="if(event.target===this) closePngMenu()">
   <div class="modal" style="max-width:620px">
     <h2>That image is too big for one sprite</h2>
@@ -479,6 +537,7 @@ const blankRoom   = () => new Array(COLS * ROWS).fill(0); // 0 = empty
 
 let project = {
   mode: "normal",
+  songs: null,
   sprites: [blankSprite(), blankSprite(), blankSprite()], // index 0 -> sprite 1
   rooms:   [blankRoom()],
   code: `# welcome! press Run.
@@ -522,12 +581,13 @@ function ensureSprite(n){
    TABS
    ========================================================= */
 function tab(name){
-  for (const t of ["code","paint","rooms","learn","help","changes"]){
+  for (const t of ["code","paint","rooms","music","learn","help","changes"]){
     $("v-"+t).classList.toggle("on", t === name);
     $("t-"+t).classList.toggle("on", t === name);
   }
   if (name === "paint") { drawPaint(); drawSpriteList(); }
   if (name === "rooms") { drawRoom(); drawTileList(); drawRoomList(); }
+  if (name === "music") { drawSongList(); drawSong(); }
   if (name === "code")  $("code").focus();
 }
 
@@ -857,24 +917,125 @@ function drawRoom(){
     if (!r[i]) continue;
     blit(roomCtx, r[i], (i % COLS) * SW, Math.floor(i / COLS) * SH);
   }
+  if (roomFrom && roomTo){
+    roomCtx.globalAlpha = .6;
+    roomShape(roomTool, roomFrom, roomTo, false).forEach(([x, y]) => {
+      if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
+      if (tiling === 2){ roomCtx.fillStyle = "rgba(255,255,255,.3)"; roomCtx.fillRect(x*SW, y*SH, SW, SH); }
+      else blit(roomCtx, curTile, x*SW, y*SH);
+    });
+    roomCtx.globalAlpha = 1;
+  }
   roomCtx.strokeStyle = "rgba(255,255,255,.06)";
   for (let x = 0; x <= COLS; x++){ roomCtx.beginPath(); roomCtx.moveTo(x*SW+.5,0); roomCtx.lineTo(x*SW+.5,VH); roomCtx.stroke(); }
   for (let y = 0; y <= ROWS; y++){ roomCtx.beginPath(); roomCtx.moveTo(0,y*SH+.5); roomCtx.lineTo(VW,y*SH+.5); roomCtx.stroke(); }
 }
 
-let tiling = 0;
-function tileAt(e, erase){
-  const b = roomCv.getBoundingClientRect();
-  const x = Math.floor((e.clientX - b.left) / b.width  * COLS);
-  const y = Math.floor((e.clientY - b.top ) / b.height * ROWS);
-  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
-  project.rooms[curRoom][y*COLS+x] = erase ? 0 : curTile;
-  drawRoom(); save();
+let tiling = 0, roomTool = "pencil", roomFrom = null, roomTo = null;
+
+const ROOM_TOOLS = [
+  { id:"pencil", label:"✏️", tip:"Pencil — drag to stamp tiles" },
+  { id:"fill",   label:"🪣", tip:"Fill — flood everything joined to this tile" },
+  { id:"line",   label:"／",  tip:"Line — drag from one tile to another" },
+  { id:"box",    label:"▭",  tip:"Square — hold Shift to fill it in" },
+  { id:"circle", label:"◯",  tip:"Circle — hold Shift to fill it in" }
+];
+function buildRoomTools(){
+  const box = $("room-tools"); if (!box) return;
+  box.innerHTML = "";
+  ROOM_TOOLS.forEach(t => {
+    const b = document.createElement("button");
+    b.textContent = t.label; b.title = t.tip;
+    b.className = t.id === roomTool ? "on" : "";
+    b.style.minWidth = "38px";
+    b.onclick = () => { roomTool = t.id; buildRoomTools(); };
+    box.appendChild(b);
+  });
 }
-roomCv.addEventListener("mousedown", e => { tiling = e.button === 2 ? 2 : 1; tileAt(e, tiling === 2); });
-roomCv.addEventListener("mousemove", e => { if (tiling) tileAt(e, tiling === 2); });
-window.addEventListener("mouseup", () => tiling = 0);
+
+function roomCell(e){
+  const b = roomCv.getBoundingClientRect();
+  return { x: Math.floor((e.clientX - b.left) / b.width  * COLS),
+           y: Math.floor((e.clientY - b.top ) / b.height * ROWS) };
+}
+function setTileAt(x, y, what){
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
+  project.rooms[curRoom][y*COLS + x] = what;
+}
+function floodRoom(x, y, what){
+  const r = project.rooms[curRoom];
+  const from = r[y*COLS + x];
+  if (from === what) return;
+  const queue = [[x, y]];
+  while (queue.length){
+    const [cx, cy] = queue.pop();
+    if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) continue;
+    if (r[cy*COLS + cx] !== from) continue;
+    r[cy*COLS + cx] = what;
+    queue.push([cx+1,cy], [cx-1,cy], [cx,cy+1], [cx,cy-1]);
+  }
+}
+/* the same shapes the paint editor draws, on the tile grid */
+function roomShape(tool, a, b, filled){
+  const out = [];
+  const x0 = a.x, y0 = a.y, x1 = b.x, y1 = b.y;
+  if (tool === "line"){
+    const dx = Math.abs(x1-x0), dy = Math.abs(y1-y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy, x = x0, y = y0;
+    for (let guard = 0; guard < 4096; guard++){
+      out.push([x, y]);
+      if (x === x1 && y === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy){ err -= dy; x += sx; }
+      if (e2 <  dx){ err += dx; y += sy; }
+    }
+  } else if (tool === "box"){
+    const lx = Math.min(x0,x1), hx = Math.max(x0,x1);
+    const ly = Math.min(y0,y1), hy = Math.max(y0,y1);
+    for (let y = ly; y <= hy; y++)
+      for (let x = lx; x <= hx; x++)
+        if (filled || x === lx || x === hx || y === ly || y === hy) out.push([x, y]);
+  } else if (tool === "circle"){
+    const cx = (x0+x1)/2, cy = (y0+y1)/2;
+    const rx = Math.abs(x1-x0)/2, ry = Math.abs(y1-y0)/2;
+    for (let y = 0; y < ROWS; y++)
+      for (let x = 0; x < COLS; x++){
+        const d = ((x-cx)/(rx||.5))**2 + ((y-cy)/(ry||.5))**2;
+        if (filled ? d <= 1 : (d <= 1 && d >= 0.42)) out.push([x, y]);
+      }
+  }
+  return out;
+}
+
+roomCv.addEventListener("mousedown", e => {
+  const c = roomCell(e);
+  const erase = e.button === 2;
+  tiling = erase ? 2 : 1;
+  const what = erase ? 0 : curTile;
+
+  if (roomTool === "fill"){ floodRoom(c.x, c.y, what); tiling = 0; afterRoom(); return; }
+  if (roomTool !== "pencil"){ roomFrom = c; roomTo = c; drawRoom(); return; }
+  setTileAt(c.x, c.y, what); afterRoom();
+});
+roomCv.addEventListener("mousemove", e => {
+  if (!tiling) return;
+  const c = roomCell(e);
+  if (roomFrom){ roomTo = c; drawRoom(); return; }
+  setTileAt(c.x, c.y, tiling === 2 ? 0 : curTile);
+  afterRoom();
+});
+window.addEventListener("mouseup", e => {
+  if (roomFrom && roomTo){
+    const what = tiling === 2 ? 0 : curTile;
+    roomShape(roomTool, roomFrom, roomTo, e.shiftKey).forEach(([x,y]) => setTileAt(x, y, what));
+    afterRoom();
+  }
+  tiling = 0; roomFrom = roomTo = null;
+});
 roomCv.addEventListener("contextmenu", e => e.preventDefault());
+
+function afterRoom(){ ROOM_EPOCH++; drawRoom(); drawStageInfo(); save(); }
 
 function drawTileList(){
   const box = $("tile-list"); box.innerHTML = "";
@@ -1298,7 +1459,10 @@ function stageClick(e){
   for (const q of buttonRects()){
     if (mx >= q.x && mx <= q.x + q.w && my >= q.y && my <= q.y + q.h){
       R.clicks.push(q.b.label);
-      if (q.b.play){ R.titlesShown[R.title] = true; R.title = null; R.buttons = []; R.startDone = false; }
+      if (q.b.play){
+        R.titlesShown[R.title] = true; R.title = null; R.buttons = []; R.startDone = false;
+        stopSong();                       // the title tune ends when the game begins
+      }
       beep(2);
       return;
     }
@@ -1779,9 +1943,10 @@ function runCall(st){
                       break; }
     /* ---- title screens ---- */
     case "title": case "titlescreen": case "title_screen": {
-      const [name] = A();
+      const [name, track] = A();
       if (R.titlesShown[String(name)]) break;      // already dismissed, carry on
       showTitle(name);
+      if (track) playSong(Math.round(track), true);
       collectTitleButtons(R.prog);
       throw new Wait(0);                            // hold everything until Play
     }
@@ -1870,6 +2035,13 @@ function runCall(st){
       setFps(R.fps, true);
       break; }
 
+    /* ---- music ---- */
+    case "music": { const [n, loop] = A();
+                    const k = Math.round(n);
+                    if (!k) stopSong(); else playSong(k, loop === undefined ? true : !!loop);
+                    break; }
+    case "stopmusic": case "stop_music": { stopSong(); break; }
+
     /* ---- stopping and starting again ---- */
     case "pause": { R.paused = true; break; }
     case "resume": case "unpause": { R.paused = false; break; }
@@ -1919,9 +2091,13 @@ function runCall(st){
 
     /* ---- title screens, coming and going ---- */
     case "fancytitle": case "fancy_title": {
-      showTitle(A()[0], "drop"); collectTitleButtons(R.prog); throw new Wait(0); }
+      const [nm, tr] = A();
+      showTitle(nm, "drop"); if (tr) playSong(Math.round(tr), true);
+      collectTitleButtons(R.prog); throw new Wait(0); }
     case "fanciertitle": case "fancier_title": {
-      showTitle(A()[0], "spin"); collectTitleButtons(R.prog); throw new Wait(0); }
+      const [nm2, tr2] = A();
+      showTitle(nm2, "spin"); if (tr2) playSong(Math.round(tr2), true);
+      collectTitleButtons(R.prog); throw new Wait(0); }
     case "exittitle": case "exit_title": case "exittitlescreen": {
       if (R.title){ R.titlesShown[R.title] = true; R.title = null; R.buttons = []; }
       break; }
@@ -2092,6 +2268,7 @@ function doReset(){
 function stop(){
   R.running = false;
   cancelAnimationFrame(R.raf);
+  if (typeof stopSong === "function") stopSong();
 }
 
 function safe(body, what){
@@ -4683,217 +4860,499 @@ function showAICode(){
   log("here is the code — it is yours now, change anything you like.", "ok");
 }
 
+
 /* =========================================================
-   DRAW ME SOMETHING
-   Describe a sprite and it draws one. There is no picture library
-   here: each shape is assembled from rules — a body, then whatever
-   the words ask for on top — so it works offline and gives you
-   something different every time you press it. If a real model is
-   connected in AI mode it asks that instead and uses the grid it
-   sends back.
+   MUSIC
+   A song is a grid: time along the bottom, pitch up the side.
+   The notes are a five-note scale, so anything you click sounds
+   like it belongs. A song can also be an imported file instead,
+   in which case it plays as it is.
    ========================================================= */
-const ART_COLOURS = {
-  red:8, crimson:8, blood:8, orange:9, gold:10, yellow:10, green:11, lime:11,
-  blue:12, sky:12, cyan:12, purple:13, violet:13, pink:14, magenta:14,
-  white:7, grey:6, gray:6, silver:6, black:0, brown:4, tan:15, skin:15,
-  dark:5, navy:1, teal:3
-};
-function colourFrom(words, dflt){
-  for (const w of words) if (ART_COLOURS[w] !== undefined) return ART_COLOURS[w];
-  return dflt;
+const SONG_STEPS = 32, SONG_ROWS = 15;
+/* C major pentatonic over three octaves — no wrong notes */
+const SCALE = [0, 2, 4, 7, 9];
+function rowFreq(row){
+  const n = SONG_ROWS - 1 - row;                    // low notes at the bottom
+  const semis = SCALE[n % SCALE.length] + 12 * Math.floor(n / SCALE.length);
+  return 220 * Math.pow(2, semis / 12);
+}
+function rowName(row){
+  const names = ["C", "D", "E", "G", "A"];
+  const n = SONG_ROWS - 1 - row;
+  return names[n % SCALE.length] + (3 + Math.floor(n / SCALE.length));
 }
 
-/* the shapes it knows how to build */
-const ART_SHAPES = {
-  heart: (g, c) => {
-    forEach(g, (x, y, w, h) => {
-      const fx = (x + .5) / w * 2 - 1, fy = (y + .5) / h * 2 - 1;
-      const v = Math.pow(fx*fx + fy*fy - 0.34, 3) - fx*fx * Math.pow(fy*fy, 3) * 1.2;
-      if (fy < 0.85 && v < 0) g.set(x, y, c);
-    });
-  },
-  star: (g, c) => {
-    forEach(g, (x, y, w, h) => {
-      const fx = (x + .5) / w * 2 - 1, fy = (y + .5) / h * 2 - 1;
-      const a = Math.atan2(fy, fx), r = Math.hypot(fx, fy);
-      const spike = 0.42 + 0.42 * Math.abs(Math.cos(a * 2.5));
-      if (r < spike) g.set(x, y, c);
-    });
-  },
-  ball: (g, c) => {
-    forEach(g, (x, y, w, h) => {
-      const fx = (x + .5) / w * 2 - 1, fy = (y + .5) / h * 2 - 1;
-      if (fx*fx + fy*fy < 0.82) g.set(x, y, c);
-    });
-  },
-  block: (g, c) => {
-    forEach(g, (x, y, w, h) => g.set(x, y, c));
-    forEach(g, (x, y, w, h) => { if (x === 0 || y === 0 || x === w-1 || y === h-1) g.set(x, y, 5); });
-  },
-  tree: (g, c) => {
-    const w = g.w, h = g.h;
-    forEach(g, (x, y) => {
-      if (y > h * 0.62 && Math.abs(x - w/2 + 0.5) < w * 0.09) g.set(x, y, 4);
-    });
-    forEach(g, (x, y) => {
-      const fx = (x + .5) / w * 2 - 1, fy = (y + .5) / (h * 0.7) * 2 - 1;
-      if (fx*fx * 1.1 + fy*fy < 0.9) g.set(x, y, c);
-    });
-  },
-  flower: (g, c) => {
-    const w = g.w, h = g.h;
-    forEach(g, (x, y) => { if (y > h*0.55 && Math.abs(x - w/2 + 0.5) < 1) g.set(x, y, 11); });
-    const cx = w/2 - .5, cy = h*0.33;
-    for (let i = 0; i < 6; i++){
-      const a = i / 6 * Math.PI * 2;
-      g.blob(cx + Math.cos(a) * w*0.22, cy + Math.sin(a) * h*0.18, w*0.13, c);
-    }
-    g.blob(cx, cy, w*0.11, 10);
-  },
-  sword: (g, c) => {
-    const w = g.w, h = g.h;
-    forEach(g, (x, y) => {
-      if (Math.abs(x - w/2 + 0.5) < w*0.08 && y < h*0.72) g.set(x, y, c);        // blade
-      if (y > h*0.62 && y < h*0.72 && Math.abs(x - w/2 + 0.5) < w*0.3) g.set(x, y, 9);  // guard
-      if (Math.abs(x - w/2 + 0.5) < w*0.07 && y >= h*0.72) g.set(x, y, 4);       // grip
-    });
-  },
-  key: (g, c) => {
-    const w = g.w, h = g.h;
-    g.ring(w*0.32, h*0.32, w*0.2, c);
-    forEach(g, (x, y) => {
-      if (Math.abs(y - h*0.55) < h*0.07 && x > w*0.35) g.set(x, y, c);
-      if (x > w*0.72 && y > h*0.55 && y < h*0.75 && (x % 3 === 0)) g.set(x, y, c);
-    });
-  },
-  ghost: (g, c) => {
-    const w = g.w, h = g.h;
-    forEach(g, (x, y) => {
-      const fx = (x + .5) / w * 2 - 1;
-      if (y < h*0.55 && fx*fx + Math.pow((y/h - 0.3) * 3, 2) < 1) g.set(x, y, c);
-      if (y >= h*0.5 && y < h*0.85 && Math.abs(fx) < 0.86) g.set(x, y, c);
-      if (y >= h*0.85 && Math.abs(fx) < 0.86 && (Math.floor(x / Math.max(1, w/5)) % 2 === 0)) g.set(x, y, c);
-    });
-    g.eyes(0);
-  },
-  face: (g, c) => {
-    const w = g.w, h = g.h;
-    forEach(g, (x, y) => {
-      const fx = (x + .5) / w * 2 - 1, fy = (y + .5) / h * 2 - 1;
-      if (fx*fx + fy*fy < 0.8) g.set(x, y, c);
-    });
-    g.eyes(0);
-    g.mouth(0);
-  },
-  creature: (g, c) => {
-    const w = g.w, h = g.h;
-    // a symmetrical body, different every time
-    for (let y = Math.floor(h*0.15); y < h*0.9; y++)
-      for (let x = 0; x < Math.ceil(w/2); x++){
-        const edge = Math.abs(x - w*0.28) / w + Math.abs(y - h*0.5) / h;
-        if (Math.random() > edge * 2.2){ g.set(x, y, c); g.set(w-1-x, y, c); }
-      }
-    g.eyes(7);
+function blankSong(){
+  return { grid: new Array(SONG_STEPS * SONG_ROWS).fill(0),
+           tempo: 120, wave: "square", audio: null, name: "" };
+}
+let curSong = 0;
+
+function songs(){
+  if (!project.songs || !project.songs.length) project.songs = [blankSong()];
+  return project.songs;
+}
+function song(n){
+  const list = songs();
+  while (list.length < n) list.push(blankSong());
+  return list[n - 1];
+}
+
+/* ---------- the grid ---------- */
+const songCv = $("song"), songCtx = songCv.getContext("2d");
+const CELL_W = songCv.width / SONG_STEPS, CELL_H = songCv.height / SONG_ROWS;
+
+function drawSong(){
+  const sg = song(curSong + 1);
+  songCtx.fillStyle = "#0c0e13";
+  songCtx.fillRect(0, 0, songCv.width, songCv.height);
+
+  if (sg.audio){
+    songCtx.fillStyle = "#8b95ab";
+    songCtx.font = "16px ui-monospace,monospace";
+    songCtx.textAlign = "center";
+    songCtx.fillText("song " + (curSong + 1) + " is an imported file", songCv.width/2, songCv.height/2 - 10);
+    songCtx.fillText("(" + (sg.name || "sound") + ")", songCv.width/2, songCv.height/2 + 14);
+    songCtx.font = "13px ui-monospace,monospace";
+    songCtx.fillText("press Clear to write your own notes instead", songCv.width/2, songCv.height/2 + 44);
+    songCtx.textAlign = "left";
+    $("song-note").textContent = "";
+    return;
   }
-};
-function forEach(g, fn){
-  for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) fn(x, y, g.w, g.h);
-}
 
-function newGrid(){
-  const px = blankSprite();
-  return {
-    w: SW, h: SH, px,
-    set(x, y, c){ x = Math.round(x); y = Math.round(y);
-                  if (x >= 0 && y >= 0 && x < SW && y < SH) px[y*SW+x] = c; },
-    blob(cx, cy, r, c){
-      for (let y = Math.floor(cy-r); y <= cy+r; y++)
-        for (let x = Math.floor(cx-r); x <= cx+r; x++)
-          if ((x-cx)**2 + (y-cy)**2 <= r*r) this.set(x, y, c);
-    },
-    ring(cx, cy, r, c){
-      for (let y = Math.floor(cy-r); y <= cy+r; y++)
-        for (let x = Math.floor(cx-r); x <= cx+r; x++){
-          const d = Math.hypot(x-cx, y-cy);
-          if (d <= r && d >= r - Math.max(1, r*0.4)) this.set(x, y, c);
-        }
-    },
-    eyes(c){
-      const ey = Math.floor(this.h * 0.4);
-      this.blob(this.w * 0.34, ey, Math.max(0.6, this.w*0.07), c);
-      this.blob(this.w * 0.66, ey, Math.max(0.6, this.w*0.07), c);
-    },
-    mouth(c){
-      const my = Math.floor(this.h * 0.62);
-      for (let x = Math.floor(this.w*0.36); x <= this.w*0.64; x++) this.set(x, my, c);
+  for (let r = 0; r < SONG_ROWS; r++){
+    for (let c = 0; c < SONG_STEPS; c++){
+      const on = sg.grid[r * SONG_STEPS + c];
+      const beat = c % 4 === 0;
+      songCtx.fillStyle = on ? PALETTE[8 + (r % 6)] : (beat ? "#191d26" : "#12151c");
+      songCtx.fillRect(c*CELL_W + 1, r*CELL_H + 1, CELL_W - 2, CELL_H - 2);
     }
-  };
+  }
+  if (musicState.playing && musicState.song === curSong + 1){
+    songCtx.fillStyle = "rgba(255,255,255,.18)";
+    songCtx.fillRect(musicState.step * CELL_W, 0, CELL_W, songCv.height);
+  }
+  $("tempo-label").textContent = sg.tempo + " bpm";
+  $("wave").value = sg.wave;
+  $("tempo").value = sg.tempo;
 }
 
-const ART_WORDS = [
-  [/heart|love/, "heart", 8], [/star|sparkle/, "star", 10],
-  [/coin|ball|circle|dot|moon|sun|gem|orb|bubble/, "ball", 10],
-  [/block|brick|crate|box|wall|stone|ground|platform|tile/, "block", 4],
-  [/tree|bush/, "tree", 11], [/flower|rose|daisy|plant/, "flower", 14],
-  [/sword|blade|knife|dagger/, "sword", 6], [/key/, "key", 10],
-  [/ghost|spirit|slime|blob/, "ghost", 7],
-  [/face|player|guy|person|hero|smiley|head|character/, "face", 9]
+let painting_song = 0;
+function songCell(e){
+  const r = songCv.getBoundingClientRect();
+  return { c: Math.floor((e.clientX - r.left) / r.width * SONG_STEPS),
+           r: Math.floor((e.clientY - r.top) / r.height * SONG_ROWS) };
+}
+songCv.addEventListener("mousedown", e => {
+  const sg = song(curSong + 1);
+  if (sg.audio) return;
+  const { c, r } = songCell(e);
+  if (c < 0 || r < 0 || c >= SONG_STEPS || r >= SONG_ROWS) return;
+  painting_song = sg.grid[r*SONG_STEPS + c] ? 2 : 1;      // drag to draw or to rub out
+  setNote(c, r, painting_song === 1);
+});
+songCv.addEventListener("mousemove", e => {
+  const { c, r } = songCell(e);
+  if (c >= 0 && r >= 0 && c < SONG_STEPS && r < SONG_ROWS)
+    $("song-note").textContent = "step " + (c + 1) + " · note " + rowName(r);
+  if (!painting_song) return;
+  setNote(c, r, painting_song === 1);
+});
+window.addEventListener("mouseup", () => painting_song = 0);
+
+function setNote(c, r, on){
+  if (c < 0 || r < 0 || c >= SONG_STEPS || r >= SONG_ROWS) return;
+  const sg = song(curSong + 1);
+  const was = sg.grid[r*SONG_STEPS + c];
+  sg.grid[r*SONG_STEPS + c] = on ? 1 : 0;
+  if (on && !was) blip(rowFreq(r), sg.wave, 0.12);
+  drawSong(); save();
+}
+
+/* ---------- the list ---------- */
+function drawSongList(){
+  const box = $("song-list"); if (!box) return;
+  box.innerHTML = "";
+  songs().forEach((sg, i) => {
+    const b = document.createElement("button");
+    const notes = sg.audio ? "file" : sg.grid.filter(Boolean).length + " notes";
+    b.textContent = "Song " + (i + 1) + " — " + notes;
+    if (i === curSong) b.className = "on";
+    b.onclick = () => { curSong = i; drawSongList(); drawSong(); };
+    box.appendChild(b);
+  });
+}
+function addSong(){ songs().push(blankSong()); curSong = songs().length - 1; drawSongList(); drawSong(); save(); }
+function copySong(){
+  const sg = song(curSong + 1);
+  songs().push({ grid: sg.grid.slice(), tempo: sg.tempo, wave: sg.wave, audio: sg.audio, name: sg.name });
+  curSong = songs().length - 1; drawSongList(); drawSong(); save();
+}
+function clearSong(){
+  songs()[curSong] = blankSong();
+  drawSongList(); drawSong(); save();
+}
+function setTempo(v){ song(curSong + 1).tempo = Math.round(+v); drawSong(); save(); }
+function setWave(v){ song(curSong + 1).wave = v; drawSong(); save(); }
+
+/* ---------- playing ---------- */
+const musicState = { playing:false, song:0, step:0, timer:null, el:null, loop:true };
+
+function audioCtx(){
+  audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+  return audio;
+}
+function blip(freq, wave, len){
+  try {
+    const ac = audioCtx();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = wave || "square";
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(.16, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + (len || .2));
+    o.connect(g); g.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + (len || .2) + .02);
+  } catch(e){}
+}
+
+function playSong(n, loop){
+  stopSong();
+  const sg = songs()[n - 1];
+  if (!sg) return;
+  musicState.playing = true;
+  musicState.song = n;
+  musicState.step = 0;
+  musicState.loop = loop !== false;
+
+  if (sg.audio){                                   // an imported file
+    try {
+      const el = new Audio(sg.audio);
+      el.loop = musicState.loop;
+      el.volume = 0.7;
+      el.play().catch(() => log("the browser would not start the music until you click something", "err"));
+      musicState.el = el;
+    } catch(e){}
+    updatePlayButton();
+    return;
+  }
+
+  const stepMs = 60000 / sg.tempo / 4;             // four steps to a beat
+  musicState.timer = setInterval(() => {
+    const st = musicState.step;
+    for (let r = 0; r < SONG_ROWS; r++)
+      if (sg.grid[r*SONG_STEPS + st]) blip(rowFreq(r), sg.wave, stepMs / 1000 * 1.6);
+    musicState.step = st + 1;
+    if (musicState.step >= SONG_STEPS){
+      if (musicState.loop) musicState.step = 0;
+      else { stopSong(); return; }
+    }
+    if ($("v-music").classList.contains("on")) drawSong();
+  }, stepMs);
+  updatePlayButton();
+}
+function stopSong(){
+  if (musicState.timer) clearInterval(musicState.timer);
+  if (musicState.el){ musicState.el.pause(); musicState.el = null; }
+  musicState.timer = null;
+  musicState.playing = false;
+  musicState.step = 0;
+  updatePlayButton();
+  if ($("v-music") && $("v-music").classList.contains("on")) drawSong();
+}
+function toggleSong(){
+  if (musicState.playing) stopSong();
+  else playSong(curSong + 1, true);
+}
+function updatePlayButton(){
+  const b = $("song-play");
+  if (b) b.textContent = musicState.playing ? "❚❚ Pause" : "▶ Play";
+}
+
+/* ---------- importing ---------- */
+function importMusic(input){
+  const f = input.files[0]; if (!f) return;
+  input.value = "";
+  const mb = f.size / 1024 / 1024;
+  if (mb > 4){
+    alert("That file is " + mb.toFixed(1) + " MB.\n\n" +
+          "Music is kept inside the project, and a browser only allows a few megabytes " +
+          "of storage, so anything this big would push your sprites and rooms out. " +
+          "Try a shorter clip, or a smaller file.");
+    return;
+  }
+  if (mb > 1.5 && !confirm("That file is " + mb.toFixed(1) + " MB.\n\n" +
+        "It is stored inside your project, so saving may start to fail if you add much more. " +
+        "Import it anyway?")) return;
+
+  const r = new FileReader();
+  r.onload = () => {
+    const sg = song(curSong + 1);
+    sg.audio = r.result;
+    sg.name = f.name;
+    drawSongList(); drawSong();
+    if (!saveOrSayNo()){ sg.audio = null; sg.name = ""; drawSongList(); drawSong(); }
+    else log("imported " + f.name + " as song " + (curSong + 1), "ok");
+  };
+  r.readAsDataURL(f);
+}
+/* a save that admits when it could not */
+function saveOrSayNo(){
+  try { save(); return true; }
+  catch(e){ alert("There is not enough room in this browser to keep that."); return false; }
+}
+
+/* =========================================================
+   SPRITES OUT AS PICTURES
+   ========================================================= */
+function spriteToPngUrl(n, scale){
+  const cv = document.createElement("canvas");
+  cv.width = SW * scale; cv.height = SH * scale;
+  const c = cv.getContext("2d");
+  c.imageSmoothingEnabled = false;
+  const src = spriteCanvas(n);
+  if (src) c.drawImage(src, 0, 0, cv.width, cv.height);
+  return cv.toDataURL("image/png");
+}
+function exportSpritePng(){
+  const which = prompt(
+    "Save sprite " + (curSprite + 1) + " as a picture.\n\n" +
+    "How big? 1 means one pixel each, 8 makes it eight times bigger so it is\n" +
+    "easy to see. Type ALL to save every sprite as one sheet instead.", "8");
+  if (which === null) return;
+
+  if (String(which).trim().toUpperCase() === "ALL") return exportSheetPng();
+  const scale = Math.max(1, Math.min(32, parseInt(which, 10) || 8));
+  const a = document.createElement("a");
+  a.href = spriteToPngUrl(curSprite + 1, scale);
+  a.download = "sprite-" + (curSprite + 1) + ".png";
+  a.click();
+  log("saved sprite " + (curSprite + 1) + " as a picture", "ok");
+}
+function exportSheetPng(){
+  const n = project.sprites.length;
+  const cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
+  const scale = 4;
+  const cv = document.createElement("canvas");
+  cv.width = cols * SW * scale; cv.height = rows * SH * scale;
+  const c = cv.getContext("2d");
+  c.imageSmoothingEnabled = false;
+  for (let i = 0; i < n; i++){
+    const src = spriteCanvas(i + 1);
+    if (src) c.drawImage(src, (i % cols) * SW * scale, Math.floor(i / cols) * SH * scale,
+                         SW * scale, SH * scale);
+  }
+  const a = document.createElement("a");
+  a.href = cv.toDataURL("image/png");
+  a.download = "sprites.png";
+  a.click();
+  log("saved all " + n + " sprites as one sheet (" + cols + " across)", "ok");
+}
+
+/* =========================================================
+   PRE-MADE SPRITES
+   Everything here is drawn for Simple++ and free to use in
+   anything you make.
+   ========================================================= */
+const PACKS = [
+  { name:"Template sprites", about:"Every sprite the built-in templates use.",
+    keys:["face","brick","star","coin","paddle","ball","ship","rock","wall","grass","heart","goal"] },
+  { name:"Platformer pack", about:"A runner, blocks, a spring, a spike and a ring to collect.",
+    keys:["runner","runner2","ground","ledge","springpad","spike","ring","checkpoint"] },
+  { name:"Space pack", about:"A ship, rocks, a star field tile and a laser bolt.",
+    keys:["ship","rock","stars","bolt","alien","shield"] },
+  { name:"Dungeon pack", about:"Walls, a door, a key, a chest, a torch and a slime.",
+    keys:["dwall","dfloor","door2","key2","chest","torch","slime"] }
 ];
 
-async function drawSomething(){
-  const wish = prompt(
-    "What should I draw?\n\n" +
-    "Try: a red heart · gold star · brick block · green tree · pink flower ·\n" +
-    "a sword · a key · a blue ghost · a face · a monster", "a red heart");
-  if (wish === null || !wish.trim()) return;
+/* the extra artwork the packs need */
+Object.assign(ART, {
+  runner: art([
+    "................","......7777......",".....799997.....",".....790097.....",
+    ".....799997.....","......8888......",".....888888.....","....88888888....",
+    "....8.8888.8....","....8.8888.8....","......8888......","......9..9......",
+    ".....99..99.....","....999..999....","................","................"]),
+  runner2: art([
+    "................","......7777......",".....799997.....",".....790097.....",
+    ".....799997.....","......8888......","....8888888.....","...888888888....",
+    "...8..8888..8...","......8888......","......8888......",".....9....9.....",
+    "....99......99..","...999.......9..","................","................"]),
+  ground: art([
+    "3333333333333333","3bb3b3bb3b33bb33","4444444444444444","4454444544454444",
+    "4444544444444544","4444444454444444","4544444444445444","4444445444444444",
+    "4444444444544444","4454444444444454","4444454444444444","4444444445444444",
+    "4544444444444544","4444444544444444","4444444444444444","4444444444444444"]),
+  ledge: art([
+    "6666666666666666","6777777777777776","6777777777777776","6666666666666666",
+    "................","................","................","................",
+    "................","................","................","................",
+    "................","................","................","................"]),
+  springpad: art([
+    "................","................","................","................",
+    "................","................","................","......bbbb......",
+    ".....bbbbbb.....","....bb....bb....","....b......b....","...bbbbbbbbbb...",
+    "...b666666666b..","...bbbbbbbbbb...","................","................"]),
+  spike: art([
+    "................","................","................","................",
+    "................","................","................",".......66.......",
+    "......6666......","......6776......",".....677776.....",".....677776.....",
+    "....67777776....","...6777777776...","..677777777776..","6666666666666666"]),
+  ring: art([
+    "................","................",".....aaaaaa.....","....aa9999aa....",
+    "...aa9....9aa...","...a9......9a...","..aa9......9aa..","..a9........9a..",
+    "..a9........9a..","..aa9......9aa..","...a9......9a...","...aa9....9aa...",
+    "....aa9999aa....",".....aaaaaa.....","................","................"]),
+  checkpoint: art([
+    ".......66.......",".......66.......",".......6bbbbbb..",".......6bbbbbb..",
+    ".......6bb77bb..",".......6bbbbbb..",".......6bbbbbb..",".......66.......",
+    ".......66.......",".......66.......",".......66.......",".......66.......",
+    ".......66.......",".......66.......","......6666......","......6666......"]),
+  stars: art([
+    "1111111111111111","1117111111111711","1111111111111111","1111111111711111",
+    "1711111111111111","1111111711111111","1111111111111111","1111711111111171",
+    "1111111111111111","1117111111111111","1111111111711111","1111111111111111",
+    "1711111111111117","1111111111111111","1111171111111111","1111111111111111"]),
+  bolt: art([
+    "................","................","................","................",
+    "................","......8888......",".....888888.....","....88999988....",
+    "....88999988....",".....888888.....","......8888......","................",
+    "................","................","................","................"]),
+  alien: art([
+    "................","................","...bb......bb...","....bb....bb....",
+    "...bbbbbbbbbb...","..bbb0bbbb0bbb..","..bbbbbbbbbbbb..","..bb00bbbb00bb..",
+    "..bbbbbbbbbbbb..","..bb.bbbbbb.bb..","..b..b....b..b..","................",
+    "................","................","................","................"]),
+  shield: art([
+    "................","................","....cccccccc....","...c77777777c...",
+    "...c7cccccc7c...","...c7c7777c7c...","...c7c7cc7c7c...","...c7c7cc7c7c...",
+    "...c7c7777c7c...","...c7cccccc7c...","....c777777c....","....cc7777cc....",
+    ".....cc77cc.....","......cccc......","................","................"]),
+  dwall: art([
+    "5555555555555555","5666655666655665","5666655666655665","5555555555555555",
+    "6655666655666556","6655666655666556","5555555555555555","5566665566665566",
+    "5566665566665566","5555555555555555","6655666655666556","6655666655666556",
+    "5555555555555555","5666655666655665","5666655666655665","5555555555555555"]),
+  dfloor: art([
+    "5555555555555555","5444444444444445","5444444544444445","5444444444444445",
+    "5445444444445445","5444444444444445","5444444444444445","5555555555555555",
+    "5444444444444445","5444544444454445","5444444444444445","5444444444444445",
+    "5444444444444445","5445444444444445","5444444444444445","5555555555555555"]),
+  door2: art([
+    "................","....44444444....","...4444444444...","...44becccb44...",
+    "...44ecccccb4...","...44ecccccb4...","...44ecc9ccb4...","...44ecccccb4...",
+    "...44ecccccb4...","...44ecccccb4...","...44ecccccb4...","...44ecccccb4...",
+    "...44ecccccb4...","...4444444444...","...4444444444...","................"]),
+  key2: art([
+    "................","................","....aaaa........","...a9999a.......",
+    "...a9..9a.......","...a9..9a.......","...a9999a.......","....aaaaaaaaa...",
+    "................",".........a...a..",".........a...a..",".........aaaaa..",
+    "................","................","................","................"]),
+  chest: art([
+    "................","................","................","....99999999....",
+    "...9aaaaaaaa9...","...9a9999999a...","...99999999999..","...944444444449.",
+    "...94aaaaaaaa49.","...94a999999a49.","...94a9aaaa9a49.","...94a999999a49.",
+    "...94aaaaaaaa49.","...944444444449.","...99999999999..","................"]),
+  torch: art([
+    "................","................",".......99.......","......9aa9......",
+    ".....9aa9a9.....",".....9a99a9.....","......9aa9......",".......99.......",
+    ".......44.......",".......44.......",".......44.......",".......44.......",
+    ".......44.......","................","................","................"]),
+  slime: art([
+    "................","................","................","................",
+    "......3333......",".....333333.....","....33333333....","...3330330333...",
+    "...3333333333...","..333333333333..","..333333333333..","..333333333333..",
+    "..333.333333.33.","..33...3333...3.","................","................"])
+});
 
-  const words = wish.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+let packOpen = -1;
+function openPacks(){ packOpen = -1; $("packs-ov").classList.add("on"); drawPacks(); }
+function closePacks(){ $("packs-ov").classList.remove("on"); }
 
-  if (aiKey()){                       // a real model is connected — let it draw
-    try {
-      const px = await askModelForArt(wish);
-      project.sprites[curSprite] = px;
-      afterDrawn(wish, "the model");
-      return;
-    } catch(e){ log("the model would not draw that (" + e.message + ") — drawing it here instead", "err"); }
+function drawPacks(){
+  const box = $("packs-body");
+  box.innerHTML = "";
+
+  if (packOpen < 0){
+    const grid = document.createElement("div");
+    grid.className = "cards";
+    PACKS.forEach((pk, i) => {
+      const d = document.createElement("div");
+      d.className = "card";
+      d.innerHTML = `<b>${pk.name}</b><span>${pk.about}</span>`;
+      const strip = document.createElement("div"); strip.className = "art";
+      pk.keys.slice(0, 6).forEach(k => strip.appendChild(packThumb(k)));
+      d.appendChild(strip);
+      d.onclick = () => { packOpen = i; drawPacks(); };
+      grid.appendChild(d);
+    });
+    box.appendChild(grid);
+    return;
   }
 
-  let shape = "creature", base = 12;
-  for (const [re, name, colour] of ART_WORDS)
-    if (re.test(wish.toLowerCase())){ shape = name; base = colour; break; }
+  const pk = PACKS[packOpen];
+  const head = document.createElement("div");
+  head.className = "row";
+  head.style.marginBottom = "12px";
+  const back = document.createElement("button");
+  back.textContent = "← All packs";
+  back.onclick = () => { packOpen = -1; drawPacks(); };
+  const all = document.createElement("button");
+  all.textContent = "Add all " + pk.keys.length;
+  all.onclick = () => { pk.keys.forEach(addPackSprite); closePacks();
+                        log("added " + pk.keys.length + " sprites from " + pk.name, "ok"); };
+  head.append(back, all);
+  box.appendChild(head);
 
-  const g = newGrid();
-  ART_SHAPES[shape](g, colourFrom(words, base));
-  project.sprites[curSprite] = g.px;
-  afterDrawn(wish, shape);
+  const note = document.createElement("div");
+  note.className = "hint";
+  note.style.marginBottom = "10px";
+  note.textContent = "Click any one to add it on its own.";
+  box.appendChild(note);
+
+  const grid = document.createElement("div");
+  grid.className = "cards";
+  grid.style.gridTemplateColumns = "repeat(auto-fill,minmax(96px,1fr))";
+  pk.keys.forEach(k => {
+    const d = document.createElement("div");
+    d.className = "card";
+    d.style.textAlign = "center";
+    d.appendChild(packThumb(k, 56));
+    const b = document.createElement("b");
+    b.textContent = k;
+    b.style.fontSize = "11px";
+    d.appendChild(b);
+    d.onclick = () => { const n = addPackSprite(k); closePacks();
+                        log("added " + k + " as sprite " + n, "ok"); };
+    grid.appendChild(d);
+  });
+  box.appendChild(grid);
 }
 
-function afterDrawn(wish, how){
-  spriteCache.delete(curSprite + 1);
+function packThumb(key, size){
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 16;
+  cv.style.width = cv.style.height = (size || 26) + "px";
+  cv.style.background = "#0c0e13";
+  cv.style.borderRadius = "3px";
+  const c = cv.getContext("2d");
+  const px = ART[key];
+  if (px) for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++){
+    const v = px[y*16+x];
+    if (v < 0) continue;
+    c.fillStyle = BASE_PALETTE[v] || "#fff";
+    c.fillRect(x, y, 1, 1);
+  }
+  return cv;
+}
+
+/* the artwork is drawn at 16x16, so stretch it if this project is bigger */
+function addPackSprite(key){
+  const px = ART[key];
+  if (!px) return 0;
+  project.sprites.push(SW === 16 ? px.slice() : resampleSprite(px, 16, 16, SW, SH));
+  curSprite = project.sprites.length - 1;
   SPRITE_EPOCH++;
-  drawPaint(); drawSpriteList(); drawRoom(); save();
-  log("drew \u201c" + wish + "\u201d into sprite " + (curSprite + 1) + " (" + how + ")", "ok");
-}
-
-/* if a key is set, ask the model for a grid of palette numbers */
-async function askModelForArt(wish){
-  const list = PALETTE.map((c, i) => i + "=" + c).join(" ");
-  const out = await callModel(
-    "You draw tiny pixel art. Reply with ONLY " + SH + " lines of " + SW +
-    " numbers separated by spaces — nothing else, no words, no code fence. " +
-    "Each number is a colour: " + list + ", or -1 for see-through. " +
-    "Fill most of the square and keep it recognisable at this size.",
-    [{ role:"user", content: "Draw: " + wish }], 1500);
-
-  const rows = out.trim().split("\n").map(r => r.trim().split(/[\s,]+/).map(Number));
-  const px = blankSprite();
-  for (let y = 0; y < SH; y++)
-    for (let x = 0; x < SW; x++){
-      const v = (rows[y] || [])[x];
-      px[y*SW+x] = (typeof v === "number" && !isNaN(v) && v >= 0 && v < PALETTE.length) ? v : -1;
-    }
-  if (px.every(v => v < 0)) throw new Error("nothing usable came back");
-  return px;
+  drawPaint(); drawSpriteList(); drawTileList(); drawStageInfo(); save();
+  return project.sprites.length;
 }
 
 /* =========================================================
@@ -5024,6 +5483,7 @@ function gameNow(name, author){
     name, author: author || "",
     mode: project.mode, code: project.code,
     spriteSize: SW,
+    songs: (project.songs || []).map(sg => ({ ...sg, grid: sg.grid.slice() })),
     sprites: project.sprites, rooms: project.rooms,
     palette: PALETTE.slice(),      // without this, colours you added came back black
     fps: project.fps || 60, zoom: project.zoom || 512,
@@ -5072,6 +5532,7 @@ function libLoad(g){
               sprites:(g.sprites||[]).map(a => a.slice()),
               rooms:(g.rooms||[]).map(a => a.slice()),
               palette: fixed.pal.slice(), spriteSize: SW,
+              songs: (g.songs || []).map(sg => ({ ...sg, grid: (sg.grid || []).slice() })),
               fps: g.fps || 60, zoom: g.zoom || 512 };
   if (fixed.guessed)
     log("this game was saved before colours travelled with the file — " +
@@ -5218,6 +5679,9 @@ const HELP_CORE = `
 <code>add(score, 1)</code>       add to a variable
 <code>wait(30)</code>            wait 30 frames (about half a second)
 <code>sound(1)</code>            make a beep — try 1 to 6
+<code>music(1)</code>            play song 1 from the Music tab, over and over
+<code>music(1, 0)</code>         ...just once
+<code>music(0)</code>            stop the music (<code>stopmusic()</code> too)
 <code>settile(80, 64, 0)</code>  change the room tile there (0 = rub it out)
 <code>stop()</code>              stop the program
 
@@ -5298,6 +5762,11 @@ Title screens:
 <code>move("Hello World!", 10, 0)</code>
                           moves any writing that says that, and any
                           button with that name
+
+<code>title("My Game", 2)</code>   a second number plays that song while the
+                          title screen is up, and stops when Play is
+                          pressed. <code>fancytitle</code> and <code>fanciertitle</code> take
+                          one too.
 
 <code>title("My Game")</code>      big title with a Play button — the program
                           waits here until Play is clicked.
@@ -5674,6 +6143,15 @@ window.addEventListener("keydown", e => {
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.11.0", t:"Music, room tools, pre-made sprites",
+    lines:[
+      "<b>A Music tab.</b> Songs are numbered like sprites. Click notes onto a grid — time across, pitch up the side, using a five-note scale so nothing you click sounds wrong — then set the speed and the kind of sound. <code>music(1)</code> plays song 1 in your game, <code>music(0)</code> stops it, and <code>title(\"My Game\", 2)</code> plays song 2 behind the title screen and stops when Play is pressed.",
+      "<b>Or import an mp3 or wav</b> and that becomes the song instead. It is kept inside your project, so there is a warning past 1.5 MB and a refusal past 4 MB — a browser only gives us a few megabytes and your sprites live there too.",
+      "<b>Fill, line, square and circle in the Rooms tab</b>, the same tools the Paint tab has, with Shift to fill a shape and a preview while you drag.",
+      "<b>⬇ PNG</b> saves a sprite as a picture at whatever size you ask for, or type ALL to get every sprite as one sheet.",
+      "<b>📦 Pre-made</b> replaces the drawing generator: four packs of sprites — every sprite the templates use, plus a platformer, space and dungeon set, all drawn for Simple++. Take one or take the lot.",
+      "A note on the Sonic request: those sprites belong to SEGA, so copying them into a public project is not something I will do. The Platformer pack covers the same ground with original art."
+    ] },
   { v:"0.10.0", t:"Solid collision, room tiles, and less clutter",
     lines:[
       "<b>Fixed: jumping while running went straight through blocks.</b> Sideways movement was worked out at the old height and falling at the new width, so a diagonal path could cross a corner that neither check saw. Movement is now walked in small pieces with both directions tested at each one — verified against a floor-to-ceiling pillar at every speed and jump height, including a jump of 20 at speed 10.",
@@ -5847,7 +6325,7 @@ if (project.sprites.every(s => s.every(p => p < 0))) defaultArt();
 $("code").value = project.code || "";
 $("code").addEventListener("input", save);
 PALETTE = (project.palette && project.palette.length) ? project.palette.slice() : BASE_PALETTE.slice();
-buildPalette(); buildTools(); setPaintZoom(project.zoom || 512);
+buildPalette(); buildTools(); buildRoomTools(); setPaintZoom(project.zoom || 512);
 $("sprite-size").value = SW;
 $("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
 setFps(project.fps || 60);

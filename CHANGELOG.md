@@ -3,6 +3,43 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.11.0 — Music, room tools, pre-made sprites
+
+### Added — music
+- **A Music tab.** Songs are numbered the way sprites are. Notes go on a grid,
+  time across and pitch up the side, drawn from a five-note scale so anything
+  you click sounds like it belongs. Speed and the kind of sound are per song,
+  and a song plays back in the editor while the playhead sweeps across it.
+- **`music(1)`** plays a song over and over, **`music(1, 0)`** plays it once,
+  **`music(0)`** or **`stopmusic()`** stops it. Stopping the game stops the
+  music too.
+- **`title("My Game", 2)`** plays song 2 while the title screen is up and stops
+  it when Play is pressed. `fancytitle()` and `fanciertitle()` take the same
+  second number.
+- **Import an mp3 or wav** and it becomes that song, played as it is. It is
+  stored inside the project, so there is a warning past 1.5 MB and a refusal
+  past 4 MB — browser storage is only a few megabytes and the sprites share it.
+
+### Added — editors
+- **Fill, line, square and circle in the Rooms tab**, matching the Paint tab.
+  Hold **Shift** to fill a square or circle; shapes preview while you drag.
+- **⬇ PNG** saves the current sprite as a picture at whatever scale you ask
+  for, or type **ALL** to get every sprite laid out as one sheet.
+- **📦 Pre-made** — four packs, all drawn for Simple++ and free to use:
+  **Template sprites** (everything the built-in templates use), plus
+  **Platformer**, **Space** and **Dungeon** sets. Add one sprite or the whole
+  pack; nothing you have drawn is replaced.
+
+### Removed
+- The **Draw me** generator, replaced by the pre-made packs.
+
+### Not done
+- **A 1:1 recreation of the Sonic 1 sprites.** That artwork belongs to SEGA and
+  this is a public repository, so copying it in is not something this project
+  will do. The **Platformer pack** is original art covering the same ground — a
+  runner with two frames, ground, ledges, a spring, a spike, a ring and a
+  checkpoint.
+
 ## 0.10.0 — Solid collision, room tiles, and less clutter
 
 ### Fixed

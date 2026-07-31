@@ -23,8 +23,12 @@ hide(1)
   how big the drawing area is. Sprites are 16×16 by default and can be set to 8,
   24, 32, 48 or 64 — the room grid adjusts to match. Unlimited sprites, numbered
   1, 2, 3, and up.
-- **Rooms** — stamp any sprite onto a 20×15 tile grid with the mouse.
-  Unlimited rooms, shown from code with `room(2)`.
+- **Rooms** — stamp any sprite onto a 20×15 tile grid with the mouse, with
+  pencil, fill, line, square and circle tools. Unlimited rooms, shown from code
+  with `room(2)`.
+- **Music** — songs numbered like sprites. Click notes onto a grid (a five-note
+  scale, so nothing sounds wrong), pick a speed and a sound, or import an mp3 or
+  wav. `music(1)` plays one; `title("My Game", 2)` plays one behind the title.
 - **Help** — every command, with a search box that looks through all four modes
   and tells you which one each answer belongs to. Press **/** to jump to it.
 - **Learn** — short steps, each with a button that loads and runs the code.
@@ -141,11 +145,13 @@ or Tauri for Windows, Capacitor for Android, and Capacitor plus a Mac and an
 Apple developer account for iPhone. On a phone, "add to home screen" gets you an
 icon that opens straight into the game without any of that.
 
-## Drawing sprites
+## Sprites you don't have to draw
 
-**✨ Draw me** asks what you want and draws it — a red heart, a gold star, a
-brick block, a green tree, a sword, a ghost, a monster. If you have connected a
-model under ⚡ in AI mode it asks that instead.
+**📦 Pre-made** has four packs, all drawn for Simple++ and free to use in
+anything you make: every sprite the templates use, plus platformer, space and
+dungeon sets. Take one or take the whole pack.
+
+**⬇ PNG** saves a sprite as a picture, or every sprite as one sheet.
 
 The 🖼 button in the Paint tab imports an image. With **Limited colours** ticked
 the colours snap to the nearest in the palette; untick it and the picture keeps
