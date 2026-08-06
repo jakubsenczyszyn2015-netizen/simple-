@@ -23,9 +23,9 @@ hide(1)
   how big the drawing area is. Sprites are 16×16 by default and can be set to 8,
   24, 32, 48 or 64 — the room grid adjusts to match. Unlimited sprites, numbered
   1, 2, 3, and up.
-- **Rooms** — stamp any sprite onto a 20×15 tile grid with the mouse, with
-  pencil, fill, line, square and circle tools. Unlimited rooms, shown from code
-  with `room(2)`.
+- **Rooms** — stamp any sprite onto a tile grid with pencil, fill, line, square
+  and circle tools. A room is either one screen or **endless**, for open worlds
+  you explore with `camera(1)`. Unlimited rooms, shown from code with `room(2)`.
 - **Music** — songs numbered like sprites. Click notes onto a grid (a five-note
   scale, so nothing sounds wrong), pick a speed and a sound, or import an mp3 or
   wav. `music(1)` plays one; `title("My Game", 2)` plays one behind the title.
@@ -182,9 +182,19 @@ changegame("My Other Game")     become it — sprites, rooms and code
 ## Title screens
 
 ```
-title("My Game")            big title, Play button, program waits here
-titleoption("Options")      adds another button
-if clickbutton("Options")   true on the frame it's clicked
+title("My Game")              big title, Play button, program waits here
+title("My Game", 2)           ...with song 2 playing behind it
+titleoption("Options")        adds another button
+if clickbutton("Options")     true on the frame it's clicked
+
+fancytitle("Go!")             drops in and bounces
+fanciertitle("Go!")           drops in spinning, settles facing you
+fanciesttitle("Go!", 1)       sprite 1 glides in, leaps away, white flash,
+                              then the spinning title
+scrolltitle("Go!", 2)         sprite 2 drifting diagonally behind the title
+customtitle("Go!", 1, 4, 5, 3)  your own sequence of numbered pieces
+titletile(2)                  a scrolling background behind any of them
+titlesprite(3)                which sprite the flying ones use
 ```
 
 ## Two players

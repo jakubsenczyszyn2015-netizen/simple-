@@ -322,6 +322,21 @@
     </div>
 
     <div class="pane col" style="width:190px;flex:none">
+      <h3>Room size</h3>
+      <select id="room-mode" onchange="setRoomMode(this.value)"
+              style="width:100%;background:#0c0e13;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+        <option value="limited">One screen</option>
+        <option value="infinite">Endless — for open worlds</option>
+      </select>
+      <div id="pan-label" class="hint" style="margin:6px 0 4px"></div>
+      <div id="pan-buttons" class="row" style="margin-bottom:12px;display:none">
+        <button onclick="panBy(-1,0)">◀</button>
+        <button onclick="panBy(0,-1)">▲</button>
+        <button onclick="panBy(0,1)">▼</button>
+        <button onclick="panBy(1,0)">▶</button>
+        <button onclick="panHome()">Home</button>
+      </div>
+
       <h3>Tools</h3>
       <div id="room-tools" class="row" style="margin-bottom:12px"></div>
 
@@ -533,10 +548,12 @@ let PALETTE = BASE_PALETTE.slice();      // a project can add its own colours
 
 /* ---------- project data ---------- */
 const blankSprite = () => new Array(SW * SH).fill(-1);   // -1 = transparent
-const blankRoom   = () => new Array(COLS * ROWS).fill(0); // 0 = empty
+let ROOM_MODE = "limited";      // kept in step with project.roomMode
+const blankRoom   = () => (ROOM_MODE === "infinite" ? {} : new Array(COLS * ROWS).fill(0));
 
 let project = {
   mode: "normal",
+  roomMode: "limited",
   songs: null,
   sprites: [blankSprite(), blankSprite(), blankSprite()], // index 0 -> sprite 1
   rooms:   [blankRoom()],
@@ -629,21 +646,31 @@ function blit(ctx, n, px, py, scale = 1){
 
 /* The room behind everything is painted once and reused until a tile,
    the room number or a sprite actually changes. */
-let roomPaint = { key:null, cv:null };
+let roomPaint = { key:null, cv:null, ox:0, oy:0 };
+
+/* Paints one screen of tiles, plus a border, anchored to the tile grid.
+   In an endless room this window slides along with the camera; the picture
+   is only redrawn when it crosses into new tiles. */
 function roomCanvas(){
   const rm = liveRoom(R.room);
   if (!rm) return null;
-  const key = R.room + ":" + SPRITE_EPOCH + ":" + ROOM_EPOCH + ":" + JSON.stringify(R.roomSwaps || {});
+
+  const camLeft = R.cam.x - VW / 2, camTop = R.cam.y - VH / 2;
+  const tx = Math.floor(camLeft / SW), ty = Math.floor(camTop / SH);
+  const key = R.room + ":" + SPRITE_EPOCH + ":" + ROOM_EPOCH + ":" +
+              JSON.stringify(R.roomSwaps || {}) + ":" + tx + "," + ty;
   if (roomPaint.key === key) return roomPaint.cv;
+
   const cv = roomPaint.cv || document.createElement("canvas");
-  cv.width = VW; cv.height = VH;
+  cv.width = VW + SW * 2; cv.height = VH + SH * 2;
   const c = cv.getContext("2d");
-  c.clearRect(0, 0, VW, VH);
-  for (let i = 0; i < rm.length; i++){
-    const t = swapped(rm[i]);
-    if (t) blit(c, t, (i % COLS) * SW, Math.floor(i / COLS) * SH);
-  }
-  roomPaint = { key, cv };
+  c.clearRect(0, 0, cv.width, cv.height);
+  for (let y = 0; y <= ROWS + 1; y++)
+    for (let x = 0; x <= COLS + 1; x++){
+      const t = swapped(roomGet(rm, tx + x, ty + y));
+      if (t) blit(c, t, x * SW, y * SH);
+    }
+  roomPaint = { key, cv, ox: tx * SW, oy: ty * SH };
   return cv;
 }
 
@@ -913,10 +940,11 @@ function drawRoom(){
   roomCtx.fillStyle = "#0c0e13";
   roomCtx.fillRect(0, 0, VW, VH);
   const r = project.rooms[curRoom];
-  for (let i = 0; i < r.length; i++){
-    if (!r[i]) continue;
-    blit(roomCtx, r[i], (i % COLS) * SW, Math.floor(i / COLS) * SH);
-  }
+  for (let y = 0; y < ROWS; y++)
+    for (let x = 0; x < COLS; x++){
+      const t = roomGet(r, x + panX, y + panY);
+      if (t) blit(roomCtx, t, x * SW, y * SH);
+    }
   if (roomFrom && roomTo){
     roomCtx.globalAlpha = .6;
     roomShape(roomTool, roomFrom, roomTo, false).forEach(([x, y]) => {
@@ -932,6 +960,51 @@ function drawRoom(){
 }
 
 let tiling = 0, roomTool = "pencil", roomFrom = null, roomTo = null;
+let panX = 0, panY = 0;            // which corner of an endless room you are looking at
+
+function panBy(dx, dy){
+  if (!isEndless()) return;
+  panX += dx * Math.max(1, Math.round(COLS / 2));
+  panY += dy * Math.max(1, Math.round(ROWS / 2));
+  drawRoom(); drawPanLabel();
+}
+function panHome(){ panX = panY = 0; drawRoom(); drawPanLabel(); }
+function drawPanLabel(){
+  const el = $("pan-label");
+  if (!el) return;
+  el.textContent = isEndless()
+    ? "looking at " + (panX * SW) + ", " + (panY * SH) + " — the room goes on for ever"
+    : "one screen, " + COLS + " × " + ROWS + " tiles";
+}
+
+function setRoomMode(mode){
+  const endless = mode === "infinite";
+  if (endless === isEndless()) return;
+  const rooms = project.rooms;
+  project.roomMode = ROOM_MODE = endless ? "infinite" : "limited";
+
+  project.rooms = rooms.map(old => {
+    if (endless){                       // array becomes a map, same tiles
+      const out = {};
+      for (let i = 0; i < old.length; i++)
+        if (old[i]) out[(i % COLS) + "," + Math.floor(i / COLS)] = old[i];
+      return out;
+    }
+    const out = new Array(COLS * ROWS).fill(0);   // map becomes one screen
+    let lost = 0;
+    for (const k of Object.keys(old)){
+      const [cx, cy] = k.split(",").map(Number);
+      if (cx >= 0 && cy >= 0 && cx < COLS && cy < ROWS) out[cy * COLS + cx] = old[k];
+      else lost++;
+    }
+    if (lost) log(lost + " tiles were outside the screen and have gone", "err");
+    return out;
+  });
+  panHome();
+  ROOM_EPOCH++;
+  $("room-mode").value = project.roomMode;
+  drawRoom(); drawRoomList(); drawStageInfo(); save();
+}
 
 const ROOM_TOOLS = [
   { id:"pencil", label:"✏️", tip:"Pencil — drag to stamp tiles" },
@@ -959,19 +1032,21 @@ function roomCell(e){
            y: Math.floor((e.clientY - b.top ) / b.height * ROWS) };
 }
 function setTileAt(x, y, what){
-  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
-  project.rooms[curRoom][y*COLS + x] = what;
+  if (!isEndless() && (x < 0 || y < 0 || x >= COLS || y >= ROWS)) return;
+  roomSet(project.rooms[curRoom], x + panX, y + panY, what);
 }
 function floodRoom(x, y, what){
   const r = project.rooms[curRoom];
-  const from = r[y*COLS + x];
+  const from = roomGet(r, x + panX, y + panY);
   if (from === what) return;
   const queue = [[x, y]];
-  while (queue.length){
+  let guard = 0;
+  while (queue.length && guard++ < 20000){
     const [cx, cy] = queue.pop();
+    // an endless room has no edges, so a fill is kept to what you can see
     if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) continue;
-    if (r[cy*COLS + cx] !== from) continue;
-    r[cy*COLS + cx] = what;
+    if (roomGet(r, cx + panX, cy + panY) !== from) continue;
+    roomSet(r, cx + panX, cy + panY, what);
     queue.push([cx+1,cy], [cx-1,cy], [cx,cy+1], [cx,cy-1]);
   }
 }
@@ -1054,7 +1129,7 @@ function drawTileList(){
    Tiles live in the Rooms tab. This strip says so. */
 function drawStageInfo(){
   const el = $("stage-info"); if (!el) return;
-  const tiles = project.rooms.reduce((sum, r) => sum + r.filter(Boolean).length, 0);
+  const tiles = project.rooms.reduce((sum, r) => sum + roomCount(r), 0);
   el.innerHTML =
     `this project holds <b>${project.sprites.length} sprites</b> (Paint tab) and ` +
     `<b>${project.rooms.length} room${project.rooms.length === 1 ? "" : "s"}</b> (Rooms tab)` +
@@ -1062,6 +1137,11 @@ function drawStageInfo(){
 }
 
 function drawRoomList(){
+  const pb = $("pan-buttons");
+  if (pb) pb.style.display = isEndless() ? "flex" : "none";
+  const rm = $("room-mode");
+  if (rm) rm.value = project.roomMode || "limited";
+  drawPanLabel();
   const box = $("room-list"); box.innerHTML = "";
   project.rooms.forEach((_, i) => {
     const b = document.createElement("button");
@@ -1297,7 +1377,7 @@ const R = {
   fps:60, fpsReal:0, acc:0, lastT:undefined,
   textMoves:{}, uiButtons:{}, uiClicks:[], spriteClicks:[], flips:{},
   vehicles:[], riding:null, ending:null, lastKeys:{}, keyHits:{},
-  paused:false, roomSwaps:{},
+  paused:false, roomSwaps:{}, titleScroll:0, titleSprite:1, titleTile:0,
   roomChanged:0, coinSpots:[], chat:null, mouse:{x:0,y:0},
   hard:null
 };
@@ -1325,9 +1405,9 @@ function touchingTile(A, n){
   if (!rm || !n) return false;
   const x0 = Math.floor(A.x / SW), x1 = Math.floor((A.x + A.w - 1) / SW);
   const y0 = Math.floor(A.y / SH), y1 = Math.floor((A.y + A.h - 1) / SH);
-  for (let y = Math.max(0, y0); y <= Math.min(ROWS - 1, y1); y++)
-    for (let x = Math.max(0, x0); x <= Math.min(COLS - 1, x1); x++)
-      if (swapped(rm[y * COLS + x]) === n) return true;
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++)
+      if (swapped(roomGet(rm, x, y)) === n) return true;
   return false;
 }
 
@@ -1336,12 +1416,36 @@ function liveRoom(n){
   const src = (R.running && R.roomData) ? R.roomData : project.rooms;
   return src[n - 1];
 }
+/* A room is either one screen of tiles (an array) or an endless field of
+   them (a map keyed by tile position). Everything else asks through here,
+   so the rest of the engine does not care which it is. */
+function isEndless(){ return ROOM_MODE === "infinite"; }
+function copyRoom(r){ return Array.isArray(r) ? r.slice() : Object.assign({}, r); }
+
+function roomGet(rm, cx, cy){
+  if (!rm) return 0;
+  if (isEndless()) return rm[cx + "," + cy] || 0;
+  if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) return 0;
+  return rm[cy * COLS + cx] || 0;
+}
+function roomSet(rm, cx, cy, v){
+  if (!rm) return;
+  if (isEndless()){
+    if (v) rm[cx + "," + cy] = v; else delete rm[cx + "," + cy];
+    return;
+  }
+  if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) return;
+  rm[cy * COLS + cx] = v;
+}
+function roomCount(rm){
+  if (!rm) return 0;
+  return isEndless() ? Object.keys(rm).length : rm.filter(Boolean).length;
+}
+
 function tileAtPixel(px, py){
   const rm = liveRoom(R.room);
   if (!rm) return 0;
-  const x = Math.floor(px / SW), y = Math.floor(py / SH);
-  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return 0;
-  return swapped(rm[y * COLS + x]);
+  return swapped(roomGet(rm, Math.floor(px / SW), Math.floor(py / SH)));
 }
 /* roomhide(12, 3) makes every 12 in the room behave and look like a 3 */
 function swapped(t){
@@ -1401,7 +1505,10 @@ function showTitle(name, style){
   R.title = String(name);
   R.lastTitle = R.title;
   R.buttons = [{ label:"Play", play:true }];
-  R.titleAnim = { style: style || "plain", t: 0 };
+  R.titleAnim = { style: style || "plain", t: 0, sprite: R.titleSprite || 1, steps: null, phase: 0 };
+  // a background set with titletile() or scrolltitle() stays behind whichever
+  // style comes next, so they can be put together
+  R.titleScroll = R.titleTile || 0;
 }
 function addTitleButton(label){
   if (!R.title) return;
@@ -1936,10 +2043,8 @@ function runCall(st){
     case "sound": { beep(A()[0]); break; }
     case "settile": { const [x,y,n] = A();
                       const rm = liveRoom(R.room);
-                      const cx = Math.floor(x / SW), cy = Math.floor(y / SH);
-                      if (rm && cx >= 0 && cy >= 0 && cx < COLS && cy < ROWS){
-                        rm[cy*COLS+cx] = Math.round(n) || 0; ROOM_EPOCH++;
-                      }
+                      roomSet(rm, Math.floor(x / SW), Math.floor(y / SH), Math.round(n) || 0);
+                      ROOM_EPOCH++;
                       break; }
     /* ---- title screens ---- */
     case "title": case "titlescreen": case "title_screen": {
@@ -2098,6 +2203,35 @@ function runCall(st){
       const [nm2, tr2] = A();
       showTitle(nm2, "spin"); if (tr2) playSong(Math.round(tr2), true);
       collectTitleButtons(R.prog); throw new Wait(0); }
+    /* the showy ones */
+    case "scrolltitle": case "scroll_title": {
+      const [nm, tile, track] = A();
+      R.titleTile = Math.round(tile) || 0;
+      showTitle(nm, "plain");
+      if (track) playSong(Math.round(track), true);
+      collectTitleButtons(R.prog); throw new Wait(0); }
+
+    case "fanciesttitle": case "fanciest_title": {
+      const [nm, spr, track] = A();
+      showTitle(nm, "fanciest");
+      R.titleAnim.sprite = Math.round(spr) || 1;
+      ensureSprite(R.titleAnim.sprite);
+      if (track) playSong(Math.round(track), true);
+      collectTitleButtons(R.prog); throw new Wait(0); }
+
+    case "customtitle": case "custom_title": {
+      const args = A();
+      const nm = args[0];
+      const steps = args.slice(1).map(v => Math.round(v)).filter(v => v > 0);
+      showTitle(nm, "custom");
+      R.titleAnim.steps = steps.length ? steps : [1];
+      collectTitleButtons(R.prog); throw new Wait(0); }
+
+    case "titlesprite": case "title_sprite": {
+      R.titleSprite = Math.round(A()[0]) || 1; ensureSprite(R.titleSprite); break; }
+    case "titletile": case "title_tile": {
+      R.titleTile = Math.round(A()[0]) || 0; ensureSprite(R.titleTile); break; }
+
     case "exittitle": case "exit_title": case "exittitlescreen": {
       if (R.title){ R.titlesShown[R.title] = true; R.title = null; R.buttons = []; }
       break; }
@@ -2225,7 +2359,7 @@ function startWith(source){
   }
 
   R.running = true; R.actors = {}; R.vars = {}; R.texts = []; R.extra = [];
-  R.roomData = project.rooms.map(r => r.slice()); ROOM_EPOCH++;   // games edit a copy, not your saved rooms
+  R.roomData = project.rooms.map(copyRoom); ROOM_EPOCH++;   // games edit a copy, not your saved rooms
   R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false; R.afterDone = false;
   R.title = null; R.buttons = []; R.clicks = []; R.titlesShown = {};
   R.player = 0; R.roles = {}; R.lives = null; R.gameOver = false;
@@ -2237,6 +2371,7 @@ function startWith(source){
   R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
   R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
   R.paused = false; R.roomSwaps = {};
+  R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0;
   R.vars.coins = 0;                      // coin() counts into this one
   KEYBIND = {};
   if (project.mode === "hard" && !runHard()){ R.running = false; return; }
@@ -2249,7 +2384,7 @@ function startWith(source){
 /* start everything again without touching the sprites or rooms you drew */
 function doReset(){
   R.actors = {}; R.vars = {}; R.texts = []; R.extra = [];
-  R.roomData = project.rooms.map(r => r.slice()); ROOM_EPOCH++;
+  R.roomData = project.rooms.map(copyRoom); ROOM_EPOCH++;
   R.room = 0; R.frame = 0; R.waitFrames = 0; R.startDone = false; R.afterDone = false;
   R.player = 0; R.roles = {}; R.lives = null; R.gameOver = false;
   R.resetting = false; R.homes = {}; R.speed = 3;
@@ -2259,6 +2394,7 @@ function doReset(){
   R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
   R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
   R.paused = false; R.roomSwaps = {};
+  R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0;
   R.clicks = []; R.vars.coins = 0;
   R.acc = 0; R.lastT = undefined;
   render();
@@ -2429,7 +2565,7 @@ function render(){
   const ox = Math.round(VW / 2 - R.cam.x), oy = Math.round(VH / 2 - R.cam.y);
 
   const bg = roomCanvas();
-  if (bg) sctx.drawImage(bg, ox, oy);
+  if (bg) sctx.drawImage(bg, Math.round(roomPaint.ox + ox), Math.round(roomPaint.oy + oy));
 
   for (const e of (R.extra || [])) blit(sctx, e.n, Math.round(e.x) + ox, Math.round(e.y) + oy);
   for (const c of R.coinSpots){          // coins placed one at a time
@@ -2750,6 +2886,140 @@ function render3D(){
 }
 
 /* everything stops, the picture fades away, and the words are left */
+/* a tile drifting diagonally, behind whatever else the title does */
+function drawScrollingBackground(){
+  const cv = spriteCanvas(R.titleScroll);
+  if (!cv) return;
+  const t = (R.titleAnim ? R.titleAnim.t : 0) * 0.4;
+  const ox = -(t % SW), oy = -(t % SH);
+  for (let y = -1; y <= ROWS + 1; y++)
+    for (let x = -1; x <= COLS + 1; x++)
+      sctx.drawImage(cv, Math.round(x * SW + ox), Math.round(y * SH + oy));
+  sctx.fillStyle = "rgba(8,10,24,.55)";        // dimmed so the words stay readable
+  sctx.fillRect(0, 0, VW, VH);
+}
+
+/* fanciesttitle: black, then the sprite glides in at double size, leaps
+   off the top, the screen flashes white, and the spinning title lands */
+function drawFanciestTitle(anim){
+  const GLIDE = 70, LEAP = 26, FLASH = 10;
+  const t = anim.t;
+
+  const size = SW * 2;                     // twice its usual size, as asked
+  const midX = VW / 2 - size / 2, midY = VH / 2 - size / 2;
+
+  if (t < GLIDE){                          // glides in from the left and settles
+    const e = 1 - Math.pow(1 - t / GLIDE, 3);
+    const cv = spriteCanvas(anim.sprite);
+    if (cv) sctx.drawImage(cv, Math.round(-size + (midX + size) * e), Math.round(midY), size, size);
+    return;
+  }
+  if (t < GLIDE + LEAP){                   // then leaps off the top of the screen
+    const k = (t - GLIDE) / LEAP;
+    const cv = spriteCanvas(anim.sprite);
+    if (cv) sctx.drawImage(cv, Math.round(midX), Math.round(midY - k * k * (VH + size)),
+                           size, size);
+    return;
+  }
+  if (t < GLIDE + LEAP + FLASH){
+    const k = (t - GLIDE - LEAP) / FLASH;
+    sctx.fillStyle = "rgba(255,255,255," + (1 - k) + ")";
+    sctx.fillRect(0, 0, VW, VH);
+    return;
+  }
+  // and now the spinning one, starting from the moment the flash ends
+  drawSpinningTitle(anim, t - (GLIDE + LEAP + FLASH));
+}
+
+/* the numbered steps customtitle() can play */
+const TITLE_STEPS = {
+  1: { name:"fade in",        len:50 },
+  2: { name:"drop and bounce",len:75 },
+  3: { name:"spin to a stop", len:150 },
+  4: { name:"a sprite flies past", len:70 },
+  5: { name:"white flash",    len:12 },
+  6: { name:"hold still",     len:40 },
+  7: { name:"zoom out",       len:45 }
+};
+function drawCustomTitle(anim){
+  const steps = anim.steps || [1];
+  let t = anim.t, i = 0;
+  while (i < steps.length - 1 && t > (TITLE_STEPS[steps[i]] || TITLE_STEPS[1]).len){
+    t -= (TITLE_STEPS[steps[i]] || TITLE_STEPS[1]).len;
+    i++;
+  }
+  const step = steps[i], info = TITLE_STEPS[step] || TITLE_STEPS[1];
+  const last = i === steps.length - 1;
+  const k = Math.min(1, t / info.len);
+
+  if (step === 4){
+    const size = SW * 2, cv = spriteCanvas(anim.sprite);
+    if (cv) sctx.drawImage(cv, Math.round(-size + (VW + size * 2) * k),
+                           Math.round(VH / 2 - size / 2), size, size);
+    if (!last) return;
+  }
+  if (step === 5){
+    sctx.fillStyle = "rgba(255,255,255," + (1 - k) + ")";
+    sctx.fillRect(0, 0, VW, VH);
+    if (!last) return;
+  }
+
+  let y = 58, squash = 1, alpha = 1;
+  if (step === 1) alpha = k;
+  if (step === 2){
+    const e = 1 - Math.pow(1 - k, 3);
+    y = -40 + 98 * e;
+    const after = t - info.len * 0.6;
+    if (after > 0 && after < 26) y -= Math.sin((after / 26) * Math.PI) * 16;
+  }
+  if (step === 3) return drawSpinningTitle(anim, t, last);
+  if (step === 7) squash = 2 - k;
+
+  drawTitleWord(y, squash, alpha);
+  if (last && t > info.len) drawTitleButtons();
+}
+
+function drawSpinningTitle(anim, t, showButtons){
+  const drop = Math.min(1, t / 40);
+  const y = -40 + 98 * (1 - Math.pow(1 - drop, 3));
+  const spinFor = 110;
+  let squash = 1;
+  if (t < spinFor){
+    const left = 1 - t / spinFor;
+    squash = Math.cos(t * 0.22 * left * left + 0.0001);
+    if (Math.abs(squash) < 0.06) squash = squash < 0 ? -0.06 : 0.06;
+  }
+  drawTitleWord(y, squash, 1);
+  if (t >= 40 && (showButtons === undefined || showButtons)) drawTitleButtons();
+}
+
+function drawTitleWord(y, squash, alpha){
+  sctx.textAlign = "center";
+  sctx.font = "bold 26px ui-monospace,monospace";
+  sctx.globalAlpha = alpha === undefined ? 1 : alpha;
+  sctx.save();
+  sctx.translate(VW / 2, 0);
+  sctx.scale(squash || 1, 1);
+  sctx.fillStyle = "#0b1017"; sctx.fillText(R.title, 2 / (squash || 1), y + 2);
+  sctx.fillStyle = "#ffd166"; sctx.fillText(R.title, 0, y);
+  sctx.restore();
+  sctx.globalAlpha = 1;
+  sctx.textAlign = "left";
+}
+function drawTitleButtons(){
+  sctx.textAlign = "center";
+  sctx.font = "10px ui-monospace,monospace";
+  for (const q of buttonRects()){
+    sctx.fillStyle = "#232734";
+    sctx.fillRect(q.x, q.y, q.w, q.h);
+    sctx.strokeStyle = "#5ac8fa"; sctx.lineWidth = 1;
+    sctx.strokeRect(q.x + .5, q.y + .5, q.w - 1, q.h - 1);
+    sctx.fillStyle = "#e8ecf5";
+    sctx.fillText(q.b.label, VW/2, q.y + 7);
+  }
+  sctx.textAlign = "left";
+}
+
 function drawEnding(){
   const e = R.ending;
   const fade = Math.min(1, e.t / 60);            // about a second to black
@@ -2771,11 +3041,16 @@ function drawEnding(){
 }
 
 function drawTitle(){
-  sctx.fillStyle = "#0b0e18";
-  sctx.fillRect(0, 0, VW, VH);
-
   const anim = R.titleAnim || { style:"plain", t:0 };
   anim.t++;
+
+  sctx.fillStyle = "#0b0e18";
+  sctx.fillRect(0, 0, VW, VH);
+  if (R.titleScroll) drawScrollingBackground();
+
+  // custom titles are a list of steps, played one after another
+  if (anim.style === "custom") return drawCustomTitle(anim);
+  if (anim.style === "fanciest") return drawFanciestTitle(anim);
   sctx.textAlign = "center";
   sctx.font = "bold 26px ui-monospace,monospace";
 
@@ -3833,9 +4108,10 @@ function loadTemplate(i){
   const t = TEMPLATES[i];
   stop();
   applySpriteSize(16);               // the built-in artwork is 16 x 16
+  ROOM_MODE = "limited";                   // the built-in levels are one screen
   project = {
     mode:    t.mode || "normal",
-    spriteSize: 16,
+    spriteSize: 16, roomMode: "limited",
     sprites: t.sprites.map(k => k ? ART[k].slice() : blankSprite()),
     rooms:   t.rooms.map(f => f()),
     code:    t.code
@@ -5482,7 +5758,7 @@ function gameNow(name, author){
     v: 3,
     name, author: author || "",
     mode: project.mode, code: project.code,
-    spriteSize: SW,
+    spriteSize: SW, roomMode: project.roomMode || "limited",
     songs: (project.songs || []).map(sg => ({ ...sg, grid: sg.grid.slice() })),
     sprites: project.sprites, rooms: project.rooms,
     palette: PALETTE.slice(),      // without this, colours you added came back black
@@ -5527,11 +5803,13 @@ function hslToHex(h, s, l){
 function libLoad(g){
   stop();
   applySpriteSize(g.spriteSize || 16);      // before anything is copied, so the sizes line up
+  ROOM_MODE = g.roomMode || "limited";
   const fixed = repairPalette(g);
   project = { mode:g.mode || "normal", code:g.code || "",
               sprites:(g.sprites||[]).map(a => a.slice()),
-              rooms:(g.rooms||[]).map(a => a.slice()),
+              rooms:(g.rooms||[]).map(copyRoom),
               palette: fixed.pal.slice(), spriteSize: SW,
+              roomMode: g.roomMode || "limited",
               songs: (g.songs || []).map(sg => ({ ...sg, grid: (sg.grid || []).slice() })),
               fps: g.fps || 60, zoom: g.zoom || 512 };
   if (fixed.guessed)
@@ -5747,6 +6025,23 @@ Things you can ask about:
                         if you let go before the next frame)
 
 Title screens:
+
+<code>scrolltitle("Go!", 2)</code>  a title with sprite 2 drifting diagonally
+                          behind it
+<code>fanciesttitle("Go!", 1)</code> black, then sprite 1 glides in at double
+                          size, leaps off the top, the screen flashes
+                          white, and the spinning title lands
+<code>customtitle("Go!", 1, 4, 5, 3)</code>
+                          builds your own from numbered pieces, played
+                          in the order you list them:
+                            1 fade in        5 white flash
+                            2 drop and bounce 6 hold still
+                            3 spin to a stop  7 zoom out
+                            4 a sprite flies past
+<code>titlesprite(3)</code>      which sprite the flying ones use
+<code>titletile(2)</code>        a scrolling background for ANY of the title
+                          screens — set it first, then use whichever
+                          style you like
 
 <code>fancytitle("My Game")</code>  the title drops in from the top and bounces
 <code>fanciertitle("My Game")</code> it drops in spinning, and settles facing you
@@ -6143,6 +6438,15 @@ window.addEventListener("keydown", e => {
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.12.0", t:"Endless rooms and four more title screens",
+    lines:[
+      "<b>Rooms can be endless.</b> The Rooms tab has a size picker: <i>one screen</i> as before, or <i>endless</i>, where the grid carries on for ever in every direction. Arrow buttons pan around it and Home returns to the start. Point <code>camera(1)</code> at your player and you have an open world — tested by walking a very long floor with the view following.",
+      "Switching keeps your tiles: one screen becomes the top-left corner of an endless room, and going back the other way warns about anything that falls outside the screen instead of dropping it silently.",
+      "<b><code>scrolltitle(\"Go!\", 2)</code></b> — a title with that sprite drifting diagonally behind it.",
+      "<b><code>fanciesttitle(\"Go!\", 1)</code></b> — black, then sprite 1 glides in at double size, leaps off the top, the screen flashes white, and the spinning title lands.",
+      "<b><code>customtitle(\"Go!\", 1, 4, 5, 3)</code></b> — build your own from seven numbered pieces played in order: fade, drop, spin, a sprite flying past, flash, hold, zoom.",
+      "<b><code>titletile(2)</code></b> sets a scrolling background behind <i>any</i> title style, and <b><code>titlesprite(3)</code></b> picks the sprite the flying ones use — so they can be put together."
+    ] },
   { v:"0.11.0", t:"Music, room tools, pre-made sprites",
     lines:[
       "<b>A Music tab.</b> Songs are numbered like sprites. Click notes onto a grid — time across, pitch up the side, using a five-note scale so nothing you click sounds wrong — then set the speed and the kind of sound. <code>music(1)</code> plays song 1 in your game, <code>music(0)</code> stops it, and <code>title(\"My Game\", 2)</code> plays song 2 behind the title screen and stops when Play is pressed.",
@@ -6320,6 +6624,7 @@ function defaultArt(){
 }
 
 load();
+ROOM_MODE = project.roomMode || "limited";
 applySpriteSize(project.spriteSize || 16);
 if (project.sprites.every(s => s.every(p => p < 0))) defaultArt();
 $("code").value = project.code || "";

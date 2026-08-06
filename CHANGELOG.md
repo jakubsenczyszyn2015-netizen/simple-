@@ -3,6 +3,39 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.12.0 — Endless rooms and four more title screens
+
+### Added — rooms without edges
+- **A room can be one screen or endless.** The Rooms tab has a size picker.
+  *One screen* is what rooms have always been; *endless* lets the tile grid
+  carry on for ever in every direction, which is what `camx()`, `camy()` and
+  `camera()` were waiting for. Arrow buttons pan around it and **Home** goes
+  back to the start.
+- Switching between them keeps your work: one screen becomes the top-left
+  corner of an endless room, and coming back the other way says how many tiles
+  fell outside the screen rather than dropping them quietly.
+- An endless room is stored as a map of positions rather than a fixed array, so
+  only the tiles you actually place take up space, and the picture behind the
+  game is redrawn a screen at a time as the camera moves.
+
+### Added — title screens
+- **`scrolltitle("Go!", 2)`** — a title with sprite 2 drifting diagonally
+  behind it.
+- **`fanciesttitle("Go!", 1)`** — the screen is black, sprite 1 glides in from
+  the left at double size and settles in the middle, leaps off the top, the
+  screen flashes white, and the spinning title lands.
+- **`customtitle("Go!", 1, 4, 5, 3)`** — your own sequence, from seven numbered
+  pieces played in order: 1 fade in, 2 drop and bounce, 3 spin to a stop, 4 a
+  sprite flies past, 5 white flash, 6 hold still, 7 zoom out.
+- **`titletile(2)`** puts a scrolling background behind *any* title style, and
+  **`titlesprite(3)`** chooses the sprite the flying ones use — so
+  `titletile(2)` followed by `fanciertitle("Both")` is a spinning title over a
+  scrolling background, which is what makes these worth combining.
+
+### Fixed
+- A crash on load introduced while adding endless rooms: `blankRoom()` read the
+  project's room mode while the project object was still being built.
+
 ## 0.11.0 — Music, room tools, pre-made sprites
 
 ### Added — music
