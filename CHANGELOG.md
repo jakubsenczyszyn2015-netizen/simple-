@@ -3,6 +3,26 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.12.1 — Moving your games to a new address
+
+### Fixed
+- **Opening a saved game showed the previous game's code.** `libLoad()` filled
+  the editor box as one of its last steps, but several steps before it call
+  `save()`, and `save()` reads that box as the truth about the current program —
+  so the game just opened was immediately overwritten with whatever was on
+  screen beforehand. The box is now filled in before anything can save. The
+  copies in the library were never damaged, only what you saw after opening one.
+
+### Added
+- **⬇ Backup all** and **⬆ Restore** in My Games. A browser keeps storage under
+  the exact address of the website, so moving a site — from `github.io` to
+  `pages.dev`, for instance — arrives at an empty shelf while the old games sit
+  safe at the old address. Back up on the old site, restore on the new one.
+  Restoring never writes over a game already there: a name clash is kept beside
+  it under a new name.
+- The empty My Games window now explains this, instead of looking like
+  everything has been lost.
+
 ## 0.12.0 — Endless rooms and four more title screens
 
 ### Added — rooms without edges

@@ -166,10 +166,20 @@ author, save it, and open it again whenever you like — searchable by either.
 To give a game to somebody else, use **⬆ Export**: it writes a single `.html`
 file that plays anywhere, with no editor around it and nothing to install.
 
-## Putting it on GitHub Pages
+## Putting it online
 
-Settings → Pages → Deploy from a branch → `main` → `/root`. That's it — the
-site is just `index.html`.
+The whole thing is one file, so any static host works.
+
+- **GitHub Pages:** Settings → Pages → Deploy from a branch → `main` → `/root`.
+- **Cloudflare Pages:** connect the repository, leave the build command empty
+  and the output directory as `/`. If anything behaves oddly there, turn
+  **Rocket Loader** off in Speed → Optimization — it rearranges inline scripts,
+  which this page is built from.
+
+**Games do not follow you between addresses.** A browser keeps saved games
+under the exact address of the site, so moving from one host to another starts
+with an empty library while the old games stay safe at the old address. Open the
+old site, press **⬇ Backup all** in My Games, then **⬆ Restore** on the new one.
 
 ## Breaking the fourth wall
 

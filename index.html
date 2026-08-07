@@ -207,6 +207,7 @@
   <button onclick="saveFile()">Save</button>
   <button onclick="document.getElementById('load').click()">Load</button>
   <input id="load" type="file" accept=".json" style="display:none" onchange="loadFile(this)">
+  <input id="libfile" type="file" accept=".json,.simplebackup" style="display:none" onchange="restoreLibrary(this)">
   <input id="musicfile" type="file" accept="audio/*" style="display:none" onchange="importMusic(this)">
   <input id="pngfile" type="file" accept="image/*" style="display:none" onchange="importPng(this)">
 </header>
@@ -512,6 +513,8 @@
       </div>
       <div class="row" style="margin-bottom:12px">
         <button onclick="libSaveHere()">💾 Save here</button>
+        <button onclick="backupLibrary()" title="Save every game in this browser to one file">⬇ Backup all</button>
+        <button onclick="document.getElementById('libfile').click()" title="Add games from a backup file">⬆ Restore</button>
       </div>
       <input id="lib-search" type="text" placeholder="search your games by name or author"
              style="margin-bottom:10px" autocomplete="off">
@@ -5817,6 +5820,13 @@ function libLoad(g){
         fixed.guessed + " of them had to be guessed", "err");
   if (!project.sprites.length) project.sprites = [blankSprite()];
   if (!project.rooms.length)   project.rooms   = [blankRoom()];
+
+  // The editor box has to be filled in FIRST. save() treats it as the truth
+  // about the program, and several things below call save() — so leaving it
+  // until the end meant the game you just opened was overwritten with the
+  // code of the one you had open before.
+  $("code").value = project.code;
+
   curSprite = 0; curRoom = 0; curTile = 1;
   PALETTE = project.palette.slice();
   if (curColor >= PALETTE.length) curColor = 8;
@@ -5826,7 +5836,7 @@ function libLoad(g){
   $("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
   setMode(project.mode, true);
   setFps(project.fps || 60); setPaintZoom(project.zoom || 512);
-  $("code").value = project.code;
+  $("code").value = project.code;          // and again, in case a step above changed it
   drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
   save(); render();
 }
@@ -5916,7 +5926,11 @@ function drawLibList(){
   if (!names.length){
     list.innerHTML = `<div class="hint">${Object.keys(all).length
       ? "nothing matches that search."
-      : "nothing saved yet. Type a name above and press “Save here”."}</div>`;
+      : "nothing saved here yet. Type a name above and press “Save here”." +
+        "<br><br><b>Moved the site to a new address?</b> Games are kept by the browser " +
+        "under the exact address of the website, so a new one starts empty — your old " +
+        "games are still safe at the old address. Open the old site, press " +
+        "<b>⬇ Backup all</b>, then come back here and press <b>⬆ Restore</b>."}</div>`;
     return;
   }
   names.forEach(n => {
@@ -5932,6 +5946,52 @@ function drawLibList(){
 
 function escapeHtml(t){
   return String(t).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+}
+
+/* Browser storage belongs to one website address. Moving the site — from
+   github.io to pages.dev, say — leaves the old library behind, so here is a
+   way to carry it across. This is a backup of the whole shelf, not the
+   per-game .simple files that used to exist. */
+function backupLibrary(){
+  const all = libRead();
+  const n = Object.keys(all).length;
+  if (!n){ alert("There is nothing saved in this browser to back up."); return; }
+
+  const blob = new Blob([JSON.stringify({ simplepp_backup: 1, saved: Date.now(), games: all })],
+                        { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "my-simple-games.json";
+  a.click();
+  log("backed up " + n + " game" + (n === 1 ? "" : "s"), "ok");
+}
+
+function restoreLibrary(input){
+  const f = input.files[0]; if (!f) return;
+  input.value = "";
+  const r = new FileReader();
+  r.onload = () => {
+    let data;
+    try { data = JSON.parse(r.result); } catch(e){ alert("That file is not a Simple++ backup."); return; }
+    const incoming = data && data.games ? data.games : null;
+    if (!incoming || typeof incoming !== "object"){ alert("That file is not a Simple++ backup."); return; }
+
+    const all = libRead();
+    let added = 0, renamed = 0;
+    for (const name of Object.keys(incoming)){
+      let key = name;
+      // never write over a game already here — put the incoming one beside it
+      while (all[key]){ key = name + " (from backup" + (renamed ? " " + (renamed + 1) : "") + ")"; renamed++; }
+      all[key] = incoming[name];
+      added++;
+    }
+    if (libWrite(all)){
+      drawLibList();
+      log("restored " + added + " game" + (added === 1 ? "" : "s") +
+          (renamed ? " (" + renamed + " renamed so nothing was written over)" : ""), "ok");
+    }
+  };
+  r.readAsText(f);
 }
 
 function libSaveHere(){
@@ -6438,6 +6498,12 @@ window.addEventListener("keydown", e => {
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.12.1", t:"Moving your games to a new address",
+    lines:[
+      "<b>Fixed: opening a saved game showed the previous game\u2019s code.</b> Loading filled the editor box last, but several steps before it call save(), and save() treats that box as the truth about your program — so the game you had just opened was written over with the one you had open before. The box is filled in first now. The saved copies themselves were never damaged.",
+      "<b>⬇ Backup all</b> and <b>⬆ Restore</b> in My Games. Browser storage belongs to one website address, so moving a site — github.io to pages.dev, say — starts with an empty shelf while the old games sit safely at the old address. Back up on the old site, restore on the new one, and nothing already there is written over: a clash is kept beside it under a new name.",
+      "The empty My Games window now explains that, rather than looking like everything is gone."
+    ] },
   { v:"0.12.0", t:"Endless rooms and four more title screens",
     lines:[
       "<b>Rooms can be endless.</b> The Rooms tab has a size picker: <i>one screen</i> as before, or <i>endless</i>, where the grid carries on for ever in every direction. Arrow buttons pan around it and Home returns to the start. Point <code>camera(1)</code> at your player and you have an open world — tested by walking a very long floor with the view following.",
