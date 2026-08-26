@@ -35,6 +35,11 @@ hide(1)
 - **Music** — songs numbered like sprites. Click notes onto a grid (a five-note
   scale, so nothing sounds wrong), pick a speed and a sound, or import an mp3 or
   wav. `music(1)` plays one; `title("My Game", 2)` plays one behind the title.
+- **SFX** — short noises built from seven sliders (pitch, slide, length,
+  loudness, roughness, wobble, repeats), with the waveform drawn above them so
+  you can see what each one does. Ten presets — Jump, Coin, Hit, Laser,
+  Explode, Power up, Blip, Step, Alarm, Splash — plus 🎤 recording your own
+  voice or importing a wav/mp3. `sfx(1)` or `sfx("jump")` plays one.
 - **Help** — every command, with a search box that looks through all four modes
   and tells you which one each answer belongs to. Press **/** to jump to it.
 - **Learn** — short steps, each with a button that loads and runs the code.

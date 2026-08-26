@@ -7,7 +7,11 @@ const must = ['function stopSong','function playSong','function drawSongList','f
   'case "collision"','case "music"','case "pause"','case "roomhide"','case "touchinginroom"',
   'function buildHelp','function showHelp','function libLoad','function exportHtml',
   'function changeSpriteSize','function flipSpriteH','case "vehicle"','case "ending"',
-  'id="v-music"','id="song"','id="packs-ov"','id="room-tools"'];
+  'id="v-music"','id="song"','id="packs-ov"','id="room-tools"',
+  'function playSfx','function drawSfxPanel','function toggleRecord','case "sfx"',
+  'id="v-sfx"','id="sfx-knobs"','function addFrame','function delFrame',
+  'function spriteByName','case "play"','function setTheme','function toggleTouch',
+  'id="touchpad"','id="more-menu"','id="frame-strip"','function allMatches'];
 const missing = must.filter(m => !h.includes(m));
 
 // iOS 12.5 runs Safari 12, which cannot parse or run any of these

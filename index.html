@@ -372,6 +372,7 @@
     <button id="t-paint" onclick="tab('paint')" title="Paint">2<span class="lbl"> · Paint</span></button>
     <button id="t-rooms" onclick="tab('rooms')" title="Rooms">3<span class="lbl"> · Rooms</span></button>
     <button id="t-music" onclick="tab('music')" title="Music">4<span class="lbl"> · Music</span></button>
+    <button id="t-sfx" onclick="tab('sfx')" title="Sound effects">5<span class="lbl"> · SFX</span></button>
     <button id="t-learn" onclick="tab('learn')" title="Learn">★<span class="lbl"> · Learn</span></button>
     <button id="t-help" onclick="tab('help')" title="Help">?<span class="lbl"> · Help</span></button>
     <button id="t-changes" onclick="tab('changes')" title="Changelog">≡<span class="lbl"> · Changelog</span></button>
@@ -414,6 +415,7 @@
   <input id="load" type="file" accept=".json" style="display:none" onchange="loadFile(this)">
   <input id="libfile" type="file" accept=".json,.simplebackup" style="display:none" onchange="restoreLibrary(this)">
   <input id="musicfile" type="file" accept="audio/*" style="display:none" onchange="importMusic(this)">
+  <input id="sfxfile" type="file" accept="audio/*" style="display:none" onchange="importSfx(this)">
   <input id="pngfile" type="file" accept="image/*" style="display:none" onchange="importPng(this)">
 </header>
 
@@ -632,6 +634,42 @@
       </div>
       <canvas id="song" width="768" height="384" style="width:100%;max-width:768px"></canvas>
       <div id="song-note" class="hint" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <!-- ================= SFX ================= -->
+  <section id="v-sfx" class="view">
+    <div class="pane col" style="width:210px;flex:none">
+      <h3>Sound effects</h3>
+      <div class="row" style="margin-bottom:8px">
+        <button onclick="addSfx()">+ New</button>
+        <button onclick="copySfx()">Copy</button>
+        <button onclick="delSfx()">Delete</button>
+      </div>
+      <div id="sfx-list" class="list"></div>
+      <h3 style="margin-top:14px">Start from one of these</h3>
+      <div id="sfx-presets" class="row" style="gap:4px"></div>
+      <h3 style="margin-top:14px">Your own voice</h3>
+      <button id="sfx-rec" onclick="toggleRecord()">🎤 Record</button>
+      <button onclick="document.getElementById('sfxfile').click()">📂 Import a sound</button>
+      <div id="sfx-rec-note" class="hint" style="margin-top:6px">
+        Record yourself, or bring in a wav or mp3. Either one replaces the knobs
+        for this number and plays as it is.
+      </div>
+    </div>
+
+    <div class="col" style="flex:1;min-width:0;padding:12px;overflow:auto">
+      <div class="row" style="margin-bottom:12px">
+        <button id="sfx-play" class="b-run" onclick="playSfx(curSfx + 1)">▶ Hear it</button>
+        <b id="sfx-title" style="color:var(--accent2)">Sound 1</b>
+        <input id="sfx-name" type="text" maxlength="20" placeholder="name it — jump, coin…"
+               autocomplete="off" oninput="renameSfx(this.value)"
+               style="width:190px;background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+      </div>
+      <canvas id="sfx-wave" width="768" height="150"
+              style="width:100%;max-width:768px;border:1px solid var(--line);border-radius:var(--r)"></canvas>
+      <div id="sfx-knobs" style="max-width:768px;margin-top:12px"></div>
+      <div id="sfx-note" class="hint" style="margin-top:10px;max-width:768px"></div>
     </div>
   </section>
 
@@ -889,13 +927,14 @@ function spriteByName(name){
    TABS
    ========================================================= */
 function tab(name){
-  for (const t of ["code","paint","rooms","music","learn","help","changes"]){
+  for (const t of ["code","paint","rooms","music","sfx","learn","help","changes"]){
     $("v-"+t).classList.toggle("on", t === name);
     $("t-"+t).classList.toggle("on", t === name);
   }
   if (name === "paint") { drawPaint(); drawSpriteList(); }
   if (name === "rooms") { drawRoom(); drawTileList(); drawRoomList(); }
   if (name === "music") { drawSongList(); drawSong(); }
+  if (name === "sfx")   { drawSfxList(); drawSfxPanel(); }
   if (name === "code")  $("code").focus();
 }
 
@@ -2448,6 +2487,338 @@ function buildTouchpad(){
   toggleTouch(saved === null ? IS_TOUCH : saved === "1");
 }
 
+/* =========================================================
+   SOUND EFFECTS
+   A song is a tune. An effect is one short noise, built from a
+   handful of numbers, the way an old console made them: a starting
+   pitch, somewhere it slides to, how long it lasts, and how rough it
+   is. Every setting is a slider, so you find a sound by pushing them
+   about rather than by knowing what any of it means.
+   ========================================================= */
+const SFX_KNOBS = [
+  { k:"freq",   label:"Pitch",        min:60,  max:2000, step:10, unit:" Hz" },
+  { k:"slide",  label:"Slides to",    min:-1200, max:1200, step:25, unit:" Hz" },
+  { k:"len",    label:"How long",     min:30,  max:1500, step:10, unit:" ms" },
+  { k:"vol",    label:"How loud",     min:1,   max:100,  step:1,  unit:"%" },
+  { k:"noise",  label:"How rough",    min:0,   max:100,  step:1,  unit:"%" },
+  { k:"wobble", label:"Wobble",       min:0,   max:40,   step:1,  unit:"" },
+  { k:"repeat", label:"How many times", min:1, max:8,    step:1,  unit:"" }
+];
+const SFX_WAVES = [["square","beepy"],["triangle","soft"],["sawtooth","buzzy"],["sine","smooth"]];
+
+function blankSfx(){
+  return { name:"", wave:"square", freq:440, slide:0, len:200,
+           vol:45, noise:0, wobble:0, repeat:1, audio:null };
+}
+/* Sounds worth having on the first day, so nobody starts from silence. */
+const SFX_PRESETS = {
+  Jump:     { wave:"square",   freq:320,  slide:520,  len:150, vol:40, noise:0,  wobble:0,  repeat:1 },
+  Coin:     { wave:"square",   freq:990,  slide:400,  len:180, vol:35, noise:0,  wobble:0,  repeat:2 },
+  Hit:      { wave:"sawtooth", freq:220,  slide:-160, len:180, vol:55, noise:35, wobble:0,  repeat:1 },
+  Laser:    { wave:"sawtooth", freq:1400, slide:-1100,len:220, vol:40, noise:5,  wobble:0,  repeat:1 },
+  Explode:  { wave:"sawtooth", freq:160,  slide:-120, len:600, vol:60, noise:100,wobble:0,  repeat:1 },
+  "Power up":{ wave:"square",  freq:260,  slide:900,  len:420, vol:40, noise:0,  wobble:0,  repeat:3 },
+  Blip:     { wave:"square",   freq:700,  slide:0,    len:60,  vol:30, noise:0,  wobble:0,  repeat:1 },
+  Step:     { wave:"triangle", freq:120,  slide:-40,  len:70,  vol:35, noise:60, wobble:0,  repeat:1 },
+  Alarm:    { wave:"square",   freq:640,  slide:-240, len:260, vol:45, noise:0,  wobble:22, repeat:4 },
+  Splash:   { wave:"sine",     freq:900,  slide:-700, len:380, vol:40, noise:70, wobble:0,  repeat:1 }
+};
+let curSfx = 0;
+
+function sfxAll(){
+  if (!project.sfx || !project.sfx.length) project.sfx = [blankSfx()];
+  return project.sfx;
+}
+function sfxAt(n){
+  const list = sfxAll();
+  while (list.length < n) list.push(blankSfx());
+  return list[n - 1];
+}
+
+/* ---------- making the noise ---------- */
+let noiseBuffer = null;
+function noiseSource(ac){
+  if (!noiseBuffer || noiseBuffer.sampleRate !== ac.sampleRate){
+    const len = Math.floor(ac.sampleRate * 1.6);
+    noiseBuffer = ac.createBuffer(1, len, ac.sampleRate);
+    const d = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuffer; src.loop = true;
+  return src;
+}
+function playSfx(n){
+  const e = sfxAt(Math.round(n) || 1);
+  if (e.audio){ playSfxFile(e); return; }
+  let ac;
+  try { ac = audioCtx(); } catch(err){ return; }
+  const t0 = ac.currentTime;
+  const one = Math.max(.03, (e.len || 200) / 1000);
+  const times = Math.max(1, Math.min(8, Math.round(e.repeat) || 1));
+  const gap = one * 1.08;
+  for (let r = 0; r < times; r++){
+    const at = t0 + r * gap;
+    const g = ac.createGain();
+    const peak = Math.max(.01, (e.vol || 45) / 100) * .5;
+    g.gain.setValueAtTime(.0001, at);
+    g.gain.exponentialRampToValueAtTime(peak, at + Math.min(.02, one / 6));
+    g.gain.exponentialRampToValueAtTime(.0001, at + one);
+    g.connect(ac.destination);
+
+    const rough = Math.max(0, Math.min(1, (e.noise || 0) / 100));
+    if (rough < 1){
+      const o = ac.createOscillator();
+      o.type = e.wave || "square";
+      const f0 = Math.max(20, e.freq || 440);
+      o.frequency.setValueAtTime(f0, at);
+      if (e.slide) o.frequency.linearRampToValueAtTime(Math.max(20, f0 + e.slide), at + one);
+      if (e.wobble){                       // a second oscillator shakes the pitch
+        const lfo = ac.createOscillator(), amp = ac.createGain();
+        lfo.frequency.value = Math.max(1, e.wobble);
+        amp.gain.value = f0 * .06 * (e.wobble / 10);
+        lfo.connect(amp); amp.connect(o.frequency);
+        lfo.start(at); lfo.stop(at + one);
+      }
+      const tg = ac.createGain(); tg.gain.value = 1 - rough;
+      o.connect(tg); tg.connect(g);
+      o.start(at); o.stop(at + one);
+    }
+    if (rough > 0){
+      const nz = noiseSource(ac);
+      const ng = ac.createGain(); ng.gain.value = rough;
+      const bp = ac.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.setValueAtTime(Math.max(60, e.freq || 440), at);
+      if (e.slide) bp.frequency.linearRampToValueAtTime(Math.max(60, (e.freq||440) + e.slide), at + one);
+      bp.Q.value = 1.2;
+      nz.connect(bp); bp.connect(ng); ng.connect(g);
+      nz.start(at); nz.stop(at + one);
+    }
+  }
+}
+/* a recorded or imported sound plays as it is */
+const sfxFileCache = {};
+function playSfxFile(e){
+  try {
+    let el = sfxFileCache[e.audio];
+    if (!el){ el = new Audio(e.audio); sfxFileCache[e.audio] = el; }
+    el.currentTime = 0;
+    el.volume = Math.max(.01, (e.vol || 45) / 100);
+    const go = el.play();
+    if (go && go.catch) go.catch(() => {});
+  } catch(err){}
+}
+
+/* ---------- the editor ---------- */
+function drawSfxList(){
+  const box = $("sfx-list"); if (!box) return;
+  box.innerHTML = "";
+  sfxAll().forEach((e, i) => {
+    const b = document.createElement("button");
+    b.textContent = "Sound " + (i + 1) + (e.name ? " — " + e.name : (e.audio ? " — recorded" : ""));
+    if (i === curSfx) b.className = "on";
+    b.onclick = () => { curSfx = i; drawSfxList(); drawSfxPanel(); playSfx(i + 1); };
+    box.appendChild(b);
+  });
+  const pre = $("sfx-presets");
+  if (pre && !pre.childElementCount){
+    for (const name in SFX_PRESETS){
+      const b = document.createElement("button");
+      b.textContent = name;
+      b.style.fontSize = "11px"; b.style.padding = "4px 7px";
+      b.onclick = () => usePreset(name);
+      pre.appendChild(b);
+    }
+  }
+}
+function drawSfxPanel(){
+  const wrap = $("sfx-knobs"); if (!wrap) return;
+  const e = sfxAt(curSfx + 1);
+  $("sfx-title").textContent = "Sound " + (curSfx + 1);
+  const nameBox = $("sfx-name");
+  if (nameBox && document.activeElement !== nameBox) nameBox.value = e.name || "";
+
+  if (e.audio){
+    wrap.innerHTML =
+      '<div class="hint">This one is a recording, so there is nothing to turn. ' +
+      '<button onclick="dropSfxAudio()">Go back to the knobs</button></div>';
+    $("sfx-note").innerHTML = "Play it in your game with <code>sfx(" + (curSfx + 1) + ")</code>.";
+    drawSfxWave();
+    return;
+  }
+  let html = '<div class="row" style="margin-bottom:10px"><span style="min-width:96px">Sound</span>';
+  for (const [w, label] of SFX_WAVES)
+    html += '<button class="' + (e.wave === w ? "on" : "") + '" onclick="setSfx(\'wave\',\'' + w + '\')">' + label + '</button>';
+  html += '</div>';
+  for (const kn of SFX_KNOBS){
+    const v = e[kn.k];
+    html += '<label class="row" style="flex-wrap:nowrap;gap:8px;margin-bottom:7px">' +
+            '<span style="min-width:96px;font-size:12px">' + kn.label + '</span>' +
+            '<input type="range" min="' + kn.min + '" max="' + kn.max + '" step="' + kn.step + '"' +
+            ' value="' + v + '" oninput="setSfx(\'' + kn.k + '\', this.value)" style="flex:1">' +
+            '<span id="sfxv-' + kn.k + '" class="hint" style="min-width:70px;text-align:right">' +
+            v + kn.unit + '</span></label>';
+  }
+  wrap.innerHTML = html;
+  $("sfx-note").innerHTML =
+    "Play it in your game with <code>sfx(" + (curSfx + 1) + ")</code>" +
+    (e.name ? ' or <code>sfx("' + e.name + '")</code>' : "") + ".";
+  drawSfxWave();
+}
+/* A picture of the sound, so you can see a slider do something. */
+function drawSfxWave(){
+  const cv = $("sfx-wave"); if (!cv) return;
+  const c = cv.getContext("2d");
+  const e = sfxAt(curSfx + 1);
+  c.fillStyle = themeVar("--void", "#0c0e13");
+  c.fillRect(0, 0, cv.width, cv.height);
+  c.strokeStyle = themeVar("--line", "#333a4a");
+  c.beginPath(); c.moveTo(0, cv.height/2); c.lineTo(cv.width, cv.height/2); c.stroke();
+  if (e.audio){
+    c.fillStyle = themeVar("--dim", "#8b95ab");
+    c.font = "14px ui-monospace,monospace";
+    c.fillText("a recorded sound", 14, cv.height/2 - 8);
+    return;
+  }
+  c.strokeStyle = themeVar("--accent", "#5ac8fa");
+  c.lineWidth = 1.5;
+  c.beginPath();
+  const N = cv.width, one = (e.len || 200) / 1000;
+  for (let i = 0; i < N; i++){
+    const t = i / N * one;
+    const p = t / one;
+    const f = Math.max(20, (e.freq || 440) + (e.slide || 0) * p);
+    const ph = t * f;
+    let y;
+    switch (e.wave){
+      case "triangle": y = 4 * Math.abs(ph - Math.floor(ph + .5)) - 1; break;
+      case "sawtooth": y = 2 * (ph - Math.floor(ph + .5)); break;
+      case "sine":     y = Math.sin(ph * Math.PI * 2); break;
+      default:         y = (ph - Math.floor(ph)) < .5 ? 1 : -1;
+    }
+    const rough = (e.noise || 0) / 100;
+    y = y * (1 - rough) + (Math.random() * 2 - 1) * rough;
+    const env = Math.pow(1 - p, 1.6) * ((e.vol || 45) / 100);
+    const py = cv.height/2 - y * env * (cv.height/2 - 6);
+    if (i === 0) c.moveTo(i, py); else c.lineTo(i, py);
+  }
+  c.stroke();
+}
+function setSfx(key, v){
+  const e = sfxAt(curSfx + 1);
+  e[key] = (key === "wave") ? v : (+v);
+  const out = $("sfxv-" + key);
+  if (out){
+    const kn = SFX_KNOBS.filter(k => k.k === key)[0];
+    if (kn) out.textContent = e[key] + kn.unit;
+  }
+  if (key === "wave") drawSfxPanel();
+  drawSfxWave();
+  save();
+  if (sfxPreviewTimer) clearTimeout(sfxPreviewTimer);
+  sfxPreviewTimer = setTimeout(() => playSfx(curSfx + 1), 220);   // hear the change
+}
+let sfxPreviewTimer = null;
+function usePreset(name){
+  const preset = SFX_PRESETS[name];
+  if (!preset) return;
+  const e = sfxAt(curSfx + 1);
+  for (const k in preset) e[k] = preset[k];
+  e.audio = null;
+  if (!e.name) e.name = name.toLowerCase().replace(/\s+/g, "");
+  drawSfxList(); drawSfxPanel(); save(); playSfx(curSfx + 1);
+}
+function renameSfx(v){
+  sfxAt(curSfx + 1).name = String(v || "").trim().slice(0, 20);
+  drawSfxList(); save();
+}
+function addSfx(){ sfxAll().push(blankSfx()); curSfx = sfxAll().length - 1; drawSfxList(); drawSfxPanel(); save(); }
+function copySfx(){
+  const e = sfxAt(curSfx + 1);
+  sfxAll().push(Object.assign({}, e, { name: e.name ? e.name + " 2" : "" }));
+  curSfx = sfxAll().length - 1; drawSfxList(); drawSfxPanel(); save();
+}
+function delSfx(){
+  const list = sfxAll();
+  if (list.length < 2){ alert("There is always at least one sound."); return; }
+  list.splice(curSfx, 1);
+  curSfx = Math.min(curSfx, list.length - 1);
+  drawSfxList(); drawSfxPanel(); save();
+}
+function dropSfxAudio(){
+  const e = sfxAt(curSfx + 1);
+  e.audio = null;
+  drawSfxList(); drawSfxPanel(); save();
+}
+function sfxByName(name){
+  const want = String(name || "").trim().toLowerCase();
+  if (!want) return 0;
+  const list = sfxAll();
+  for (let i = 0; i < list.length; i++)
+    if ((list[i].name || "").toLowerCase() === want) return i + 1;
+  return 0;
+}
+
+/* ---------- your own voice ---------- */
+let recorder = null, recChunks = null;
+function canRecord(){
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+}
+function toggleRecord(){
+  if (recorder){ stopRecord(); return; }
+  if (!canRecord()){
+    alert("This browser cannot record.\n\nSafari on iOS 12 has no recorder in it. " +
+          "Use “Import a sound” instead — a wav or mp3 works the same way.");
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    recChunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = ev => { if (ev.data && ev.data.size) recChunks.push(ev.data); };
+    recorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(recChunks, { type: recorder.mimeType || "audio/webm" });
+      const fr = new FileReader();
+      fr.onload = () => {
+        const e = sfxAt(curSfx + 1);
+        e.audio = fr.result;
+        recorder = null;
+        $("sfx-rec").textContent = "🎤 Record";
+        $("sfx-rec").classList.remove("on");
+        drawSfxList(); drawSfxPanel();
+        if (!saveOrSayNo()) { e.audio = null; drawSfxList(); drawSfxPanel(); }
+        else playSfx(curSfx + 1);
+      };
+      fr.readAsDataURL(blob);
+    };
+    recorder.start();
+    $("sfx-rec").textContent = "⏹ Stop — recording";
+    $("sfx-rec").classList.add("on");
+    setTimeout(() => { if (recorder) stopRecord(); }, 8000);   // eight seconds is plenty
+  }).catch(() => alert("The microphone was not allowed."));
+}
+function stopRecord(){ if (recorder && recorder.state !== "inactive") recorder.stop(); }
+function importSfx(input){
+  const f = input.files && input.files[0];
+  input.value = "";
+  if (!f) return;
+  if (f.size > 1500000 && !confirm(
+      "That file is " + Math.round(f.size/1024) + " KB. Sound effects are kept inside your " +
+      "project, and a browser only gives us a few megabytes. Use it anyway?")) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    const e = sfxAt(curSfx + 1);
+    const before = e.audio;
+    e.audio = fr.result;
+    e.name = e.name || f.name.replace(/\.[^.]+$/, "").slice(0, 20);
+    drawSfxList(); drawSfxPanel();
+    if (!saveOrSayNo()){ e.audio = before; drawSfxList(); drawSfxPanel(); }
+    else playSfx(curSfx + 1);
+  };
+  fr.readAsDataURL(f);
+}
+
 /* ---------- statement execution ---------- */
 class Stop { }
 class Wait { constructor(f){ this.f = f; } }
@@ -2553,6 +2924,11 @@ function runCall(st){
       R.sframe[k] = 0;
       R.splay[k] = { t:0, speed: Math.max(1, Math.round(speed) || 6), once:true };
       break; }
+    case "sfx": {
+      const [n] = A();
+      const k = typeof n === "string" ? (sfxByName(n) || 0) : Math.round(n);
+      if (!k) throw new Err("there is no sound effect called \u201c" + n + "\u201d \u2014 name one in the SFX tab", st.n);
+      playSfx(k); break; }
     case "stopplay": case "stop_play": {
       const [n] = A(); const k = Math.round(spriteArg(n));
       R.splay[k] = null; R.sframe[k] = 0; break; }
@@ -6363,6 +6739,7 @@ function gameNow(name, author){
     songs: (project.songs || []).map(sg => ({ ...sg, grid: sg.grid.slice() })),
     sprites: project.sprites, rooms: project.rooms,
     frames: project.frames || null, names: project.names || null,
+    sfx: (project.sfx || []).map(e => Object.assign({}, e)),
     palette: PALETTE.slice(),      // without this, colours you added came back black
     fps: project.fps || 60, zoom: project.zoom || 512,
     saved: Date.now()
@@ -6419,6 +6796,8 @@ function libLoad(g){
     for (const k in g.frames) project.frames[k] = g.frames[k].map(a => a.slice());
   }
   if (g.names) project.names = Object.assign({}, g.names);
+  project.sfx = (g.sfx || []).map(e => Object.assign({}, e));
+  curSfx = 0;
   if (fixed.guessed)
     log("this game was saved before colours travelled with the file — " +
         fixed.guessed + " of them had to be guessed", "err");
@@ -6744,6 +7123,25 @@ Notes
 · Sprite numbers start at 1 and never run out.
 · Anything after <code>#</code> is a comment.
 · Variables work anywhere a number does: <code>move(1, speed, 0)</code>
+
+<b style="color:var(--accent2)">Sound effects</b>
+The <b>5 · SFX</b> tab makes short noises out of seven sliders: a pitch,
+somewhere it slides to, how long, how loud, how rough, how much it wobbles
+and how many times it repeats. The picture above the sliders is the sound
+itself, so you can see what each one does. Every change plays straight back.
+
+<code>sfx(1)</code>                play sound 1
+<code>sfx("jump")</code>           ...or call it by the name you gave it
+
+  Ten ready-made ones — <b>Jump</b>, <b>Coin</b>, <b>Hit</b>, <b>Laser</b>,
+  <b>Explode</b>, <b>Power up</b>, <b>Blip</b>, <b>Step</b>, <b>Alarm</b>,
+  <b>Splash</b> — fill the sliders in for you, then you push them about.
+  <b>🎤 Record</b> uses your own voice instead, and <b>📂 Import a sound</b>
+  takes a wav or an mp3. (Recording needs Safari 14 or a recent Chrome or
+  Firefox; importing works everywhere, including iOS 12.)
+
+  <code>sound(1)</code> is still there for the six plain beeps, and the
+  <b>4 · Music</b> tab is for tunes that play underneath.
 
 <b style="color:var(--accent2)">A sprite's own frames</b>
 Draw a sprite more than once and it can move on its own. In the Paint tab,
@@ -7354,6 +7752,7 @@ $("sprite-size").value = SW;
 $("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
 setFps(project.fps || 60);
 buildLessons(); buildReleases(); buildHelp(); buildTouchpad(); loadTheme();
+drawSfxList(); drawSfxPanel();
 setMode(project.mode || "normal", true);
 drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
 drawStageInfo();
