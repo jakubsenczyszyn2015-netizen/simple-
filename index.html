@@ -202,6 +202,16 @@
   #stage-frame:fullscreen #touchpad .acts,
   #stage-frame:-webkit-full-screen #touchpad .acts{right:24px}
 
+  /* ---- narrower windows: shrink before anything wraps ---- */
+  @media (max-width: 1500px){
+    header{gap:5px; padding:6px 9px}
+    .tabs button{padding:5px 7px}
+    button{padding:5px 9px}
+  }
+  @media (max-width: 1340px){
+    .lbl{display:none}                     /* tabs become just their number */
+  }
+
   /* ---- phones and small windows ---- */
   @media (max-width: 900px){
     header{padding:5px 7px; gap:4px}
@@ -272,11 +282,11 @@
     background-size:10px 10px;background-position:0 0,5px 5px}
 
   /* ---- template gallery ---- */
-  #overlay,#png-ov,#lib-ov,#export-ov,#packs-ov{
+  #overlay,#png-ov,#lib-ov,#packs-ov{
     position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(8,10,14,.82); z-index:50;
     display:none; align-items:center; justify-content:center; padding:24px;
   }
-  #overlay.on,#png-ov.on,#lib-ov.on,#export-ov.on,#packs-ov.on{display:flex}
+  #overlay.on,#png-ov.on,#lib-ov.on,#packs-ov.on{display:flex}
   .modal{
     background:var(--panel); border:1px solid var(--line); border-radius:12px;
     max-width:900px; width:100%; max-height:100%; overflow:auto; padding:20px;
@@ -368,14 +378,15 @@
 <header>
   <h1>Simple<span>++</span></h1>
   <div class="tabs">
-    <button id="t-code" class="on" onclick="tab('code')" title="Code">1<span class="lbl"> · Code</span></button>
-    <button id="t-paint" onclick="tab('paint')" title="Paint">2<span class="lbl"> · Paint</span></button>
-    <button id="t-rooms" onclick="tab('rooms')" title="Rooms">3<span class="lbl"> · Rooms</span></button>
-    <button id="t-music" onclick="tab('music')" title="Music">4<span class="lbl"> · Music</span></button>
-    <button id="t-sfx" onclick="tab('sfx')" title="Sound effects">5<span class="lbl"> · SFX</span></button>
-    <button id="t-learn" onclick="tab('learn')" title="Learn">★<span class="lbl"> · Learn</span></button>
-    <button id="t-help" onclick="tab('help')" title="Help">?<span class="lbl"> · Help</span></button>
-    <button id="t-changes" onclick="tab('changes')" title="Changelog">≡<span class="lbl"> · Changelog</span></button>
+    <button id="t-code" class="on" onclick="tab('code')" title="Code">1<span class="lbl"> Code</span></button>
+    <button id="t-paint" onclick="tab('paint')" title="Paint">2<span class="lbl"> Paint</span></button>
+    <button id="t-rooms" onclick="tab('rooms')" title="Rooms">3<span class="lbl"> Rooms</span></button>
+    <button id="t-music" onclick="tab('music')" title="Music">4<span class="lbl"> Music</span></button>
+    <button id="t-sfx" onclick="tab('sfx')" title="Sound effects">5<span class="lbl"> SFX</span></button>
+    <button id="t-export" onclick="tab('export')" title="Export">⬆<span class="lbl"> Export</span></button>
+    <button id="t-learn" onclick="tab('learn')" title="Learn">★<span class="lbl"> Learn</span></button>
+    <button id="t-help" onclick="tab('help')" title="Help">?<span class="lbl"> Help</span></button>
+    <button id="t-changes" onclick="tab('changes')" title="Changelog — what changed">≡<span class="lbl"> News</span></button>
   </div>
   <div class="modepick" title="How much the language does for you">
     <button id="m-easy"   onclick="setMode('easy')">Easy</button>
@@ -673,6 +684,38 @@
     </div>
   </section>
 
+  <!-- ================= EXPORT ================= -->
+  <section id="v-export" class="view">
+    <div class="col" style="flex:1;min-width:0;padding:18px;overflow:auto">
+      <h2 style="margin:0 0 4px;font-size:18px">Give your game to somebody</h2>
+      <p style="margin:0 0 16px;color:var(--dim);font-size:13px">
+        Everything here uses the game exactly as it is right now — sprites, rooms,
+        songs, sounds and code.
+      </p>
+      <div id="export-cards" class="cards" style="max-width:900px"></div>
+
+      <h3 style="margin:22px 0 8px;font-size:11px;letter-spacing:1.5px;color:var(--dim)">
+        WHY THERE IS NO ".EXE" BUTTON
+      </h3>
+      <div class="hint" style="max-width:720px;font-size:13px;line-height:1.7">
+        A browser tab cannot compile a program. Making an <b>.exe</b> needs a linker,
+        an <b>.apk</b> needs the Android SDK, and an <b>.ipa</b> needs a Mac and
+        Apple's signature. No engine does it from inside a browser — Godot, Unity and
+        GameMaker all run a compiler on your own computer.
+        <br><br>
+        So the two kits above give you the finished project those compilers expect,
+        with the commands written out in a <code>BUILD.txt</code>. Unzip, type two
+        lines, and you have the real thing.
+        <br><br>
+        <b>Xbox and PlayStation</b> are further off again: both need a registered
+        developer account, a devkit machine you apply for, and a signed licence
+        agreement before Microsoft or Sony will let anything run. That is not
+        something an engine can hand out — but the desktop kit is the same code
+        those ports start from.
+      </div>
+    </div>
+  </section>
+
   <!-- ================= LEARN ================= -->
   <section id="v-learn" class="view">
     <div style="padding:18px">
@@ -716,34 +759,6 @@
     </p>
     <div id="cards" class="cards"></div>
     <div style="margin-top:16px;text-align:right"><button onclick="closeGallery()">Close</button></div>
-  </div>
-</div>
-
-<div id="export-ov" onclick="if(event.target===this) closeExport()">
-  <div class="modal" style="max-width:640px">
-    <h2>Export your game</h2>
-    <p class="sub">Turn the project into something you can send to anyone.</p>
-    <div class="cards">
-      <div class="card" onclick="exportHtml()">
-        <div class="em">🌐</div><b>Web page (.html)</b>
-        <span>One file with the whole game inside it — no editor, no internet needed.
-        Double-click it and it plays. Works on any computer, phone or tablet.</span>
-      </div>
-    </div>
-    <h3 style="margin-top:18px">What about .exe, .apk and .ipa?</h3>
-    <div class="hint" style="max-width:560px">
-      Those are compiled programs, and a web page cannot build one — it would need a
-      compiler and a signing key on your computer, not in a browser tab. Nobody's engine
-      does it from inside the browser either; they all hand the job to a tool you run
-      yourself. The good news is the <b>.html</b> above is exactly what those tools take:
-      <br><br>
-      · <b>.exe</b> (Windows) — drop the .html into <a href="https://www.electronjs.org/docs/latest/tutorial/quick-start" target="_blank" style="color:var(--accent)">Electron</a> or Tauri and build.<br>
-      · <b>.apk</b> (Android) — <a href="https://capacitorjs.com/docs/getting-started" target="_blank" style="color:var(--accent)">Capacitor</a> wraps it; Android Studio makes the .apk.<br>
-      · <b>.ipa</b> (iPhone) — Capacitor again, but it also needs a Mac and a paid Apple developer account. That part is Apple's rule, not ours.<br><br>
-      On a phone, the .html can also be added to the home screen from the browser menu,
-      which gets you an icon that opens straight into the game without any of that.
-    </div>
-    <div style="margin-top:16px;text-align:right"><button onclick="closeExport()">Close</button></div>
   </div>
 </div>
 
@@ -927,7 +942,7 @@ function spriteByName(name){
    TABS
    ========================================================= */
 function tab(name){
-  for (const t of ["code","paint","rooms","music","sfx","learn","help","changes"]){
+  for (const t of ["code","paint","rooms","music","sfx","export","learn","help","changes"]){
     $("v-"+t).classList.toggle("on", t === name);
     $("t-"+t).classList.toggle("on", t === name);
   }
@@ -935,6 +950,7 @@ function tab(name){
   if (name === "rooms") { drawRoom(); drawTileList(); drawRoomList(); }
   if (name === "music") { drawSongList(); drawSong(); }
   if (name === "sfx")   { drawSfxList(); drawSfxPanel(); }
+  if (name === "export"){ drawExportPanel(); }
   if (name === "code")  $("code").focus();
 }
 
@@ -4226,34 +4242,279 @@ function hardLoop(){
    The whole engine is one file, so an exported game is that same
    file with your project baked into it and the editor hidden.
    ========================================================= */
-function exportHtml(){
-  const { name, author } = libOpen() ? libFields()
-                                     : { name: project.name || "My Game", author: project.author || "" };
-  save();
-  const game = gameNow(name || "My Game", author);
+/* =========================================================
+   MAKING A ZIP
+   A build kit is a folder of files, and a folder you can download is a
+   zip. This writes the simplest possible one — every file stored as it
+   is, with no compression — which takes a few dozen lines and no library.
+   ========================================================= */
+const CRC_TABLE = (function(){
+  const t = new Int32Array(256);
+  for (let n = 0; n < 256; n++){
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c;
+  }
+  return t;
+})();
+function crc32(bytes){
+  let c = -1;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+}
+function utf8(str){
+  if (window.TextEncoder) return new TextEncoder().encode(str);
+  const raw = unescape(encodeURIComponent(str));          // iOS 12 has no TextEncoder
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+/* files: [{ name, text }] -> a Blob you can download */
+function makeZip(files){
+  const parts = [], dir = [];
+  let offset = 0;
+  const u16 = v => [v & 255, (v >>> 8) & 255];
+  const u32 = v => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
 
-  // the page is self-contained, so its own markup is the player — but it has to
-  // be serialised in a clean state, or whatever window was open comes along too
+  for (const f of files){
+    const nameB = utf8(f.name), body = utf8(f.text);
+    const crc = crc32(body);
+    const head = new Uint8Array([].concat(
+      u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(0), u16(0),
+      u32(crc), u32(body.length), u32(body.length),
+      u16(nameB.length), u16(0)));
+    parts.push(head, nameB, body);
+    dir.push({ nameB, crc, size: body.length, offset });
+    offset += head.length + nameB.length + body.length;
+  }
+  const dirStart = offset;
+  let dirLen = 0;
+  for (const d of dir){
+    const rec = new Uint8Array([].concat(
+      u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0),
+      u32(d.crc), u32(d.size), u32(d.size),
+      u16(d.nameB.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(d.offset)));
+    parts.push(rec, d.nameB);
+    dirLen += rec.length + d.nameB.length;
+  }
+  parts.push(new Uint8Array([].concat(
+    u32(0x06054b50), u16(0), u16(0), u16(dir.length), u16(dir.length),
+    u32(dirLen), u32(dirStart), u16(0))));
+  return new Blob(parts, { type: "application/zip" });
+}
+function download(blob, filename){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* =========================================================
+   EXPORTING
+   ========================================================= */
+function gameTitle(){
+  const t = (libOpen() ? libFields().name : project.name) || "My Game";
+  return String(t).trim() || "My Game";
+}
+function gameAuthor(){
+  return (libOpen() ? libFields().author : project.author) || "";
+}
+function safeName(t){
+  return String(t).replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase() || "my-game";
+}
+/* the whole editor, serialised clean, with the game injected into it */
+function standaloneHtml(game){
   const clone = document.documentElement.cloneNode(true);
-  clone.querySelectorAll("#overlay, #png-ov, #lib-ov, #export-ov").forEach(el => el.classList.remove("on"));
+  clone.querySelectorAll("#overlay, #png-ov, #lib-ov, #packs-ov, #more-menu")
+       .forEach(el => el.classList.remove("on"));
   clone.querySelectorAll("#visit-bar").forEach(el => el.remove());
   const con = clone.querySelector("#console"); if (con) con.innerHTML = "";
   const ta = clone.querySelector("#code"); if (ta) ta.textContent = "";
   clone.querySelector("body").className = "";
   const source = "<!DOCTYPE html>\n" + clone.outerHTML;
-  const inject = "<script>window.SIMPLE_GAME=" + JSON.stringify(game).replace(/</g, "\\u003c") + ";<\/script>";
-  const out = source.replace("</head>", inject + "\n</head>");
-
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([out], { type:"text/html" }));
-  a.download = (name || "my-game").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + ".html";
-  a.click();
-  log("exported " + a.download + " — " + Math.round(out.length/1024) + " KB, opens in any browser", "ok");
-  closeExport();
+  const inject = "<script>window.SIMPLE_GAME=" +
+                 JSON.stringify(game).replace(/</g, "\\u003c") + ";<\/script>";
+  return source.replace("</head>", inject + "\n</head>");
+}
+function exportHtml(){
+  save();
+  const name = gameTitle();
+  const out = standaloneHtml(gameNow(name, gameAuthor()));
+  const file = safeName(name) + ".html";
+  download(new Blob([out], { type:"text/html" }), file);
+  log("exported " + file + " — " + Math.round(out.length/1024) + " KB, opens in any browser", "ok");
+  drawExportPanel();
+}
+function exportJson(){
+  save();
+  const file = safeName(gameTitle()) + ".json";
+  download(new Blob([JSON.stringify(project)], { type:"application/json" }), file);
+  log("saved " + file + " — open it again with Load", "ok");
+  drawExportPanel();
 }
 
-function openExport(){ $("export-ov").classList.add("on"); }
-function closeExport(){ $("export-ov").classList.remove("on"); }
+/* ---------- build kits ----------
+   A browser cannot compile anything: an .exe needs a linker, an .apk needs
+   the Android SDK, an .ipa needs a Mac and Apple's signature. What a browser
+   *can* do is hand you the finished project those tools expect, with the two
+   commands written down. That is what these make. */
+function kitElectron(){
+  save();
+  const name = gameTitle(), id = safeName(name);
+  const html = standaloneHtml(gameNow(name, gameAuthor()));
+  const files = [
+    { name: "game.html", text: html },
+    { name: "package.json", text: JSON.stringify({
+        name: id, version: "1.0.0", description: name + " — made with Simple++",
+        main: "main.js",
+        scripts: { start: "electron .", dist: "electron-builder" },
+        devDependencies: { electron: "^31.0.0", "electron-builder": "^24.13.3" },
+        build: {
+          appId: "com.simplepp." + id.replace(/-/g, ""),
+          productName: name,
+          files: ["main.js", "game.html"],
+          win:   { target: "nsis" },
+          mac:   { target: "dmg", category: "public.app-category.games" },
+          linux: { target: "AppImage", category: "Game" }
+        }
+      }, null, 2) },
+    { name: "main.js", text:
+"// Opens game.html in its own window. There is nothing here to change.\n" +
+"const { app, BrowserWindow } = require('electron');\n\n" +
+"function makeWindow(){\n" +
+"  const win = new BrowserWindow({\n" +
+"    width: 960, height: 720,\n" +
+"    backgroundColor: '#000000',\n" +
+"    autoHideMenuBar: true,\n" +
+"    title: " + JSON.stringify(name) + "\n" +
+"  });\n" +
+"  win.loadFile('game.html');\n" +
+"}\n\n" +
+"app.whenReady().then(makeWindow);\n" +
+"app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });\n" +
+"app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) makeWindow(); });\n" },
+    { name: "BUILD.txt", text:
+"MAKING " + name.toUpperCase() + " INTO A REAL PROGRAM\n" +
+"========================================\n\n" +
+"You need Node.js first: https://nodejs.org (take the LTS one).\n\n" +
+"Then open a terminal in this folder and type:\n\n" +
+"    npm install\n" +
+"    npm run dist\n\n" +
+"That is it. The finished program appears in a new 'dist' folder:\n\n" +
+"  On Windows  ->  " + name + " Setup 1.0.0.exe\n" +
+"  On a Mac    ->  " + name + "-1.0.0.dmg\n" +
+"  On Linux    ->  " + name + "-1.0.0.AppImage\n\n" +
+"Each kind only builds on its own kind of computer: Windows makes the .exe,\n" +
+"a Mac makes the .dmg, Linux makes the AppImage. That is Electron's rule,\n" +
+"not ours -- but this one folder works on all three.\n\n" +
+"To just try it without building anything:\n\n" +
+"    npm install\n" +
+"    npm start\n\n" +
+"The whole game lives in game.html. Export again from Simple++ and drop the\n" +
+"new game.html in on top to update it.\n" }
+  ];
+  download(makeZip(files), id + "-desktop-kit.zip");
+  log("desktop kit downloaded — unzip it, then: npm install && npm run dist", "ok");
+}
+function kitCapacitor(){
+  save();
+  const name = gameTitle(), id = safeName(name);
+  const appId = "com.simplepp." + id.replace(/-/g, "");
+  const html = standaloneHtml(gameNow(name, gameAuthor()));
+  const files = [
+    { name: "www/index.html", text: html },
+    { name: "package.json", text: JSON.stringify({
+        name: id, version: "1.0.0",
+        scripts: {
+          "add:android": "npx cap add android",
+          "add:ios": "npx cap add ios",
+          sync: "npx cap sync",
+          "open:android": "npx cap open android",
+          "open:ios": "npx cap open ios"
+        },
+        devDependencies: { "@capacitor/cli": "^6.1.0" },
+        dependencies: { "@capacitor/core": "^6.1.0",
+                        "@capacitor/android": "^6.1.0",
+                        "@capacitor/ios": "^6.1.0" }
+      }, null, 2) },
+    { name: "capacitor.config.json", text: JSON.stringify({
+        appId, appName: name, webDir: "www",
+        server: { androidScheme: "https" }
+      }, null, 2) },
+    { name: "BUILD.txt", text:
+"PUTTING " + name.toUpperCase() + " ON A PHONE\n" +
+"========================================\n\n" +
+"You need Node.js first: https://nodejs.org\n\n" +
+"    npm install\n\n" +
+"FOR ANDROID (.apk, for the Play Store)\n" +
+"  You also need Android Studio: https://developer.android.com/studio\n\n" +
+"    npm run add:android\n" +
+"    npm run sync\n" +
+"    npm run open:android\n\n" +
+"  Android Studio opens. Build > Build Bundle(s) / APK(s) > Build APK(s).\n" +
+"  The .apk lands in android/app/build/outputs/apk/.\n" +
+"  For the Play Store you need a signing key and a developer account\n" +
+"  (a one-off 25 dollars).\n\n" +
+"FOR IPHONE (.ipa, for the App Store)\n" +
+"  This part needs a Mac. Apple only lets iPhone apps be built on macOS\n" +
+"  with Xcode -- that is their rule, and nothing gets around it.\n\n" +
+"    npm run add:ios\n" +
+"    npm run sync\n" +
+"    npm run open:ios\n\n" +
+"  Xcode opens. Product > Archive, then Distribute App.\n" +
+"  You also need an Apple Developer account (99 dollars a year).\n\n" +
+"NO ACCOUNT, NO WAITING\n" +
+"  Put the .html from Simple++ on any website, open it on the phone, and\n" +
+"  use the browser's Share menu > Add to Home Screen. You get an icon that\n" +
+"  opens straight into the game, full screen, offline, with the touch\n" +
+"  buttons already on. For most games that is the whole job done.\n\n" +
+"The whole game lives in www/index.html. Export again from Simple++, drop\n" +
+"the new file in, and run 'npm run sync'.\n" }
+  ];
+  download(makeZip(files), id + "-phone-kit.zip");
+  log("phone kit downloaded — unzip it, then: npm install", "ok");
+}
+
+/* ---------- the Export tab ---------- */
+const EXPORT_CARDS = [
+  { em:"\ud83c\udf10", title:"Web page (.html)", go:"exportHtml()",
+    text:"One file with the whole game inside it — no editor, no internet. " +
+         "Double-click and it plays, on any computer, phone or tablet. " +
+         "This is also what the two kits below are built around." },
+  { em:"\ud83d\udcbe", title:"Project file (.json)", go:"exportJson()",
+    text:"Everything the editor knows: sprites, frames, rooms, songs, sounds and " +
+         "code. Open it again with Load, or send it to a friend so they can " +
+         "carry on where you left off." },
+  { em:"\ud83d\udda5\ufe0f", title:"Desktop kit (.exe / .dmg / AppImage)", go:"kitElectron()",
+    text:"A ready-made Electron project. Unzip it, then npm install and " +
+         "npm run dist — you get a Windows installer, a Mac disk image or a " +
+         "Linux AppImage. Every command is written out in BUILD.txt." },
+  { em:"\ud83d\udcf1", title:"Phone kit (.apk / .ipa)", go:"kitCapacitor()",
+    text:"A ready-made Capacitor project for the Play Store and the App Store. " +
+         "Android needs Android Studio; iPhone needs a Mac and an Apple " +
+         "developer account. BUILD.txt walks through both." }
+];
+function drawExportPanel(){
+  const box = $("export-cards"); if (!box) return;
+  const name = gameTitle();
+  box.innerHTML = "";
+  for (const c of EXPORT_CARDS){
+    const d = document.createElement("div");
+    d.className = "card";
+    d.innerHTML = '<div class="em">' + c.em + "</div><b>" + c.title + "</b><span>" + c.text + "</span>";
+    d.setAttribute("onclick", c.go);
+    box.appendChild(d);
+  }
+  const note = document.createElement("div");
+  note.className = "hint";
+  note.style.cssText = "width:100%;margin-top:10px";
+  note.innerHTML = "Everything comes out named after <b>" + name.replace(/</g, "&lt;") +
+                   "</b> — rename it in \ud83d\udcda My Games.";
+  box.appendChild(note);
+}
+
+function openExport(){ tab("export"); }
 
 /* start up as a finished game rather than the editor */
 function bootStandalone(g){
@@ -7124,6 +7385,28 @@ Notes
 · Anything after <code>#</code> is a comment.
 · Variables work anywhere a number does: <code>move(1, speed, 0)</code>
 
+<b style="color:var(--accent2)">Getting your game out</b>
+The <b>⬆ Export</b> tab has four things in it.
+
+· <b>Web page (.html)</b> — one file with the whole game inside. Double-click
+  and it plays, anywhere, offline, with the touch buttons already on.
+· <b>Project file (.json)</b> — everything the editor knows. Open it again
+  with Load, or send it to a friend to carry on.
+· <b>Desktop kit</b> — a zip holding an Electron project. Unzip it, then
+  <code>npm install</code> and <code>npm run dist</code>, and you get a
+  Windows .exe, a Mac .dmg or a Linux AppImage. BUILD.txt spells it out.
+· <b>Phone kit</b> — a zip holding a Capacitor project, for the Play Store
+  (.apk) and the App Store (.ipa).
+
+  A browser tab cannot compile a program — an .exe needs a linker, an .apk
+  needs the Android SDK, an .ipa needs a Mac and Apple's signature. No
+  engine does it from inside a browser. So the kits hand you the finished
+  project the real compilers expect, with the commands written down.
+
+  Xbox and PlayStation need a registered developer account and a devkit
+  machine you apply for before either company lets anything run, so nobody
+  can hand those out. The desktop kit is what such a port starts from.
+
 <b style="color:var(--accent2)">Sound effects</b>
 The <b>5 · SFX</b> tab makes short noises out of seven sliders: a pitch,
 somewhere it slides to, how long, how loud, how rough, how much it wobbles
@@ -7752,7 +8035,7 @@ $("sprite-size").value = SW;
 $("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
 setFps(project.fps || 60);
 buildLessons(); buildReleases(); buildHelp(); buildTouchpad(); loadTheme();
-drawSfxList(); drawSfxPanel();
+drawSfxList(); drawSfxPanel(); drawExportPanel();
 setMode(project.mode || "normal", true);
 drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
 drawStageInfo();

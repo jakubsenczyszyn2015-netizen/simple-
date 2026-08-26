@@ -163,15 +163,30 @@ iOS insists. `smoke-test.mjs` fails the build if any of that creeps back in.
 
 ## Exporting
 
-**⬆ Export** writes a single `.html` file containing the whole game with no
-editor around it — double-click and it plays, anywhere, offline.
+The **⬆ Export** tab has four things in it:
 
-`.exe`, `.apk` and `.ipa` are compiled programs, and a web page cannot build
-one; that needs a compiler and a signing key on your own machine. The exported
-`.html` is exactly what the tools that *can* build them take as input: Electron
-or Tauri for Windows, Capacitor for Android, and Capacitor plus a Mac and an
-Apple developer account for iPhone. On a phone, "add to home screen" gets you an
-icon that opens straight into the game without any of that.
+- **Web page (.html)** — one file with the whole game inside. Double-click and
+  it plays, anywhere, offline, with the touch buttons already on.
+- **Project file (.json)** — everything the editor knows. Open it with Load.
+- **Desktop kit** — a zip holding a ready-made Electron project: `game.html`,
+  `main.js`, `package.json` and a `BUILD.txt`. Unzip, `npm install`,
+  `npm run dist`, and you have a Windows `.exe`, a Mac `.dmg` or a Linux
+  AppImage.
+- **Phone kit** — a zip holding a ready-made Capacitor project for the Play
+  Store (`.apk`) and the App Store (`.ipa`).
+
+A browser tab cannot compile a program — an `.exe` needs a linker, an `.apk`
+needs the Android SDK, an `.ipa` needs a Mac and Apple's signature. No engine
+does it from inside a browser; Godot, Unity and GameMaker all run a compiler on
+your machine. So the kits hand you the exact project those compilers expect,
+with the commands written out.
+
+Xbox and PlayStation need a registered developer account and a devkit machine
+you apply for before either company will run anything, so nobody can hand those
+out — but the desktop kit is what such a port starts from.
+
+On a phone, "add to home screen" gets you an icon that opens straight into the
+game with none of the above.
 
 ## Sprites you don't have to draw
 
