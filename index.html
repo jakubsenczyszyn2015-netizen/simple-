@@ -271,6 +271,13 @@
   /* ---- paint ---- */
   #paint-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--void);padding:10px;min-width:0;overflow:auto}
   #frame-bar{width:100%;max-width:560px;display:flex;flex-direction:column;gap:7px;align-items:center}
+  #voxel-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--void);padding:10px;min-width:0;overflow:auto}
+  #voxel{touch-action:none}
+  #vox-bar{width:100%;max-width:520px;display:flex;flex-direction:column;gap:7px;align-items:center}
+  #vox-layers{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;max-height:120px;overflow:auto}
+  #vox-layers .chip{width:50px}
+  #vox-spin{border:1px solid var(--line);border-radius:var(--r);cursor:grab}
+  #vox-spin:active{cursor:grabbing}
   #frame-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
   #frame-strip .chip{width:54px}
   #palette{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
@@ -381,6 +388,7 @@
     <button id="t-code" class="on" onclick="tab('code')" title="Code">1<span class="lbl"> Code</span></button>
     <button id="t-paint" onclick="tab('paint')" title="Paint">2<span class="lbl"> Paint</span></button>
     <button id="t-rooms" onclick="tab('rooms')" title="Rooms">3<span class="lbl"> Rooms</span></button>
+    <button id="t-models" onclick="tab('models')" title="Models — pixel art in 3D">▤<span class="lbl"> Models</span></button>
     <button id="t-music" onclick="tab('music')" title="Music">4<span class="lbl"> Music</span></button>
     <button id="t-sfx" onclick="tab('sfx')" title="Sound effects">5<span class="lbl"> SFX</span></button>
     <button id="t-export" onclick="tab('export')" title="Export">⬆<span class="lbl"> Export</span></button>
@@ -645,6 +653,66 @@
       </div>
       <canvas id="song" width="768" height="384" style="width:100%;max-width:768px"></canvas>
       <div id="song-note" class="hint" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <!-- ================= MODELS ================= -->
+  <section id="v-models" class="view">
+    <div class="pane col" style="width:210px;flex:none">
+      <h3>Models</h3>
+      <div class="row" style="margin-bottom:8px">
+        <button onclick="addModel()">+ New</button>
+        <button onclick="copyModel()">Copy</button>
+        <button onclick="delModel()">Delete</button>
+      </div>
+      <button onclick="modelFromSprite()" style="width:100%;margin-bottom:10px">⬆ Build from a sprite</button>
+      <h3>Name</h3>
+      <input id="model-name" type="text" maxlength="24" placeholder="tree, car…"
+             autocomplete="off" oninput="renameModel(this.value)"
+             style="width:100%;background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+      <div class="hint" style="margin:4px 0 10px">a name works anywhere the number does — <code>voxel("tree")</code></div>
+      <div id="model-list" class="sprites"></div>
+    </div>
+
+    <div id="voxel-wrap">
+      <canvas id="voxel" width="448" height="448" style="width:448px;height:448px"></canvas>
+      <div id="vox-bar">
+        <div class="row" style="justify-content:center;gap:5px">
+          <b id="vox-layer-label" class="hint">Layer 1 of 1</b>
+          <button onclick="addLayer(false)" title="an empty slice above this one">+ Layer</button>
+          <button onclick="addLayer(true)" title="a copy of this slice">⧉ Copy</button>
+          <button id="vox-del" onclick="delLayer()">🗑 Delete</button>
+        </div>
+        <div id="vox-layers" class="sprites"></div>
+      </div>
+    </div>
+
+    <div class="pane col" style="width:236px;flex:none">
+      <h3>How it looks</h3>
+      <canvas id="vox-spin" width="212" height="212" style="width:212px;height:212px"></canvas>
+      <div class="row" style="margin-top:8px;gap:5px">
+        <button id="vox-spin-btn" onclick="spinToggle()">↻ Turn it</button>
+        <span id="vox-angle" class="hint">30°</span>
+      </div>
+      <div class="hint" style="margin-top:4px">drag the picture to turn it by hand</div>
+      <h3 style="margin-top:14px">How tall</h3>
+      <label class="row" style="flex-wrap:nowrap;gap:8px">
+        <input id="vox-tilt" type="range" min="0" max="6" step="0.5" value="1"
+               oninput="setModelTilt(this.value)" style="flex:1">
+        <span id="vox-tilt-val" class="hint" style="min-width:26px;text-align:right">1</span>
+      </label>
+      <div class="hint" style="margin-top:4px">
+        how far apart the slices are drawn. Bigger looks taller.
+      </div>
+      <h3 style="margin-top:14px">Tools</h3>
+      <div id="vox-tools" class="row" style="gap:4px"></div>
+      <h3 style="margin-top:14px">Colours</h3>
+      <div id="vox-palette" class="hint">the Paint tab's colours — pick one there</div>
+      <div class="hint" style="margin-top:12px;line-height:1.6">
+        A model is a stack of pictures. Layer 1 is the bottom slice; each new
+        layer sits on top. Show it in your game with
+        <code>voxel(<span id="vox-id">1</span>)</code>.
+      </div>
     </div>
   </section>
 
@@ -942,13 +1010,14 @@ function spriteByName(name){
    TABS
    ========================================================= */
 function tab(name){
-  for (const t of ["code","paint","rooms","music","sfx","export","learn","help","changes"]){
+  for (const t of ["code","paint","rooms","models","music","sfx","export","learn","help","changes"]){
     $("v-"+t).classList.toggle("on", t === name);
     $("t-"+t).classList.toggle("on", t === name);
   }
-  if (name === "paint") { drawPaint(); drawSpriteList(); }
+  if (name === "paint") { PAINT_MODE = "sprite"; drawPaint(); drawSpriteList(); }
   if (name === "rooms") { drawRoom(); drawTileList(); drawRoomList(); }
   if (name === "music") { drawSongList(); drawSong(); }
+  if (name === "models"){ PAINT_MODE = "model"; drawVoxel(); drawModelList(); buildVoxTools(); }
   if (name === "sfx")   { drawSfxList(); drawSfxPanel(); }
   if (name === "export"){ drawExportPanel(); }
   if (name === "code")  $("code").focus();
@@ -1103,8 +1172,8 @@ function buildTools(){
   });
 }
 
-function cellAt(e){
-  const r = paintCv.getBoundingClientRect();
+function cellAt(e, cv){
+  const r = (cv || paintCv).getBoundingClientRect();
   return { x: Math.floor((e.clientX - r.left) / r.width  * SW),
            y: Math.floor((e.clientY - r.top ) / r.height * SH) };
 }
@@ -1157,44 +1226,91 @@ function shapePixels(tool, a, b, filled){
   return out;
 }
 
-paintCv.addEventListener("mousedown", e => {
-  const c = cellAt(e);
-  const erase = e.button === 2;
-  painting = erase ? 2 : 1;
-  const colour = erase ? -1 : curColor;
+/* The same seven tools drive both the sprite editor and the voxel editor.
+   The only difference is which canvas is under the mouse and which pixels
+   paintTarget() hands back, so the handlers are installed twice. */
+function installPainter(cv, mode){
+  cv.addEventListener("mousedown", e => {
+    PAINT_MODE = mode;
+    const c = cellAt(e, cv);
+    const erase = e.button === 2;
+    painting = erase ? 2 : 1;
+    const colour = erase ? -1 : curColor;
 
-  if (curTool === "pick" && !erase){
-    const v = paintTarget()[c.y*SW+c.x];
-    if (v >= 0){ curColor = v; refreshPalette(); }
-    painting = 0; return;
-  }
-  if (curTool === "fill"){ floodFill(c.x, c.y, colour); painting = 0; afterPaint(); return; }
-  if (curTool === "line" || curTool === "box" || curTool === "circle"){
-    dragFrom = c; dragTo = c; drawPaint(); return;
-  }
-  put(c.x, c.y, colour); afterPaint();
-});
-paintCv.addEventListener("mousemove", e => {
-  if (!painting) return;
-  const c = cellAt(e);
-  if (dragFrom){ dragTo = c; drawPaint(); return; }
-  put(c.x, c.y, painting === 2 ? -1 : curColor);
-  afterPaint();
-});
-window.addEventListener("mouseup", e => {
+    if (curTool === "pick" && !erase){
+      const v = paintTarget()[c.y*SW+c.x];
+      if (v >= 0){ curColor = v; refreshPalette(); }
+      painting = 0; return;
+    }
+    if (curTool === "fill"){ floodFill(c.x, c.y, colour); painting = 0; afterPaint(); return; }
+    if (curTool === "line" || curTool === "box" || curTool === "circle"){
+      dragFrom = c; dragTo = c; repaint(); return;
+    }
+    put(c.x, c.y, colour); afterPaint();
+  });
+  cv.addEventListener("mousemove", e => {
+    if (!painting || PAINT_MODE !== mode) return;
+    const c = cellAt(e, cv);
+    if (dragFrom){ dragTo = c; repaint(); return; }
+    put(c.x, c.y, painting === 2 ? -1 : curColor);
+    afterPaint();
+  });
+  cv.addEventListener("contextmenu", e => e.preventDefault());
+  /* a finger works the same as the mouse */
+  const touch = (e, kind) => {
+    const t = e.touches[0] || e.changedTouches[0];
+    if (!t) return;
+    e.preventDefault();
+    const fake = { clientX:t.clientX, clientY:t.clientY, button:0, shiftKey:false };
+    cv.dispatchEvent(Object.assign(new MouseEvent(kind, { bubbles:false }), fake));
+  };
+  cv.addEventListener("touchstart", e => {
+    PAINT_MODE = mode;
+    const t = e.touches[0]; if (!t) return;
+    e.preventDefault();
+    const c = { x: Math.floor((t.clientX - cv.getBoundingClientRect().left) / cv.getBoundingClientRect().width * SW),
+                y: Math.floor((t.clientY - cv.getBoundingClientRect().top ) / cv.getBoundingClientRect().height * SH) };
+    painting = 1;
+    if (curTool === "fill"){ floodFill(c.x, c.y, curColor); painting = 0; afterPaint(); return; }
+    if (curTool === "line" || curTool === "box" || curTool === "circle"){ dragFrom = c; dragTo = c; repaint(); return; }
+    put(c.x, c.y, curColor); afterPaint();
+  }, { passive:false });
+  cv.addEventListener("touchmove", e => {
+    if (!painting || PAINT_MODE !== mode) return;
+    const t = e.touches[0]; if (!t) return;
+    e.preventDefault();
+    const r = cv.getBoundingClientRect();
+    const c = { x: Math.floor((t.clientX - r.left) / r.width * SW),
+                y: Math.floor((t.clientY - r.top ) / r.height * SH) };
+    if (dragFrom){ dragTo = c; repaint(); return; }
+    put(c.x, c.y, curColor); afterPaint();
+  }, { passive:false });
+  cv.addEventListener("touchend", () => finishStroke(false), { passive:false });
+}
+function repaint(){ if (PAINT_MODE === "model") drawVoxel(); else drawPaint(); }
+function finishStroke(shift){
   if (dragFrom && dragTo){
     const colour = painting === 2 ? -1 : curColor;
-    shapePixels(curTool, dragFrom, dragTo, e.shiftKey).forEach(([x,y]) => put(x, y, colour));
+    shapePixels(curTool, dragFrom, dragTo, shift).forEach(([x,y]) => put(x, y, colour));
     afterPaint();
   }
   painting = 0; dragFrom = dragTo = null;
-});
-paintCv.addEventListener("contextmenu", e => e.preventDefault());
+}
+window.addEventListener("mouseup", e => finishStroke(e.shiftKey));
+installPainter(paintCv, "sprite");
 
-function afterPaint(){ SPRITE_EPOCH++; drawPaint(); drawSpriteList(); save(); }
+function afterPaint(){
+  SPRITE_EPOCH++;
+  if (PAINT_MODE === "model"){ MODEL_EPOCH++; drawVoxel(); drawModelList(); save(); return; }
+  drawPaint(); drawSpriteList(); save();
+}
 
-/* the pixels the tools write to: the open frame of the selected sprite */
+/* Which pixels the tools write to. In the Paint tab that is the open frame
+   of the selected sprite; in the Models tab it is the open layer of the
+   selected model. Everything else about the tools is identical. */
+let PAINT_MODE = "sprite";
 function paintTarget(){
+  if (PAINT_MODE === "model") return modelLayer(curModel + 1, curLayer);
   const n = curSprite + 1;
   if (curFrame && curFrame < frameCount(n)) return frameData(n, curFrame);
   curFrame = 0;
@@ -1382,6 +1498,8 @@ function buildPalette(){
 }
 function refreshPalette(){
   [...$("palette").children].forEach((d, i) => d.classList.toggle("on", i === curColor));
+  const vp = $("vox-palette");
+  if (vp) [...vp.children].forEach((d, i) => d.classList.toggle("on", i === curColor));
 }
 
 /* =========================================================
@@ -1801,6 +1919,12 @@ function evalExpr(src, line){
       case "tile": return tileAtPixel(args[0], args[1]);
       case "free": return isFree(args[0], args[1] || 0, args[2] || 0);
       case "key": return !!R.keys[String(args[0]).toLowerCase()];
+      case "voxelx": case "voxel_x": return vactor(args[0]).x;
+      case "voxely": case "voxel_y": return vactor(args[0]).y;
+      case "voxelz": case "voxel_z": return vactor(args[0]).z;
+      case "angle":  return ((vactor(args[0]).angle % 360) + 360) % 360;
+      case "layers": return modelDepth(Math.round(modelArg(args[0])));
+      case "modelof": case "model_of": return modelByName(args[0]) || 0;
       case "frames":  return frameCount(Math.round(spriteArg(args[0])));
       case "frameof": case "frame_of": return liveFrame(Math.round(spriteArg(args[0]))) + 1;
       case "playing": return !!R.splay[Math.round(spriteArg(args[0]))];
@@ -1850,10 +1974,21 @@ function spriteArg(v){
   }
   return v;
 }
+/* A voxel actor is the same idea as a sprite actor: a number, a place, and
+   whether it is on screen. It carries an angle as well, and a thickness for
+   when a flat sprite is being shown as a solid one. */
+function vactor(n){
+  n = Math.round(modelArg(n));
+  if (!R.vox[n]) R.vox[n] = {
+    id:n, x:VW/2, y:VH/2, z:0, on:false,
+    angle:0, spin:0, scale:1, tilt:1, thick:0
+  };
+  return R.vox[n];
+}
 function actor(n){
   n = Math.round(spriteArg(n));
   if (!R.actors[n]) R.actors[n] = {
-    id:n, x:0, y:0, on:false, w:SW, h:SH, mySolids:[],
+    id:n, x:0, y:0, z:0, on:false, w:SW, h:SH, mySolids:[],
     grav:null, hor:null, ver:null, anim:null,
     vy:0, vx:0, mvy:0, onGround:false
   };
@@ -2137,6 +2272,10 @@ function stepBehaviours(){
     }
   }
   stepFrames();
+  for (const k in R.vox){
+    const v = R.vox[k];
+    if (v.spin) v.angle = (v.angle + v.spin) % 360;
+  }
 }
 
 /* Sprites told to play their own frames move one step on. This is not the
@@ -2502,6 +2641,331 @@ function buildTouchpad(){
   try { saved = localStorage.getItem("simplepp-touch"); } catch(e){}
   toggleTouch(saved === null ? IS_TOUCH : saved === "1");
 }
+
+/* =========================================================
+   MODELS — pixel art with a depth to it
+   A model is a stack of pictures. Layer 1 is the bottom slice, layer 2 sits
+   on top of it, and so on up. Drawing them one above the other, all turned
+   by the same angle, is how a flat pixel drawing turns into something you
+   can walk around: a real technique, cheap enough to run at sixty frames a
+   second, and it uses the very same seven tools as the sprite editor.
+   ========================================================= */
+let MODEL_EPOCH = 0;
+let curModel = 0, curLayer = 0;
+const modelCache = new Map();
+
+function blankModel(){ return { name:"", layers:[blankSprite()], tilt:1 }; }
+function models(){
+  if (!project.models || !project.models.length) project.models = [blankModel()];
+  return project.models;
+}
+function model(n){
+  const list = models();
+  while (list.length < n) list.push(blankModel());
+  return list[n - 1];
+}
+function modelLayer(n, i){
+  const m = model(n);
+  if (!m.layers.length) m.layers.push(blankSprite());
+  if (i >= m.layers.length){ curLayer = m.layers.length - 1; i = curLayer; }
+  return m.layers[i];
+}
+function modelDepth(n){ return model(n).layers.length; }
+function modelByName(name){
+  const want = String(name || "").trim().toLowerCase();
+  if (!want) return 0;
+  const list = models();
+  for (let i = 0; i < list.length; i++)
+    if ((list[i].name || "").toLowerCase() === want) return i + 1;
+  return 0;
+}
+function modelArg(v){
+  if (typeof v === "string"){ const n = modelByName(v); if (n) return n; }
+  return v;
+}
+
+/* Each slice is painted once onto its own canvas, shaded by how high up it
+   is, so the stack reads as solid rather than as a pile of flat pictures. */
+function layerCanvas(n, i){
+  const key = n + ":" + i;
+  const hit = modelCache.get(key);
+  if (hit && hit.epoch === MODEL_EPOCH) return hit.cv;
+  const m = model(n);
+  const px = m.layers[i];
+  if (!px) return null;
+  const depth = Math.max(1, m.layers.length);
+  const lift = depth < 2 ? 1 : i / (depth - 1);
+  const shade = 0.60 + 0.40 * lift;          // the top catches the light
+  const cv = document.createElement("canvas");
+  cv.width = SW; cv.height = SH;
+  const c = cv.getContext("2d");
+  for (let y = 0; y < SH; y++){
+    for (let x = 0; x < SW; x++){
+      const v = px[y * SW + x];
+      if (v < 0) continue;
+      c.fillStyle = shadeHex(PALETTE[v] || "#ff00ff", shade);
+      c.fillRect(x, y, 1, 1);
+    }
+  }
+  modelCache.set(key, { epoch: MODEL_EPOCH, cv });
+  return cv;
+}
+function shadeHex(hex, f){
+  const h = String(hex).replace("#", "");
+  if (h.length < 6) return hex;
+  const r = Math.round(parseInt(h.slice(0,2),16) * f);
+  const g = Math.round(parseInt(h.slice(2,4),16) * f);
+  const b = Math.round(parseInt(h.slice(4,6),16) * f);
+  return "rgb(" + r + "," + g + "," + b + ")";
+}
+
+/* Draw model n centred at (px, py), turned by angle degrees. */
+function drawModelAt(ctx, n, px, py, angle, scale, tiltMul){
+  const m = model(n);
+  const depth = m.layers.length;
+  const tilt = (m.tilt === undefined ? 1 : m.tilt) * (tiltMul === undefined ? 1 : tiltMul);
+  const rad = (angle || 0) * Math.PI / 180;
+  const sc = scale || 1;
+  const w = SW * sc, h = SH * sc;
+  for (let i = 0; i < depth; i++){
+    const cv = layerCanvas(n, i);
+    if (!cv) continue;
+    ctx.save();
+    ctx.translate(px, py - i * tilt * sc);
+    ctx.rotate(rad);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(cv, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+}
+
+/* ---------- the Models tab ---------- */
+const voxCv = $("voxel"), voxCtx = voxCv ? voxCv.getContext("2d") : null;
+const spinCv = $("vox-spin"), spinCtx = spinCv ? spinCv.getContext("2d") : null;
+let spinAngle = 30, spinTimer = null, spinDragging = false;
+
+function drawVoxel(){
+  if (!voxCtx) return;
+  const px = paintTarget();
+  const PZ = voxCv.width / SW;
+  voxCtx.fillStyle = themeVar("--void", "#0c0e13");
+  voxCtx.fillRect(0, 0, voxCv.width, voxCv.height);
+
+  /* the slice underneath shows through faintly, so you can line things up */
+  if (curLayer > 0){
+    const under = model(curModel + 1).layers[curLayer - 1];
+    voxCtx.globalAlpha = .28;
+    for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
+      const v = under[y*SW+x];
+      if (v < 0) continue;
+      voxCtx.fillStyle = PALETTE[v] || "#ff00ff";
+      voxCtx.fillRect(x*PZ, y*PZ, PZ, PZ);
+    }
+    voxCtx.globalAlpha = 1;
+  }
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
+    if (px[y*SW+x] >= 0) continue;
+    voxCtx.fillStyle = (x + y) % 2 ? themeVar("--panel", "#161a22") : themeVar("--panel2", "#1b202b");
+    voxCtx.globalAlpha = curLayer > 0 ? .5 : 1;
+    voxCtx.fillRect(x*PZ, y*PZ, PZ, PZ);
+    voxCtx.globalAlpha = 1;
+  }
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
+    const v = px[y*SW+x];
+    if (v < 0) continue;
+    voxCtx.fillStyle = PALETTE[v] || "#ff00ff";
+    voxCtx.fillRect(x*PZ, y*PZ, PZ, PZ);
+  }
+  if (PZ >= 6){
+    voxCtx.strokeStyle = "rgba(255,255,255,.07)"; voxCtx.lineWidth = 1;
+    for (let i = 0; i <= SW; i++){
+      voxCtx.beginPath(); voxCtx.moveTo(i*PZ+.5, 0); voxCtx.lineTo(i*PZ+.5, voxCv.height); voxCtx.stroke();
+      voxCtx.beginPath(); voxCtx.moveTo(0, i*PZ+.5); voxCtx.lineTo(voxCv.width, i*PZ+.5); voxCtx.stroke();
+    }
+  }
+  if (dragFrom && dragTo && PAINT_MODE === "model"){
+    voxCtx.fillStyle = painting === 2 ? "rgba(255,255,255,.35)" : PALETTE[curColor];
+    voxCtx.globalAlpha = .75;
+    shapePixels(curTool, dragFrom, dragTo, false).forEach(([x, y]) => {
+      if (x >= 0 && y >= 0 && x < SW && y < SH) voxCtx.fillRect(x*PZ, y*PZ, PZ, PZ);
+    });
+    voxCtx.globalAlpha = 1;
+  }
+  drawSpin();
+  drawLayerStrip();
+}
+function drawSpin(){
+  if (!spinCtx) return;
+  spinCtx.fillStyle = themeVar("--void", "#0c0e13");
+  spinCtx.fillRect(0, 0, spinCv.width, spinCv.height);
+  const scale = Math.max(2, Math.floor(Math.min(spinCv.width, spinCv.height) / (SW * 1.9)));
+  const depth = modelDepth(curModel + 1);
+  drawModelAt(spinCtx, curModel + 1,
+              spinCv.width / 2,
+              spinCv.height / 2 + depth * scale / 2,
+              spinAngle, scale);
+  const info = $("vox-angle");
+  if (info) info.textContent = Math.round(((spinAngle % 360) + 360) % 360) + "°";
+}
+function drawLayerStrip(){
+  const strip = $("vox-layers"); if (!strip) return;
+  const n = curModel + 1, depth = modelDepth(n);
+  const lab = $("vox-layer-label");
+  if (lab) lab.textContent = "Layer " + (curLayer + 1) + " of " + depth;
+  const del = $("vox-del"); if (del) del.disabled = depth < 2;
+  strip.innerHTML = "";
+  /* the top slice is at the top of the list, the way the model is stacked */
+  for (let i = depth - 1; i >= 0; i--){
+    const d = document.createElement("div");
+    d.className = "chip" + (i === curLayer ? " on" : "");
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = SW;
+    const c = cv.getContext("2d");
+    const src = layerCanvas(n, i);
+    if (src) c.drawImage(src, 0, 0);
+    cv.style.width = cv.style.height = "38px";
+    d.appendChild(cv);
+    const b = document.createElement("b"); b.textContent = i + 1;
+    d.appendChild(b);
+    d.onclick = () => { curLayer = i; PAINT_MODE = "model"; drawVoxel(); };
+    strip.appendChild(d);
+  }
+}
+function drawModelList(){
+  const box = $("model-list"); if (!box) return;
+  box.innerHTML = "";
+  models().forEach((m, i) => {
+    const n = i + 1;
+    const d = document.createElement("div");
+    d.className = "chip" + (i === curModel ? " on" : "");
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 44;
+    const c = cv.getContext("2d");
+    c.fillStyle = themeVar("--void", "#0c0e13"); c.fillRect(0, 0, 44, 44);
+    const sc = Math.max(1, Math.min(3, Math.floor(34 / SW)));
+    drawModelAt(c, n, 22, 24 + m.layers.length * sc / 2, 30, sc);
+    cv.style.width = cv.style.height = "100%";
+    d.appendChild(cv);
+    const b = document.createElement("b");
+    b.textContent = n + " ▤" + m.layers.length;
+    d.appendChild(b);
+    if (m.name){ const em = document.createElement("em"); em.textContent = m.name; d.appendChild(em); }
+    d.title = m.name ? m.name + " (model " + n + ")" : "model " + n;
+    d.onclick = () => { curModel = i; curLayer = 0; PAINT_MODE = "model"; drawVoxel(); drawModelList(); };
+    box.appendChild(d);
+  });
+  const nameBox = $("model-name");
+  if (nameBox && document.activeElement !== nameBox) nameBox.value = model(curModel + 1).name || "";
+  const tiltBox = $("vox-tilt");
+  if (tiltBox) tiltBox.value = model(curModel + 1).tilt;
+  const tiltOut = $("vox-tilt-val");
+  if (tiltOut) tiltOut.textContent = model(curModel + 1).tilt;
+}
+function addLayer(copy){
+  const m = model(curModel + 1);
+  m.layers.splice(curLayer + 1, 0, copy ? m.layers[curLayer].slice() : blankSprite());
+  curLayer++;
+  PAINT_MODE = "model"; afterPaint();
+}
+function delLayer(){
+  const m = model(curModel + 1);
+  if (m.layers.length < 2){ alert("A model always keeps one layer."); return; }
+  m.layers.splice(curLayer, 1);
+  curLayer = Math.min(curLayer, m.layers.length - 1);
+  PAINT_MODE = "model"; afterPaint();
+}
+function addModel(){ models().push(blankModel()); curModel = models().length - 1; curLayer = 0; PAINT_MODE = "model"; afterPaint(); }
+function copyModel(){
+  const m = model(curModel + 1);
+  models().push({ name: m.name ? m.name + " 2" : "", tilt: m.tilt, layers: m.layers.map(a => a.slice()) });
+  curModel = models().length - 1; curLayer = 0; PAINT_MODE = "model"; afterPaint();
+}
+function delModel(){
+  const list = models();
+  if (list.length < 2){ alert("There is always at least one model."); return; }
+  list.splice(curModel, 1);
+  curModel = Math.min(curModel, list.length - 1);
+  curLayer = 0; PAINT_MODE = "model"; afterPaint();
+}
+function renameModel(v){
+  model(curModel + 1).name = String(v || "").trim().slice(0, 24);
+  drawModelList(); save();
+}
+function setModelTilt(v){
+  model(curModel + 1).tilt = Math.max(0, Math.min(6, +v || 0));
+  const out = $("vox-tilt-val"); if (out) out.textContent = model(curModel + 1).tilt;
+  MODEL_EPOCH++; drawSpin(); save();
+}
+/* a flat sprite becomes a model by stacking copies of it */
+function modelFromSprite(){
+  const n = prompt("Which sprite number should this model be built from?", String(curSprite + 1));
+  if (n === null) return;
+  const k = Math.round(+n) || 1;
+  if (k < 1 || k > project.sprites.length){ alert("There is no sprite " + k + "."); return; }
+  const deep = Math.max(1, Math.min(32, Math.round(+prompt("How many layers thick?", "6") || 6)));
+  const px = sprite(k);
+  const m = model(curModel + 1);
+  m.layers = [];
+  for (let i = 0; i < deep; i++) m.layers.push(px.slice());
+  curLayer = 0; PAINT_MODE = "model"; afterPaint();
+}
+/* the same seven tools, and the same colours, shown again on this side */
+function buildVoxTools(){
+  const box = $("vox-tools");
+  if (box){
+    box.innerHTML = "";
+    TOOLS.forEach(t => {
+      const b = document.createElement("button");
+      b.textContent = t.label; b.title = t.tip;
+      b.className = t.id === curTool ? "on" : "";
+      b.style.minWidth = "34px";
+      b.onclick = () => { curTool = t.id; buildTools(); buildVoxTools(); };
+      box.appendChild(b);
+    });
+  }
+  const pal = $("vox-palette");
+  if (pal){
+    pal.innerHTML = "";
+    pal.style.display = "grid";
+    pal.style.gridTemplateColumns = "repeat(6,1fr)";
+    pal.style.gap = "4px";
+    PALETTE.forEach((hex, i) => {
+      const d = document.createElement("div");
+      d.className = "sw" + (i === curColor ? " on" : "");
+      d.style.background = hex;
+      d.onclick = () => { curColor = i; buildVoxTools(); refreshPalette(); };
+      pal.appendChild(d);
+    });
+  }
+}
+function spinToggle(){
+  const b = $("vox-spin-btn");
+  if (spinTimer){
+    clearInterval(spinTimer); spinTimer = null;
+    if (b){ b.textContent = "↻ Turn it"; b.classList.remove("on"); }
+    return;
+  }
+  if (b){ b.textContent = "■ Stop"; b.classList.add("on"); }
+  spinTimer = setInterval(() => { spinAngle = (spinAngle + 3) % 360; drawSpin(); }, 40);
+}
+
+if (spinCv){
+  let lastX = 0;
+  const start = x => { spinDragging = true; lastX = x; };
+  const move  = x => {
+    if (!spinDragging) return;
+    spinAngle = (spinAngle + (x - lastX) * 1.2) % 360;
+    lastX = x; drawSpin();
+  };
+  const end = () => { spinDragging = false; };
+  spinCv.addEventListener("mousedown", e => { e.preventDefault(); start(e.clientX); });
+  window.addEventListener("mousemove", e => move(e.clientX));
+  window.addEventListener("mouseup", end);
+  spinCv.addEventListener("touchstart", e => { e.preventDefault(); start(e.touches[0].clientX); }, { passive:false });
+  spinCv.addEventListener("touchmove",  e => { e.preventDefault(); move(e.touches[0].clientX); }, { passive:false });
+  spinCv.addEventListener("touchend", end);
+}
+installPainter(voxCv, "model");
 
 /* =========================================================
    SOUND EFFECTS
@@ -2897,6 +3361,9 @@ const QUESTIONS = {
   click_button:'if click_button("Options")',
   buttonclicked:'if clicked("Play")',   button_clicked:'if clicked("Play")',
   visible:"if visible(1)",              key:"if key(space)",
+  voxelx:"if voxelx(1) > 100",          voxely:"if voxely(1) > 100",
+  voxelz:"if voxelz(1) > 0",            angle:"if angle(1) > 90",
+  layers:"if layers(1) > 4",            modelof:'set(n, modelof("tree"))',
   frames:"if frames(1) > 1",            frameof:"if frameof(1) == 2",
   frame_of:"if frame_of(1) == 2",       playing:"if playing(1)",
   spriteof:'set(n, spriteof("player"))', sprite_of:'set(n, sprite_of("player"))',
@@ -2928,6 +3395,34 @@ function runCall(st){
     case "show":  { const [n] = A(); ensureSprite(Math.round(n)); actor(n).on = true;  break; }
     case "hide":  { const [n] = A(); actor(n).on = false; break; }
 
+    /* ---- models: pixel art with a depth to it (Models tab) ---- */
+    case "voxel": case "voxelshow": case "voxel_show": {
+      const [n, x, y] = A(); const v = vactor(n);
+      v.on = true;
+      if (x !== undefined) v.x = x;
+      if (y !== undefined) v.y = y;
+      break; }
+    case "voxelhide": case "voxel_hide": { vactor(A()[0]).on = false; break; }
+    case "voxelput":  case "voxel_put":  {
+      const [n, x, y, z] = A(); const v = vactor(n);
+      v.x = x || 0; v.y = y || 0; if (z !== undefined) v.z = z; break; }
+    case "voxelmove": case "voxel_move": {
+      const [n, dx, dy, dz] = A(); const v = vactor(n);
+      v.x += dx || 0; v.y += dy || 0; v.z += dz || 0; break; }
+    case "voxelsize": case "voxel_size": {
+      const [n, k] = A(); vactor(n).scale = Math.max(.25, Math.min(8, k || 1)); break; }
+    case "voxeltall": case "voxel_tall": {
+      const [n, k] = A(); vactor(n).tilt = Math.max(0, Math.min(8, k === undefined ? 1 : k)); break; }
+    case "rotate":    { const [n, deg] = A(); const v = vactor(n); v.angle = deg || 0; v.spin = 0; break; }
+    case "rotateby":  case "rotate_by": { const [n, deg] = A(); vactor(n).angle += deg || 0; break; }
+    case "spin":      { const [n, speed] = A(); vactor(n).spin = (speed === undefined ? 2 : speed); break; }
+    case "stopspin":  case "stop_spin": { vactor(A()[0]).spin = 0; break; }
+    case "thickness": {
+      const [a1, a2] = A();
+      if (a2 === undefined){ R.thickAll = Math.max(0, Math.min(64, Math.round(a1) || 0)); break; }
+      R.thick[Math.round(spriteArg(a1))] = Math.max(0, Math.min(64, Math.round(a2) || 0));
+      break; }
+
     /* ---- a sprite's own frames (Paint tab: + Frame) ---- */
     case "play": {
       const [n, speed] = A(); const k = Math.round(spriteArg(n));
@@ -2954,7 +3449,12 @@ function runCall(st){
       R.splay[k] = null;
       R.sframe[k] = Math.max(0, Math.min(total - 1, (Math.round(f) || 1) - 1));
       break; }
-    case "move":  { const [n,dx,dy] = A();
+    case "move":  { const [n,dx,dy,dz] = A();
+                    if (dz){                        // move(1, x, y, z) — the third one lifts it
+                      const v = R.vox[Math.round(modelArg(n))];
+                      if (v) v.z += dz;
+                      else actor(n).z = (actor(n).z || 0) + dz;
+                    }
                     if (typeof n === "string"){          // move("Hello!", 10, 0) shifts that writing
                       const m = R.textMoves[n] || { dx:0, dy:0 };
                       m.dx += dx||0; m.dy += dy||0;
@@ -3330,6 +3830,8 @@ function startWith(source){
   R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
   R.paused = false; R.roomSwaps = {};
   R.sframe = {}; R.splay = {};   // which frame each sprite shows, and what is playing
+  R.vox = {}; R.thick = {}; R.thickAll = 0;   // models, and how thick a flat sprite is in 3D
+  R.vox = {}; R.thick = {}; R.thickAll = 0;   // models, and how thick a flat sprite is in 3D
   R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0;
   R.vars.coins = 0;                      // coin() counts into this one
   KEYBIND = {};
@@ -3531,6 +4033,14 @@ function render(){
   for (const c of R.coinSpots){          // coins placed one at a time
     if (!c.gone) blit(sctx, c.n, Math.round(c.x) + ox, Math.round(c.y) + oy);
   }
+  /* models sit behind the sprites, back to front by how far down the screen
+     they are, so a nearer one covers a further one */
+  const vlist = [];
+  for (const k in R.vox) if (R.vox[k].on) vlist.push(R.vox[k]);
+  vlist.sort((p, q) => (p.y - p.z) - (q.y - q.z));
+  for (const v of vlist)
+    drawModelAt(sctx, v.id, Math.round(v.x) + ox, Math.round(v.y) - Math.round(v.z) + oy,
+                v.angle, v.scale, v.tilt);
   for (const n of Object.keys(R.actors)){
     const a = R.actors[n];
     if (!a.on) continue;
@@ -3538,7 +4048,17 @@ function render(){
     const cv = spriteCanvas(which);
     if (!cv) continue;
     const f = R.flips[+n];
-    const x = Math.round(a.x) + ox, y = Math.round(a.y) + oy;
+    const lift = Math.round(a.z || 0);
+    const x = Math.round(a.x) + ox, y = Math.round(a.y) + oy - lift;
+    /* thickness() stacks copies of a flat sprite so it looks solid */
+    const thick = R.thick[+n] === undefined ? (R.thickAll || 0) : R.thick[+n];
+    if (thick > 0){
+      for (let i = thick; i > 0; i--){
+        sctx.globalAlpha = .55;
+        sctx.drawImage(cv, x, y + i, Math.round(a.w), Math.round(a.h));
+      }
+      sctx.globalAlpha = 1;
+    }
     if (f && (f.x || f.y)){
       sctx.save();
       sctx.translate(x + (f.x ? a.w : 0), y + (f.y ? a.h : 0));
@@ -4671,6 +5191,9 @@ function changeSpriteSize(n, quiet){
   project.sprites = project.sprites.map(sp => resampleSprite(sp, oldW, oldH, SW, SH));
   if (project.frames) for (const k in project.frames)      // the extra frames go with them
     project.frames[k] = project.frames[k].map(sp => resampleSprite(sp, oldW, oldH, SW, SH));
+  if (project.models) for (const m of project.models)      // and so do the model slices
+    m.layers = m.layers.map(sp => resampleSprite(sp, oldW, oldH, SW, SH));
+  MODEL_EPOCH++; modelCache.clear();
   project.rooms = oldRooms.map(old => {
     const room = new Array(COLS * ROWS).fill(0);
     for (let y = 0; y < ROWS; y++){
@@ -7001,6 +7524,7 @@ function gameNow(name, author){
     sprites: project.sprites, rooms: project.rooms,
     frames: project.frames || null, names: project.names || null,
     sfx: (project.sfx || []).map(e => Object.assign({}, e)),
+    models: (project.models || []).map(m => ({ name:m.name, tilt:m.tilt, layers:m.layers.map(a => a.slice()) })),
     palette: PALETTE.slice(),      // without this, colours you added came back black
     fps: project.fps || 60, zoom: project.zoom || 512,
     saved: Date.now()
@@ -7058,7 +7582,9 @@ function libLoad(g){
   }
   if (g.names) project.names = Object.assign({}, g.names);
   project.sfx = (g.sfx || []).map(e => Object.assign({}, e));
-  curSfx = 0;
+  project.models = (g.models || []).map(m => ({ name:m.name || "", tilt:m.tilt === undefined ? 1 : m.tilt,
+                                                layers:(m.layers || []).map(a => a.slice()) }));
+  curSfx = 0; curModel = 0; curLayer = 0; MODEL_EPOCH++; modelCache.clear();
   if (fixed.guessed)
     log("this game was saved before colours travelled with the file — " +
         fixed.guessed + " of them had to be guessed", "err");
@@ -7384,6 +7910,42 @@ Notes
 · Sprite numbers start at 1 and never run out.
 · Anything after <code>#</code> is a comment.
 · Variables work anywhere a number does: <code>move(1, speed, 0)</code>
+
+<b style="color:var(--accent2)">Models — pixel art with a depth to it</b>
+The <b>▤ Models</b> tab draws a stack of pictures instead of one. Layer 1 is
+the bottom slice, layer 2 sits on top of it, and so on up. Drawn one above
+the other and all turned by the same angle, a flat drawing becomes something
+you can walk around. The slice below shows through faintly while you draw,
+so you can line the next one up, and the picture on the right turns — drag
+it, or press <b>↻ Turn it</b>.
+
+It is the same seven tools and the same colours as the Paint tab.
+<b>⬆ Build from a sprite</b> takes a sprite you already drew and stacks it
+however many layers deep you say, which is the quickest way to get started.
+
+<code>voxel(1)</code>               put model 1 on screen
+<code>voxel(1, 160, 120)</code>     ...at that spot
+<code>voxel("tree")</code>          by name, like sprites
+<code>voxelhide(1)</code>           take it off again
+<code>voxelput(1, x, y, z)</code>   move it exactly there (z is up)
+<code>voxelmove(1, 2, 0, 0)</code>  shift it by that much
+<code>voxelsize(1, 3)</code>        three times as big
+<code>voxeltall(1, 2)</code>        push the slices further apart
+<code>rotate(1, 45)</code>          face that way
+<code>rotateby(1, 5)</code>         turn five more degrees
+<code>spin(1, 2)</code>             keep turning, two degrees a frame
+<code>stopspin(1)</code>            stop where it is
+<code>if angle(1) > 90</code>       which way it is facing
+<code>if voxelz(1) > 0</code>       how high it is (voxelx and voxely too)
+<code>if layers(1) > 4</code>       how many slices it has
+
+<b style="color:var(--accent2)">Flat sprites in 3D</b>
+<code>move(1, 10, 0, 4)</code>      the fourth number lifts a sprite off the
+                          ground — everything else about it stays the same
+<code>thickness(1, 10)</code>       draw sprite 1 ten pixels deep, so it looks
+                          solid instead of like paper
+<code>thickness(6)</code>           ...with no sprite number, that goes for
+                          every sprite at once
 
 <b style="color:var(--accent2)">Getting your game out</b>
 The <b>⬆ Export</b> tab has four things in it.
@@ -8035,7 +8597,7 @@ $("sprite-size").value = SW;
 $("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
 setFps(project.fps || 60);
 buildLessons(); buildReleases(); buildHelp(); buildTouchpad(); loadTheme();
-drawSfxList(); drawSfxPanel(); drawExportPanel();
+drawSfxList(); drawSfxPanel(); drawExportPanel(); drawModelList(); buildVoxTools();
 setMode(project.mode || "normal", true);
 drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
 drawStageInfo();

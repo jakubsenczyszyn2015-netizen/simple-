@@ -13,7 +13,10 @@ const must = ['function stopSong','function playSong','function drawSongList','f
   'function spriteByName','case "play"','function setTheme','function toggleTouch',
   'id="touchpad"','id="more-menu"','id="frame-strip"','function allMatches',
   'function makeZip','function kitElectron','function kitCapacitor','function exportJson',
-  'id="v-export"','function standaloneHtml'];
+  'id="v-export"','function standaloneHtml',
+  'function drawModelAt','function layerCanvas','function addLayer','function drawVoxel',
+  'id="v-models"','id="vox-layers"','case "voxel"','case "thickness"','case "spin"',
+  'function installPainter','function modelFromSprite'];
 const missing = must.filter(m => !h.includes(m));
 
 // iOS 12.5 runs Safari 12, which cannot parse or run any of these

@@ -29,6 +29,12 @@ hide(1)
   different sprite *numbers* — this keeps a walking player as sprite 1.
 - **Names** — give a sprite a name in the Paint tab and it works anywhere the
   number does: `show("player")` is `show(1)`.
+- **Models** — pixel art with a depth to it. A model is a stack of pictures:
+  layer 1 is the bottom slice, layer 2 sits on top, and drawing them all
+  turned by the same angle makes something you can walk around. Same seven
+  tools as Paint, a live preview you can drag to turn, and **⬆ Build from a
+  sprite** to stack one you already drew. `voxel(1)`, `rotate(1, 45)`,
+  `spin(1, 2)`.
 - **Rooms** — stamp any sprite onto a tile grid with pencil, fill, line, square
   and circle tools. A room is either one screen or **endless**, for open worlds
   you explore with `camera(1)`. Unlimited rooms, shown from code with `room(2)`.
