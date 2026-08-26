@@ -5,47 +5,169 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Simple++ — a tiny text engine for beginners</title>
 <style>
-  :root{
+  /* ============ THEMES ============
+     Every colour, font and corner in the editor comes from one of these
+     variables, so a theme is just a new set of them. Classic is the default
+     and is what the rest of the sheet assumes. */
+  :root, html[data-theme="classic"]{
     --bg:#14161c; --panel:#1c1f28; --panel2:#232734; --line:#333a4a;
     --fg:#e8ecf5; --dim:#8b95ab; --accent:#5ac8fa; --accent2:#ffd166; --bad:#ff6b6b;
+    --ink:#12141a;            /* the code box */
+    --void:#0c0e13;           /* behind the stage, and the console */
+    --on-accent:#0b1017;      /* text on top of an accent-coloured button */
+    --ok:#2e7d32; --ok2:#3da043;
+    --plum:#4a3a80; --plum2:#6a55b8;
+    --sea:#1f4f6b;  --sea2:#2d6f95;
+    --amber:#5a4020; --amber2:#8a6330;
+    --r:6px;                  /* corner radius */
+    --r2:12px;                /* bigger corners, for modals */
+    --font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --code-font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --shadow:none;
+    --glow:none;
+    --bw:1px;                 /* border width on buttons and panels */
+    --scan:none;              /* a scanline overlay, for retro */
+    --pad-bg:rgba(28,31,40,.62); --pad-line:rgba(232,236,245,.35);
+  }
+
+  /* the current look, with nothing added */
+  html[data-theme="modern"]{
+    --bg:#f4f6fa; --panel:#ffffff; --panel2:#eef1f7; --line:#d6dce8;
+    --fg:#1c2230; --dim:#6b7488; --accent:#2f6df6; --accent2:#c2410c; --bad:#dc2626;
+    --ink:#ffffff; --void:#e8ecf4; --on-accent:#ffffff;
+    --ok:#15803d; --ok2:#16a34a; --plum:#6d28d9; --plum2:#8b5cf6;
+    --sea:#0369a1; --sea2:#0284c7; --amber:#b45309; --amber2:#d97706;
+    --r:9px; --r2:16px;
+    --font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --code-font:13.5px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --shadow:0 1px 2px rgba(20,30,60,.07), 0 4px 14px rgba(20,30,60,.06);
+    --glow:none; --bw:1px; --scan:none;
+    --pad-bg:rgba(255,255,255,.78); --pad-line:rgba(28,34,48,.35);
+  }
+
+  html[data-theme="retro"]{
+    --bg:#0a0f08; --panel:#0f1a0d; --panel2:#152413; --line:#2f5c2a;
+    --fg:#7dff6b; --dim:#4f9647; --accent:#b6ff4a; --accent2:#ffb000; --bad:#ff5f4a;
+    --ink:#070d06; --void:#050805; --on-accent:#07120a;
+    --ok:#2f6b1f; --ok2:#4a9c2f; --plum:#3d5c1f; --plum2:#5c8a2f;
+    --sea:#1f5c4a; --sea2:#2f8a6b; --amber:#6b4a0f; --amber2:#a8760f;
+    --r:0px; --r2:0px;
+    --font:14px/1.45 "Courier New",ui-monospace,Menlo,monospace;
+    --code-font:14px/1.7 "Courier New",ui-monospace,Menlo,monospace;
+    --shadow:none;
+    --glow:0 0 6px rgba(125,255,107,.45);
+    --bw:2px;
+    --pad-bg:rgba(10,20,8,.7); --pad-line:rgba(125,255,107,.5);
+    --scan:repeating-linear-gradient(rgba(0,0,0,0) 0 2px, rgba(0,0,0,.22) 2px 4px);
+  }
+
+  html[data-theme="futuristic"]{
+    --bg:#080b1a; --panel:#0e1330; --panel2:#161d45; --line:#2c3a7a;
+    --fg:#dfe6ff; --dim:#7a86c0; --accent:#22e5ff; --accent2:#ff5cf0; --bad:#ff4d6d;
+    --ink:#070a18; --void:#04060f; --on-accent:#03121a;
+    --ok:#0f766e; --ok2:#14b8a6; --plum:#5b21b6; --plum2:#a855f7;
+    --sea:#0e5a8a; --sea2:#1a8fd0; --amber:#7c3f00; --amber2:#e08a00;
+    --r:3px; --r2:6px;
+    --font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --code-font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --shadow:0 0 0 1px rgba(34,229,255,.10), 0 6px 24px rgba(34,229,255,.07);
+    --glow:0 0 10px rgba(34,229,255,.35);
+    --bw:1px; --scan:none;
+    --pad-bg:rgba(8,11,26,.66); --pad-line:rgba(34,229,255,.45);
+  }
+
+  html[data-theme="game"]{
+    --bg:#1b2a6b; --panel:#243a94; --panel2:#2f4bbd; --line:#0d1640;
+    --fg:#ffffff; --dim:#b9c8ff; --accent:#ffd400; --accent2:#ff5a5a; --bad:#ff3b3b;
+    --ink:#16225a; --void:#0d1640; --on-accent:#241a00;
+    --ok:#1e9e3a; --ok2:#2ecc4f; --plum:#7b2fd6; --plum2:#a45cff;
+    --sea:#00a0c6; --sea2:#22c6e8; --amber:#d17a00; --amber2:#ffa726;
+    --r:12px; --r2:18px;
+    --font:14px/1.45 ui-rounded,"Trebuchet MS",Verdana,ui-monospace,monospace;
+    --code-font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --shadow:0 3px 0 rgba(0,0,0,.35);
+    --glow:none;
+    --bw:3px; --scan:none;
+    --pad-bg:rgba(36,58,148,.72); --pad-line:rgba(255,212,0,.55);
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
     background:var(--bg); color:var(--fg);
-    font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font:var(--font);
     display:flex; flex-direction:column; overflow:hidden;
   }
   header{
-    display:flex; align-items:center; gap:8px; padding:8px 12px;
-    background:var(--panel); border-bottom:1px solid var(--line); flex:none; flex-wrap:wrap;
+    display:flex; align-items:center; gap:6px; padding:7px 10px;
+    background:var(--panel); border-bottom:var(--bw) solid var(--line); flex:none; flex-wrap:wrap;
   }
-  header h1{font-size:15px;margin:0 12px 0 0;letter-spacing:.5px}
+  header h1{font-size:15px;margin:0 8px 0 0;letter-spacing:.5px;white-space:nowrap}
   header h1 span{color:var(--accent)}
-  .tabs{display:flex;gap:4px}
+  .tabs{display:flex;gap:3px}
+  .tabs button{padding:5px 9px}
   button{
     font:inherit; color:var(--fg); background:var(--panel2);
-    border:1px solid var(--line); border-radius:6px; padding:5px 11px; cursor:pointer;
+    border:var(--bw) solid var(--line); border-radius:var(--r); padding:5px 11px; cursor:pointer;
+    box-shadow:var(--shadow); transition:border-color .12s, background .12s;
   }
   button:hover{border-color:var(--accent)}
-  button.on{background:var(--accent); color:#0b1017; border-color:var(--accent); font-weight:700}
+  button.on{background:var(--accent); color:var(--on-accent); border-color:var(--accent); font-weight:700}
   .spacer{flex:1}
+  /* ---- the ⋯ menu ---- */
+  #more-wrap{position:relative}
+  #more-btn{font-size:17px;line-height:1;padding:4px 10px}
+  #more-menu{
+    display:none; position:absolute; right:0; top:calc(100% + 6px); z-index:60;
+    background:var(--panel); border:var(--bw) solid var(--line); border-radius:var(--r2);
+    padding:8px; min-width:214px; box-shadow:0 10px 30px rgba(0,0,0,.45), var(--shadow);
+  }
+  #more-menu.on{display:block}
+  #more-menu > button{display:block; width:100%; text-align:left; margin-bottom:4px}
+  .mm-head{
+    font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--dim);
+    margin:8px 2px 5px;
+  }
+  .mm-head:first-child{margin-top:2px}
+  .mm-themes{display:grid; grid-template-columns:1fr 1fr; gap:4px}
+  .mm-themes button{padding:5px 6px; font-size:12px; text-align:center}
+  .mm-themes button:last-child{grid-column:1 / -1}
+  /* the coloured buttons along the top, named by what they do */
+  .b-run{background:var(--ok); border-color:var(--ok2); color:#fff}
+  .b-run:hover{background:var(--ok2)}
+  .b-gallery{background:var(--plum); border-color:var(--plum2); color:#fff}
+  .b-export{background:var(--sea); border-color:var(--sea2); color:#fff}
+  .b-lib{background:var(--amber); border-color:var(--amber2); color:#fff}
+  .b-run,.b-gallery,.b-export,.b-lib{text-shadow:0 1px 0 rgba(0,0,0,.25)}
+
+  /* retro draws scanlines over the whole page */
+  body::after{
+    content:""; position:fixed; top:0; left:0; right:0; bottom:0;
+    background:var(--scan); pointer-events:none; z-index:99; opacity:.7;
+  }
+  html[data-theme="classic"] body::after, html[data-theme="modern"] body::after,
+  html[data-theme="futuristic"] body::after, html[data-theme="game"] body::after{display:none}
+  /* an exported game looks the same whatever theme it was written in */
+  body.play-only::after{display:none}
+
+  /* accents pick up whatever glow the theme asks for */
+  button.on, .chip.on, .modepick button.on{box-shadow:var(--glow)}
+  header h1 span{text-shadow:var(--glow)}
   main{flex:1; display:flex; min-height:0}
   .view{display:none; flex:1; min-height:0}
   .view.on{display:flex}
 
   /* ---- shared column bits ---- */
   .col{display:flex;flex-direction:column;min-height:0}
-  .pane{background:var(--panel); border-right:1px solid var(--line); padding:10px; overflow:auto}
+  .pane{background:var(--panel); border-right:var(--bw) solid var(--line); padding:10px; overflow:auto}
   .pane h3{margin:0 0 8px; font-size:11px; letter-spacing:1.5px; color:var(--dim); text-transform:uppercase}
   .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 
   /* ---- code view ---- */
   #code{
     flex:1; resize:none; border:0; outline:0; padding:14px;
-    background:#12141a; color:#e8ecf5; font:14px/1.6 inherit; tab-size:2;
+    background:var(--ink); color:var(--fg); font:var(--code-font); tab-size:2;
   }
-  #stage-wrap{background:#0c0e13;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px}
+  #stage-wrap{background:var(--void);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px}
   #stage-frame{display:flex;align-items:center;justify-content:center;position:relative}
   #stage-frame:fullscreen{
     width:100vw; height:100vh; background:#000;
@@ -53,7 +175,7 @@
   #stage-frame:fullscreen canvas{border:0; border-radius:0}
   #stage-frame:-webkit-full-screen{width:100vw;height:100vh;background:#000}
 
-  canvas{image-rendering:pixelated; background:#000; border:1px solid var(--line); border-radius:4px}
+  canvas{image-rendering:pixelated; background:#000; border:var(--bw) solid var(--line); border-radius:var(--r)}
 
   /* ---- touch controls: a d-pad and buttons drawn over the stage ---- */
   #touchpad{
@@ -68,12 +190,12 @@
   .tbtn{
     pointer-events:auto; touch-action:none; -webkit-tap-highlight-color:transparent;
     display:flex; align-items:center; justify-content:center;
-    background:rgba(28,31,40,.62); color:#e8ecf5; border:2px solid rgba(232,236,245,.35);
+    background:var(--pad-bg); color:var(--fg); border:2px solid var(--pad-line);
     border-radius:10px; font:700 17px/1 ui-monospace,Menlo,Consolas,monospace; cursor:pointer;
   }
   .tbtn.round{width:56px; height:56px; border-radius:50%; font-size:19px; justify-self:center}
   .tbtn.wide{height:38px; font-size:13px}
-  .tbtn.down{background:var(--accent); color:#0b1017; border-color:var(--accent)}
+  .tbtn.down{background:var(--accent); color:var(--on-accent); border-color:var(--accent)}
   #touchpad .sp{visibility:hidden}
   #stage-frame:fullscreen #touchpad .dpad,
   #stage-frame:-webkit-full-screen #touchpad .dpad{left:24px}
@@ -115,7 +237,7 @@
   }
 
   #console{
-    height:130px; overflow:auto; background:#0c0e13; border-top:1px solid var(--line);
+    height:130px; overflow:auto; background:var(--void); border-top:var(--bw) solid var(--line);
     padding:8px 12px; color:var(--dim); font-size:12px; white-space:pre-wrap;
   }
   #console .err{color:var(--bad)}
@@ -128,15 +250,15 @@
     padding:4px; cursor:pointer; text-align:center;
   }
   .chip.on{border-color:var(--accent)}
-  .chip canvas{width:100%;height:auto;display:block;border:0;background:#0c0e13;border-radius:3px}
+  .chip canvas{width:100%;height:auto;display:block;border:0;background:var(--void);border-radius:3px}
   .chip b{font-size:11px;color:var(--dim);font-weight:700}
   .chip.on b{color:var(--accent)}
 
   /* ---- paint ---- */
-  #paint-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:#0c0e13}
+  #paint-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:var(--void)}
   #palette{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
   .sw{height:26px;aspect-ratio:1;border-radius:4px;border:2px solid transparent;cursor:pointer}
-  .sw.on{border-color:#fff}
+  .sw.on{border-color:var(--fg); box-shadow:var(--glow)}
   .sw.eraser{background:
     linear-gradient(45deg,#444 25%,transparent 25%,transparent 75%,#444 75%),
     linear-gradient(45deg,#444 25%,#222 25%,#222 75%,#444 75%);
@@ -164,7 +286,7 @@
   .card b{display:block;margin:6px 0 3px;font-size:14px}
   .card span{color:var(--dim);font-size:12px;line-height:1.5}
   .card .art{display:flex;gap:4px;margin-top:9px}
-  .card .art canvas{width:26px;height:26px;background:#0c0e13;border:0;border-radius:3px}
+  .card .art canvas{width:26px;height:26px;background:var(--void);border:0;border-radius:3px}
 
   /* ---- learn ---- */
   #v-learn.on,#v-changes.on{display:block;overflow:auto}
@@ -176,16 +298,16 @@
   .lesson h4 i{color:var(--accent);font-style:normal}
   .lesson p{margin:0 0 10px;color:var(--dim);font-size:13px;line-height:1.6}
   .lesson pre{
-    background:#0c0e13;border:1px solid var(--line);border-radius:6px;
+    background:var(--void);border:var(--bw) solid var(--line);border-radius:var(--r);
     padding:10px 12px;margin:0 0 10px;font-size:13px;overflow-x:auto;color:var(--accent2)
   }
-  .lesson .done{color:#6bd66b}
+  .lesson .done{color:var(--ok2)}
 
   .modepick{flex:none;display:flex;gap:0;margin-left:14px;border:1px solid var(--line);border-radius:7px;overflow:hidden}
   .modepick button{border:0;border-radius:0;padding:5px 13px;background:transparent;font-size:13px}
-  .modepick button.on{background:var(--accent2);color:#1b1405;font-weight:700}
+  .modepick button.on{background:var(--accent2);color:var(--on-accent);font-weight:700}
   #modeline{
-    padding:6px 14px;background:#191d26;border-bottom:1px solid var(--line);
+    padding:6px 14px;background:var(--panel2);border-bottom:var(--bw) solid var(--line);
     color:var(--dim);font-size:12px;flex:none
   }
   #modeline b{color:var(--accent2)}
@@ -217,19 +339,19 @@
   body.play-only canvas{border:0;border-radius:0}
 
   #visit-bar{
-    background:#4a3a80; color:#fff; padding:7px 14px; font-size:13px;
+    background:var(--plum); color:#fff; padding:7px 14px; font-size:13px;
     display:flex; align-items:center; gap:8px; flex-wrap:wrap;
   }
   #visit-bar button{padding:3px 9px;font-size:12px}
 
   label{color:var(--dim);font-size:12px}
   input[type=text],input[type=number]{
-    background:#0c0e13;color:var(--fg);border:1px solid var(--line);
+    background:var(--void);color:var(--fg);border:var(--bw) solid var(--line);
     border-radius:5px;padding:4px 6px;font:inherit;width:100%
   }
   .hint{color:var(--dim);font-size:12px;line-height:1.6}
   .hint code{color:var(--accent2)}
-  mark{background:#ffd166;color:#1b1405;border-radius:2px;padding:0 1px}
+  mark{background:var(--accent2);color:var(--on-accent);border-radius:2px;padding:0 1px}
   .list{display:flex;flex-direction:column;gap:4px}
   .list button{text-align:left}
 </style>
@@ -254,19 +376,34 @@
     <button id="m-ai"     onclick="setMode('ai')">AI</button>
   </div>
   <div class="spacer"></div>
-  <button onclick="openExport()" style="background:#1f4f6b;border-color:#2d6f95">⬆ Export</button>
-  <button onclick="openLib()" style="background:#5a4020;border-color:#8a6330">📚 My Games</button>
-  <button onclick="openGallery()" style="background:#4a3a80;border-color:#6a55b8">✦ Templates</button>
-  <button onclick="run()" style="background:#2e7d32;border-color:#2e7d32">▶ Run</button>
-  <button onclick="stop()">■ Stop</button>
-  <button id="touch-btn" onclick="toggleTouch()" title="on-screen arrow keys and buttons">📱 Touch</button>
   <label id="ai-remember-wrap" style="display:none;align-items:center;gap:4px">
     <input id="ai-remember" type="checkbox" checked style="width:auto">🧠 remember
   </label>
   <button id="ai-key-btn" onclick="setAIKey()" style="display:none">⚡ Real AI</button>
-  <button id="ai-show" onclick="showAICode()" style="display:none;background:#4a3a80;border-color:#6a55b8">Show me the code</button>
-  <button onclick="saveFile()">Save</button>
-  <button onclick="document.getElementById('load').click()">Load</button>
+  <button id="ai-show" class="b-gallery" onclick="showAICode()" style="display:none">Show me the code</button>
+  <button class="b-gallery" onclick="openGallery()">✦ Templates</button>
+  <button class="b-run" onclick="run()">▶ Run</button>
+  <button onclick="stop()">■ Stop</button>
+  <div id="more-wrap">
+    <button id="more-btn" onclick="toggleMore(event)" title="everything else">⋯</button>
+    <div id="more-menu">
+      <div class="mm-head">Look</div>
+      <div class="mm-themes" id="theme-pick">
+        <button data-theme="classic"    onclick="setTheme('classic')">Classic</button>
+        <button data-theme="modern"     onclick="setTheme('modern')">Modern</button>
+        <button data-theme="retro"      onclick="setTheme('retro')">Retro</button>
+        <button data-theme="futuristic" onclick="setTheme('futuristic')">Futuristic</button>
+        <button data-theme="game"       onclick="setTheme('game')">Video game</button>
+      </div>
+      <div class="mm-head">Play</div>
+      <button id="touch-btn" onclick="toggleTouch()">📱 Touch controls</button>
+      <div class="mm-head">This game</div>
+      <button class="b-export" onclick="closeMore();openExport()">⬆ Export</button>
+      <button class="b-lib" onclick="closeMore();openLib()">📚 My Games</button>
+      <button onclick="closeMore();saveFile()">💾 Save to a file</button>
+      <button onclick="closeMore();document.getElementById('load').click()">📂 Load a file</button>
+    </div>
+  </div>
   <input id="load" type="file" accept=".json" style="display:none" onchange="loadFile(this)">
   <input id="libfile" type="file" accept=".json,.simplebackup" style="display:none" onchange="restoreLibrary(this)">
   <input id="musicfile" type="file" accept="audio/*" style="display:none" onchange="importMusic(this)">
@@ -316,7 +453,7 @@
       <div id="fps-label" class="hint"></div>
       <div class="hint">click the stage, then use the arrow keys / z · <b>F</b> for fullscreen</div>
       <div id="chat-bar" style="display:none;flex-direction:column;gap:6px;width:100%;max-width:480px">
-        <div id="chat-log" style="height:88px;overflow:auto;background:#0c0e13;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;line-height:1.5"></div>
+        <div id="chat-log" style="height:88px;overflow:auto;background:var(--void);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;line-height:1.5"></div>
         <div class="row" style="flex-wrap:nowrap">
           <input id="chat-input" type="text" placeholder="type an answer and press enter"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();chatSend();}">
@@ -340,7 +477,7 @@
         <button onclick="flipSpriteH()" title="Flip left to right">⇋</button>
         <button onclick="flipSpriteV()" title="Flip top to bottom">⇅</button>
         <button onclick="document.getElementById('pngfile').click()">🖼 PNG</button>
-        <button onclick="openPacks()" style="background:#4a3a80;border-color:#6a55b8">📦 Pre-made</button>
+        <button class="b-gallery" onclick="openPacks()">📦 Pre-made</button>
         <button onclick="exportSpritePng()" title="Save this sprite as a picture">⬇ PNG</button>
       </div>
       <label class="row" style="gap:5px;margin-bottom:10px;flex-wrap:nowrap">
@@ -349,7 +486,7 @@
       </label>
       <h3>Sprite size</h3>
       <select id="sprite-size" onchange="changeSpriteSize(this.value)"
-              style="width:100%;background:#0c0e13;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+              style="width:100%;background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
         <option value="8">8 × 8 — tiny</option>
         <option value="16" selected>16 × 16 — normal</option>
         <option value="24">24 × 24</option>
@@ -398,14 +535,14 @@
       <div id="tile-list" class="sprites"></div>
     </div>
 
-    <div style="flex:1;display:flex;align-items:center;justify-content:center;background:#0c0e13">
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;background:var(--void)">
       <canvas id="roomcv" width="320" height="240" style="width:640px;height:480px;cursor:crosshair"></canvas>
     </div>
 
     <div class="pane col" style="width:190px;flex:none">
       <h3>Room size</h3>
       <select id="room-mode" onchange="setRoomMode(this.value)"
-              style="width:100%;background:#0c0e13;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+              style="width:100%;background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
         <option value="limited">One screen</option>
         <option value="infinite">Endless — for open worlds</option>
       </select>
@@ -463,7 +600,7 @@
         </label>
         <label style="min-width:130px">Sound
           <select id="wave" onchange="setWave(this.value)"
-                  style="width:100%;background:#0c0e13;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+                  style="width:100%;background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
             <option value="square">beepy</option>
             <option value="triangle">soft</option>
             <option value="sawtooth">buzzy</option>
@@ -774,14 +911,14 @@ function PZnow(){ return paintCv.width / SW; }   // how big one pixel is in the 
 
 function drawPaint(){
   const s = ensureSprite(curSprite + 1);
-  paintCtx.fillStyle = "#0c0e13";
+  paintCtx.fillStyle = themeVar("--void", "#0c0e13");
   paintCtx.fillRect(0, 0, paintCv.width, paintCv.height);
 
   // checkerboard for transparency
   const PZ = PZnow();
   for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
     if (s[y*SW+x] >= 0) continue;
-    paintCtx.fillStyle = (x + y) % 2 ? "#161a22" : "#1b202b";
+    paintCtx.fillStyle = (x + y) % 2 ? themeVar("--panel", "#161a22") : themeVar("--panel2", "#1b202b");
     paintCtx.fillRect(x*PZ, y*PZ, PZ, PZ);
   }
   for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++){
@@ -1020,7 +1157,7 @@ const roomCv = $("roomcv"), roomCtx = roomCv.getContext("2d");
 
 function drawRoom(){
   drawStageInfo();
-  roomCtx.fillStyle = "#0c0e13";
+  roomCtx.fillStyle = themeVar("--void", "#0c0e13");
   roomCtx.fillRect(0, 0, VW, VH);
   const r = project.rooms[curRoom];
   for (let y = 0; y < ROWS; y++)
@@ -2015,6 +2152,61 @@ function toggleTouch(on){
   try { localStorage.setItem("simplepp-touch", want ? "1" : "0"); } catch(e){}
   return want;
 }
+/* ---------- themes ----------
+   A theme is only a set of CSS variables, so switching is one attribute.
+   It is remembered per browser rather than saved into the game, because it
+   is how you like to look at the editor, not part of what you made. */
+const THEMES = {
+  classic:    "Classic",
+  modern:     "Modern",
+  retro:      "Retro",
+  futuristic: "Futuristic",
+  game:       "Video game"
+};
+let THEME = "classic";
+function setTheme(name, quiet){
+  if (!THEMES[name]) name = "classic";
+  THEME = name;
+  document.documentElement.setAttribute("data-theme", name);
+  for (const b of document.querySelectorAll("#theme-pick button"))
+    b.classList.toggle("on", b.dataset.theme === name);
+  try { localStorage.setItem("simplepp-theme", name); } catch(e){}
+  /* the sprite and room pictures are drawn onto canvases, not styled by CSS,
+     so they have to be redrawn to pick the new background up */
+  if (!quiet){
+    if (typeof drawPaint === "function") drawPaint();
+    if (typeof drawSpriteList === "function") drawSpriteList();
+    if (typeof drawRoom === "function") drawRoom();
+    if (typeof render === "function") render();
+    log("theme: " + THEMES[name], "ok");
+  }
+}
+/* canvases are painted by hand, so they have to ask what the theme's colours are */
+function themeVar(name, fallback){
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch(e){ return fallback; }
+}
+function loadTheme(){
+  let t = null;
+  try { t = localStorage.getItem("simplepp-theme"); } catch(e){}
+  setTheme(t || "classic", true);
+}
+
+/* ---------- the ⋯ menu ---------- */
+function closeMore(){ const m = $("more-menu"); if (m) m.classList.remove("on"); }
+function toggleMore(e){
+  if (e) e.stopPropagation();
+  const m = $("more-menu");
+  if (m) m.classList.toggle("on");
+}
+document.addEventListener("click", e => {
+  const w = $("more-wrap");
+  if (w && !w.contains(e.target)) closeMore();
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeMore(); });
+
 function buildTouchpad(){
   const pad = $("touchpad");
   if (!pad) return;
@@ -5327,7 +5519,7 @@ const CELL_W = songCv.width / SONG_STEPS, CELL_H = songCv.height / SONG_ROWS;
 
 function drawSong(){
   const sg = song(curSong + 1);
-  songCtx.fillStyle = "#0c0e13";
+  songCtx.fillStyle = themeVar("--void", "#0c0e13");
   songCtx.fillRect(0, 0, songCv.width, songCv.height);
 
   if (sg.audio){
@@ -5774,7 +5966,7 @@ function packThumb(key, size){
   const cv = document.createElement("canvas");
   cv.width = cv.height = 16;
   cv.style.width = cv.style.height = (size || 26) + "px";
-  cv.style.background = "#0c0e13";
+  cv.style.background = themeVar("--void", "#0c0e13");
   cv.style.borderRadius = "3px";
   const c = cv.getContext("2d");
   const px = ART[key];
@@ -6304,6 +6496,14 @@ Notes
 · Sprite numbers start at 1 and never run out.
 · Anything after <code>#</code> is a comment.
 · Variables work anywhere a number does: <code>move(1, speed, 0)</code>
+
+<b style="color:var(--accent2)">Themes</b>
+· <b>⋯</b> at the top right holds five looks for the editor: <b>Classic</b>
+  (this one), <b>Modern</b> (light and plain), <b>Retro</b> (a green screen
+  with scanlines), <b>Futuristic</b> (neon) and <b>Video game</b> (bright and
+  chunky). The choice is remembered in this browser.
+· A theme changes the editor, never the game. Your game looks the same to
+  everybody who plays it, whichever theme you wrote it in.
 
 <b style="color:var(--accent2)">On a phone or a tablet</b>
 · <b>📱 Touch</b> puts arrow buttons and Z / X / C / SPACE over the
@@ -6874,7 +7074,7 @@ buildPalette(); buildTools(); buildRoomTools(); setPaintZoom(project.zoom || 512
 $("sprite-size").value = SW;
 $("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
 setFps(project.fps || 60);
-buildLessons(); buildReleases(); buildHelp(); buildTouchpad();
+buildLessons(); buildReleases(); buildHelp(); buildTouchpad(); loadTheme();
 setMode(project.mode || "normal", true);
 drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
 drawStageInfo();

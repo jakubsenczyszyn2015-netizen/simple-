@@ -35,6 +35,11 @@ hide(1)
 - **Templates** — ten complete games to open, run and take apart.
 - **Changelog** — see [CHANGELOG.md](CHANGELOG.md).
 
+The **⋯** button at the top right holds everything else: five **themes** for
+the editor (Classic, Modern, Retro, Futuristic, Video game), the touch
+controls, Export, My Games, and Save/Load. A theme changes the editor and
+never the game, so what you make looks the same to everyone who plays it.
+
 ## Four modes
 
 Pick one at the top of the window; it's saved with your project.
@@ -132,6 +137,18 @@ frame is drawn. You can write several `when start` blocks; they all run.
 
 `every frame unless <condition> ... end` pauses itself while the condition is
 true and carries on when it stops.
+
+## Phones and tablets
+
+**📱 Touch** draws a d-pad and Z / X / C / SPACE over the stage. They press the
+same keys the keyboard does, so a game written for arrows and `when key z`
+already works on a phone with nothing extra to write. It turns itself on when
+the browser reports a touch screen, remembers the choice, and exported games
+carry the buttons with them.
+
+Everything runs on **iOS 12.5** and up — no `?.`, no `??`, no `matchAll`
+anywhere in the file, and the audio context unlocks on the first tap the way
+iOS insists. `smoke-test.mjs` fails the build if any of that creeps back in.
 
 ## Exporting
 
