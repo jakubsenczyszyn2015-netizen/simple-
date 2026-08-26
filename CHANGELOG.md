@@ -3,6 +3,166 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.13.0 — Phones, themes, models, sound effects and three more languages
+
+The biggest release so far. Everything below is new since 0.12.1.
+
+### Added — it works on a phone now
+- **iOS 12.5 and up.** Safari 12 cannot parse `?.` or `??` and has no
+  `String.matchAll`; one of those anywhere in the file stops the whole script,
+  so the page opened blank. All twenty-one are gone, replaced by `firstSet()`
+  and `allMatches()` helpers checked against the native versions on empty
+  matches, zero-width patterns and multiple capture groups. `inset:` and
+  `aspect-ratio` have fallbacks, and the audio context unlocks on the first tap
+  the way iOS insists. `smoke-test.mjs` fails the build if any of it comes back.
+- **📱 Touch** draws a d-pad and Z / X / C / SPACE over the stage. They press
+  the same keys the keyboard does, so a game written for arrows and
+  `when key z` already works on a phone with nothing extra to write. It turns
+  itself on when the browser reports a touch screen, remembers the choice, and
+  exported games carry the buttons with them.
+- The layout under 900px stacks the editor above the stage and shrinks the tab
+  labels to their numbers. The top bar is one row from 960px up.
+
+### Added — five themes
+- **Classic**, **Modern**, **Retro** (a green CRT with scanlines),
+  **Futuristic** and **Video game**, in the new **⋯** menu. Every colour,
+  corner, border width and font is a CSS variable now, so a theme is one
+  attribute and nothing else. The canvases are painted by hand rather than
+  styled, so the paint background, the room grid and the song grid ask the
+  theme what colour they should be.
+- Themes stop at the edge of the editor. Title screens, buttons and the lives
+  counter keep the look the game was designed with, so an exported game looks
+  the same to everybody however its author likes to sit.
+- The top bar was seven coloured buttons wide and wrapped onto two rows.
+  Templates, Run and Stop stay out where a beginner will find them; the rest
+  moved into the ⋯ menu with the theme picker.
+
+### Added — a sprite can move on its own
+- **Frames.** A sprite is a stack of pictures now. **+ Frame**, **⧉ Copy**,
+  **🗑 Delete** and **▶ Preview** sit under the drawing, and `play(1, 6)` runs
+  them in the game. Deliberately not `animate()`, which flips between different
+  sprite *numbers* — a walking player stays sprite 1 and keeps every collision,
+  role and room tile that number already has.
+- Frame 1 is still `project.sprites[n-1]`, exactly where it has always been, so
+  every project ever saved opens unchanged. The extra frames live beside it and
+  cost nothing when unused. They follow a sprite through Copy, a size change,
+  My Games and exports.
+- **Names.** Give a sprite a name and it works anywhere the number does:
+  `show("player")` is `show(1)`. Resolved inside `actor()` and
+  `ensureSprite()`, so every command takes a name without knowing about it. A
+  string that is nobody's name is left alone, so `move("Hello!", 10, 0)` still
+  moves writing.
+- New: `play`, `playonce`, `stopplay`, `frame`, `frames()`, `frameof()`,
+  `playing()`, `spriteof()`.
+
+### Added — a Models tab
+- **Pixel art with a depth to it.** A model is a stack of pictures: layer 1 is
+  the bottom slice, layer 2 sits on top, and drawing them all turned by the
+  same angle makes something you can walk around. A handful of `drawImage`
+  calls per model, so it runs at sixty frames a second.
+- It is the sprite editor. The same seven tools, the same colours and the same
+  canvas handlers — `installPainter()` attaches them to either canvas and
+  `paintTarget()` decides whether they are writing to a sprite frame or a model
+  layer. The slice below shows through faintly while you draw the next one, and
+  the preview turns: drag it, or leave it spinning.
+- Each slice is cached shaded by how high up it is, 60% at the bottom to full
+  at the top, which is what stops the stack reading as a pile of flat pictures.
+- New: `voxel`, `voxelhide`, `voxelput`, `voxelmove`, `voxelsize`, `voxeltall`,
+  `rotate`, `rotateby`, `spin`, `stopspin`, `angle()`, `layers()`,
+  `voxelx/y/z()`, `modelof()`.
+- For flat sprites: `move(1, x, y, z)` takes a fourth number that lifts one off
+  the ground, and `thickness(1, 10)` draws it ten pixels deep so it looks solid
+  rather than like paper. `thickness(6)` on its own does that to everything.
+
+### Added — an SFX tab
+- Short noises built from seven sliders: a pitch, somewhere it slides to, how
+  long, how loud, how rough, how much it wobbles, how many times it repeats.
+  Underneath, an oscillator and a band-passed noise source crossfaded by the
+  roughness slider, so the same seven numbers cover a clean blip and an
+  explosion.
+- The waveform is drawn above the sliders from those numbers, so moving one
+  shows as well as sounds, and every change plays itself back.
+- Ten presets — Jump, Coin, Hit, Laser, Explode, Power up, Blip, Step, Alarm,
+  Splash — so nobody starts from silence. **🎤 Record** uses the microphone
+  where there is one, and **📂 Import** takes a wav or mp3 where there is not:
+  iOS 12 has no MediaRecorder, and the button says so rather than failing
+  quietly.
+- `sfx(1)`, or `sfx("jump")` if you named it.
+
+### Added — an Export tab
+- **Web page (.html)** as before, **Project file (.json)**, and two build kits.
+- **Desktop kit** — a zip with `game.html`, `main.js`, `package.json` and a
+  `BUILD.txt`. `npm install && npm run dist` gives a Windows `.exe`, a Mac
+  `.dmg` or a Linux AppImage.
+- **Phone kit** — a zip with `www/index.html`, `capacitor.config.json` and a
+  `BUILD.txt` walking through Android Studio and Xcode.
+- A browser tab cannot compile a program: an `.exe` needs a linker, an `.apk`
+  needs the Android SDK, an `.ipa` needs a Mac and Apple's signature. No engine
+  does it from inside a browser. So the tab is honest about that and hands you
+  the project the real compilers expect. Making a folder downloadable means
+  making a zip, so there is a small zip writer here — CRC32 plus stored
+  entries, about sixty lines and no library.
+- It is honest about Xbox and PlayStation too: both need a registered developer
+  account and a devkit you apply for, which is not something an engine can give
+  you.
+
+### Added — role-playing games
+- Forty-odd blocks for the Undertale and Deltarune shape of game, each usable
+  on its own.
+- **Talking:** a black box that types itself out with a sprite's face beside
+  the words; Z skips to the end and Z again closes it. `askmenu()` types a
+  question then lets you pick with the arrow keys, and `chose("Fight")` is true
+  on the single frame that choice was made.
+- **Hit points:** `stats`, `attack`, `damage`, `heal`, and an `hpbar()` that
+  puts its number on the other side when the bar is near the screen edge.
+- **A bag:** `give`, `have`, `howmany`, `takeaway`, `bagsize`.
+- **Memory:** `remember()` writes to browser storage, so what a game learned
+  about you outlives a restart — which is the whole point of it.
+- **People:** `npc()` gives a sprite something to say, `nearnpc()` says when
+  you are standing next to them, and `follow()` replays the leader's own path a
+  set number of steps behind so a party strings out instead of stacking up.
+- **The white box:** `arena()` and `soul()` are the box and the red heart,
+  `bullet()` marks what hurts, `soulhit()` reports the frame it does and hands
+  back what did it.
+- **Feel:** `shake()`, `flash()`, `tint()`.
+- A **Little RPG** template that is all of it in forty lines.
+
+### Added — seventy more blocks
+- **Drawing:** `rect`, `outline`, `circle`, `line`, `pixel`, `ink`,
+  `background`, `bigprint`, `middleprint` — so a score panel no longer has to
+  be built out of sprites.
+- **Sums:** `min`, `max`, `abs`, `sqrt`, `round`, `floor`, `ceil`, `sin`, `cos`
+  (in degrees, because nobody learning this wants radians), `clamp`, `between`,
+  `pick`, `chance`, `distance`, `angleto`.
+- **Words:** `join`, `upper`, `lower`, `length`, `letter`, `piece`, `contains`,
+  `number`, `words`.
+- **Movement:** `towards`, `push`, `wrap`, `keepon`.
+- **Timers:** `timer`, `timerdone`, `timerleft`, `everysecond`, `everyframes`,
+  `frame`, `seconds`.
+- **Saving:** `savegame(1)` writes the variables, hit points, bag, room and
+  where every sprite is standing into a slot that survives the browser closing;
+  `loadgame(1)` puts it back.
+- The language went from 137 named blocks to 326.
+
+### Added — Python, Lua and C++ in Hard mode
+- A dropdown beside the mode buttons picks the language. The engine underneath
+  never changes: `S.`, `onStart` and `onFrame` are identical whichever you
+  choose, because the code is translated to JavaScript before it runs.
+- A function called `start`, `frame`, `update` or `draw` is wired up
+  automatically in every language, so registering callbacks is optional now.
+- **This is a translator, not the real language,** and it says so in the window
+  as well as here. It covers the part of each language you would write a game
+  in and nothing beyond: no classes, imports, metatables, templates or
+  pointers, and nothing is type-checked. Help lists exactly what is in each.
+- Every generated line is mapped back to the line you wrote, so a mistake in
+  Python reports *Python error (about line 3)* and points at your Python.
+
+### Fixed
+- `"\n"` inside a Simple++ string is a new line now, which every text command
+  wanted.
+- All eleven templates are run start to finish by the test suite. The earlier
+  check only loaded them, which is why nobody noticed one needed Easy mode.
+
 ## 0.12.1 — Moving your games to a new address
 
 ### Fixed

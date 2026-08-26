@@ -41,7 +41,10 @@ const banned = [
 const modern = [];
 for (const [re, name] of banned){
   // a match inside a // comment line doesn't run, so ignore those
-  const hits = script.split('\n').filter(l => re.test(l) && !/^\s*(\/\/|\/\*|\*)/.test(l)).length;
+  // prose about the syntax is not the syntax: drop <code> spans and comment lines
+  const hits = script.split('\n')
+    .map(l => l.replace(/<code>[\s\S]*?<\/code>/g, 'X'))
+    .filter(l => re.test(l) && !/^\s*(\/\/|\/\*|\*)/.test(l)).length;
   if (hits) modern.push(name + ' \u00d7' + hits);
 }
 const css = h.slice(0, h.indexOf('</style>'));
