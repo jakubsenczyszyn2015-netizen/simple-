@@ -1843,7 +1843,9 @@ function evalExpr(src, line){
   const s = src.trim();
   if (!s.length) throw new Err("missing value", line);
   // a single whole string literal, e.g. "hello"  (not  "a" + "b" )
-  if (s[0] === '"' && s.indexOf('"', 1) === s.length - 1) return s.slice(1, -1);
+  /* \n inside quotes means a new line, the way it does everywhere else */
+  if (s[0] === '"' && s.indexOf('"', 1) === s.length - 1)
+    return s.slice(1, -1).replace(/\\n/g, "\n").replace(/\\t/g, "  ");
 
   // comparisons first (lowest precedence we support)
   const cmp = s.match(/^(.+?)\s*(>=|<=|==|!=|=|>|<)\s*(.+)$/);
@@ -1919,6 +1921,42 @@ function evalExpr(src, line){
       case "tile": return tileAtPixel(args[0], args[1]);
       case "free": return isFree(args[0], args[1] || 0, args[2] || 0);
       case "key": return !!R.keys[String(args[0]).toLowerCase()];
+      case "chose": case "chosen": {
+        const want = String(args[0]);
+        return R.choiceHit !== null && R.choiceHit !== undefined &&
+               String(R.choiceHit).toLowerCase() === want.toLowerCase(); }
+      case "picked": return R.lastChoice === null ? "" : R.lastChoice;
+      case "talking": case "boxopen": case "box_open": return !!R.box;
+      case "hp":     return statsOf(args[0]).hp;
+      case "maxhp":  case "max_hp": return statsOf(args[0]).max;
+      case "att":    case "power":  return statsOf(args[0]).att;
+      case "dead":   return statsOf(args[0]).hp <= 0;
+      case "alive":  return statsOf(args[0]).hp > 0;
+      case "have":   case "has":    return R.bag.indexOf(String(args[0])) >= 0;
+      case "howmany": case "how_many": {
+        const want = String(args[0]);
+        return R.bag.filter(v => v === want).length; }
+      case "bagsize": case "bag_size": return R.bag.length;
+      case "remembered": return !!R.memory[String(args[0])];
+      case "memoryof": case "memory_of": {
+        const v = R.memory[String(args[0])]; return v === undefined ? 0 : v; }
+      case "soulx": return R.soul ? R.soul.x : 0;
+      case "souly": return R.soul ? R.soul.y : 0;
+      case "soulhit": case "soul_hit": {
+        const n = soulHits();
+        if (n && R.soul){ R.soul.hurt = 40; R.shake = 8; }
+        return n; }
+      case "nearnpc": case "near_npc": {
+        const p2 = R.player && R.actors[R.player];
+        if (!p2) return 0;
+        for (const k in R.npcs){
+          const a = R.actors[k];
+          if (!a || !a.on) continue;
+          const reach = 6;      // close enough to speak, without touching
+          if (Math.abs((a.x + a.w/2) - (p2.x + p2.w/2)) < a.w + reach &&
+              Math.abs((a.y + a.h/2) - (p2.y + p2.h/2)) < a.h + reach) return +k;
+        }
+        return 0; }
       case "voxelx": case "voxel_x": return vactor(args[0]).x;
       case "voxely": case "voxel_y": return vactor(args[0]).y;
       case "voxelz": case "voxel_z": return vactor(args[0]).z;
@@ -1951,6 +1989,8 @@ sctx.imageSmoothingEnabled = false;
 
 const R = {
   running:false, prog:null, actors:{}, vars:{}, keys:{},
+  extraDraw:[], vox:{}, thick:{}, stats:{}, bag:[], memory:{},
+  followers:[], bullets:[], npcs:{}, sframe:{}, splay:{},
   room:0, texts:[], frame:0, waitFrames:0, raf:0, startDone:false,
   title:null, buttons:[], clicks:[], titlesShown:{},   // title screens
   player:0, roles:{}, lives:null, gameOver:false, resetting:false, homes:{},
@@ -2351,6 +2391,31 @@ function stepCamera(){
   }
 }
 
+/* Everything the role-playing side does once a frame. Each piece checks
+   whether it was ever switched on, so a game that uses none of this pays
+   nothing for it. */
+/* The talking box is stepped BEFORE your code runs, so that the frame you
+   pick something from a menu is the frame chose() is true. Everything else
+   comes after, once your code has moved things. */
+function stepRpg(){
+  stepSoul();
+  stepFollowers();
+  if (R.shake > 0) R.shake--;
+  if (R.flash > 0) R.flash--;
+}
+/* a follower keeps to where the leader was a moment ago, so a line of
+   them strings out behind rather than piling up on the same spot */
+function stepFollowers(){
+  for (const f of R.followers){
+    const lead = R.actors[f.whom], me = R.actors[f.who];
+    if (!lead || !me) continue;
+    f.trail.push({ x: lead.x, y: lead.y });
+    if (f.trail.length > 240) f.trail.shift();
+    const back = f.trail.length - 1 - f.gap;
+    if (back >= 0){ me.x = f.trail[back].x; me.y = f.trail[back].y; }
+  }
+}
+
 function stepCoinSpots(){
   const p = R.player && R.actors[R.player];
   if (!p || !p.on) return;
@@ -2640,6 +2705,159 @@ function buildTouchpad(){
   let saved = null;
   try { saved = localStorage.getItem("simplepp-touch"); } catch(e){}
   toggleTouch(saved === null ? IS_TOUCH : saved === "1");
+}
+
+/* =========================================================
+   ROLE-PLAYING GAMES
+   The things an Undertale or a Deltarune is made of, each one small
+   enough to sit on a single line: a talking box with a face in it, a
+   menu you pick from, hit points, a bar to show them, an inventory,
+   the white box you steer a heart around, and something that follows
+   you about. None of them need any of the others.
+   ========================================================= */
+
+/* ---------- a box that talks ---------- */
+function openTextbox(text, face, choices){
+  R.box = {
+    lines: String(text).split("\n"),
+    face: face ? Math.round(spriteArg(face)) : 0,
+    shown: 0, tick: 0, done: false, page: 0,
+    choices: choices || null, pick: 0, chosen: null
+  };
+}
+function boxText(){ return R.box ? R.box.lines.join("\n") : ""; }
+function stepTextbox(){
+  const b = R.box;
+  if (!b) return;
+  const full = b.lines.join("\n");
+  if (b.shown < full.length){
+    b.tick++;
+    if (b.tick >= (R.boxSpeed || 2)){
+      b.tick = 0; b.shown++;
+      const ch = full.charAt(b.shown - 1);
+      if (ch !== " " && ch !== "\n" && b.shown % 2 === 0) beep(4);
+    }
+    if (R.keyHits.z || R.keyHits.space || R.keyHits.enter) b.shown = full.length;  // skip ahead
+    return;
+  }
+  b.done = true;
+  if (b.choices){
+    if (R.keyHits.up)   b.pick = (b.pick - 1 + b.choices.length) % b.choices.length;
+    if (R.keyHits.down) b.pick = (b.pick + 1) % b.choices.length;
+    if (R.keyHits.left) b.pick = (b.pick - 1 + b.choices.length) % b.choices.length;
+    if (R.keyHits.right)b.pick = (b.pick + 1) % b.choices.length;
+    if (R.keyHits.z || R.keyHits.enter || R.keyHits.space){
+      b.chosen = b.choices[b.pick];
+      R.lastChoice = b.chosen;      // picked() keeps it, for reading later
+      R.choiceHit  = b.chosen;      // chose() sees it for this one frame only
+      R.box = null;
+    }
+    return;
+  }
+  if (R.keyHits.z || R.keyHits.enter || R.keyHits.space) R.box = null;
+}
+function drawTextbox(){
+  const b = R.box; if (!b) return;
+  const boxH = b.choices ? 74 : 58;
+  const top = VH - boxH - 6;
+  sctx.fillStyle = "#000";
+  sctx.fillRect(6, top, VW - 12, boxH);
+  sctx.strokeStyle = "#fff"; sctx.lineWidth = 2;
+  sctx.strokeRect(7, top + 1, VW - 14, boxH - 2);
+
+  let textX = 14;
+  if (b.face){
+    const cv = spriteCanvas(b.face);
+    if (cv){ sctx.drawImage(cv, 14, top + 8, 32, 32); textX = 54; }
+  }
+  sctx.font = "8px ui-monospace,monospace";
+  sctx.fillStyle = "#fff";
+  const shown = b.lines.join("\n").slice(0, b.shown);
+  let y = top + 15;
+  for (const raw of shown.split("\n")){
+    let line = "";
+    const maxW = VW - textX - 14;
+    for (const w of raw.split(" ")){
+      const test = line ? line + " " + w : w;
+      if (sctx.measureText(test).width > maxW){ sctx.fillText(line, textX, y); y += 10; line = w; }
+      else line = test;
+    }
+    if (line) sctx.fillText(line, textX, y);
+    y += 10;
+  }
+  if (b.choices && b.done){
+    const cw = Math.floor((VW - 28) / b.choices.length);
+    for (let i = 0; i < b.choices.length; i++){
+      const x = 14 + i * cw, cy = top + boxH - 14;
+      sctx.fillStyle = i === b.pick ? "#ffd166" : "#fff";
+      sctx.fillText((i === b.pick ? "> " : "  ") + b.choices[i], x, cy);
+    }
+  } else if (b.done){
+    sctx.fillStyle = (R.frame % 40 < 22) ? "#ffd166" : "#000";
+    sctx.fillText("▼", VW - 20, top + boxH - 8);
+  }
+}
+
+/* ---------- hit points ---------- */
+function statsOf(n){
+  n = Math.round(spriteArg(n));
+  if (!R.stats[n]) R.stats[n] = { hp:10, max:10, att:1, def:0 };
+  return R.stats[n];
+}
+
+/* ---------- the white box, and the heart inside it ---------- */
+function stepSoul(){
+  const s = R.soul;
+  if (!s || !s.on) return;
+  const box = R.arena;
+  const sp = s.speed;
+  if (R.keys.left)  s.x -= sp;
+  if (R.keys.right) s.x += sp;
+  if (R.keys.up)    s.y -= sp;
+  if (R.keys.down)  s.y += sp;
+  if (box){
+    s.x = Math.max(box.x + 3, Math.min(box.x + box.w - 3, s.x));
+    s.y = Math.max(box.y + 3, Math.min(box.y + box.h - 3, s.y));
+  } else {
+    s.x = Math.max(3, Math.min(VW - 3, s.x));
+    s.y = Math.max(3, Math.min(VH - 3, s.y));
+  }
+  if (s.hurt > 0) s.hurt--;
+}
+function drawArena(){
+  const a = R.arena;
+  if (a){
+    sctx.fillStyle = "#000";
+    sctx.fillRect(a.x, a.y, a.w, a.h);
+    sctx.strokeStyle = "#fff"; sctx.lineWidth = 2;
+    sctx.strokeRect(a.x + 1, a.y + 1, a.w - 2, a.h - 2);
+  }
+  const s = R.soul;
+  if (s && s.on && (s.hurt <= 0 || R.frame % 6 < 3)){
+    if (s.sprite){
+      const cv = spriteCanvas(s.sprite);
+      if (cv) sctx.drawImage(cv, Math.round(s.x) - SW/2, Math.round(s.y) - SH/2, SW, SH);
+    } else {
+      sctx.fillStyle = "#ff004d";                 // the little red heart
+      const x = Math.round(s.x), y = Math.round(s.y);
+      sctx.fillRect(x - 3, y - 3, 2, 3); sctx.fillRect(x + 1, y - 3, 2, 3);
+      sctx.fillRect(x - 4, y - 2, 8, 3);
+      sctx.fillRect(x - 3, y + 1, 6, 1);
+      sctx.fillRect(x - 2, y + 2, 4, 1);
+      sctx.fillRect(x - 1, y + 3, 2, 1);
+    }
+  }
+}
+/* anything the heart runs into that was named dangerous */
+function soulHits(){
+  const s = R.soul;
+  if (!s || !s.on || s.hurt > 0) return 0;
+  for (const n of R.bullets){
+    const a = R.actors[n];
+    if (!a || !a.on) continue;
+    if (s.x > a.x && s.x < a.x + a.w && s.y > a.y && s.y < a.y + a.h) return n;
+  }
+  return 0;
 }
 
 /* =========================================================
@@ -3361,6 +3579,13 @@ const QUESTIONS = {
   click_button:'if click_button("Options")',
   buttonclicked:'if clicked("Play")',   button_clicked:'if clicked("Play")',
   visible:"if visible(1)",              key:"if key(space)",
+  chose:'if chose("Fight")',            picked:'print(picked(), 6, 6)',
+  talking:"if talking()",               hp:"if hp(1) < 3",
+  maxhp:"if hp(1) == maxhp(1)",         dead:"if dead(2)",
+  alive:"if alive(2)",                  have:'if have("Potion")',
+  howmany:'if howmany("Potion") > 1',   bagsize:"if bagsize() > 0",
+  remembered:'if remembered("metdog")', soulhit:"if soulhit()",
+  nearnpc:"if nearnpc()",               soulx:"if soulx() > 160",
   voxelx:"if voxelx(1) > 100",          voxely:"if voxely(1) > 100",
   voxelz:"if voxelz(1) > 0",            angle:"if angle(1) > 90",
   layers:"if layers(1) > 4",            modelof:'set(n, modelof("tree"))',
@@ -3394,6 +3619,110 @@ function runCall(st){
   switch (name){
     case "show":  { const [n] = A(); ensureSprite(Math.round(n)); actor(n).on = true;  break; }
     case "hide":  { const [n] = A(); actor(n).on = false; break; }
+
+    /* ---- role-playing games ---- */
+    case "textbox": case "text_box": {
+      const [t, face] = A(); openTextbox(t === undefined ? "" : t, face); break; }
+    case "talk": {
+      const [who, t] = A(); openTextbox(t === undefined ? "" : t, who); break; }
+    case "menu": {
+      const opts = A().map(v => String(v));
+      if (opts.length < 2) throw new Err("menu() needs at least two things to pick from", st.n);
+      openTextbox(opts.length > 4 ? "" : "", 0, opts); break; }
+    case "askmenu": case "ask_menu": {
+      const all = A(); const t = String(all[0] === undefined ? "" : all[0]);
+      const opts = all.slice(1).map(v => String(v));
+      if (opts.length < 2) throw new Err("askmenu() needs a question and at least two answers", st.n);
+      openTextbox(t, 0, opts); break; }
+    case "closebox": case "close_box": { R.box = null; break; }
+    case "textspeed": case "text_speed": {
+      const [v] = A(); R.boxSpeed = Math.max(1, Math.min(12, Math.round(v) || 2)); break; }
+
+    case "stats": {
+      const [n, hp, att, def] = A(); const k = Math.round(spriteArg(n));
+      R.stats[k] = { hp: hp || 10, max: hp || 10, att: att || 1, def: def || 0 };
+      break; }
+    case "damage": case "hurt": {
+      const [n, amount] = A(); const st2 = statsOf(n);
+      st2.hp = Math.max(0, st2.hp - Math.max(0, (amount || 1) - st2.def));
+      R.shake = Math.max(R.shake, 6);
+      break; }
+    case "heal": {
+      const [n, amount] = A(); const st2 = statsOf(n);
+      st2.hp = Math.min(st2.max, st2.hp + (amount || 1)); break; }
+    case "sethp": case "set_hp": {
+      const [n, v] = A(); const st2 = statsOf(n);
+      st2.hp = Math.max(0, Math.min(st2.max, v || 0)); break; }
+    case "attack": {
+      const [a1, b1] = A();
+      const me = statsOf(a1), them = statsOf(b1);
+      const hit = Math.max(1, me.att - them.def);
+      them.hp = Math.max(0, them.hp - hit);
+      R.shake = Math.max(R.shake, 6);
+      R.vars.lasthit = hit;
+      break; }
+    case "hpbar": case "hp_bar": {
+      const [n, x, y, w] = A(); const st2 = statsOf(n);
+      R.extraDraw.push({ kind:"hpbar", st: st2, x: x || 6, y: y || 6, w: w || 60 });
+      break; }
+
+    case "give": { const [item] = A(); R.bag.push(String(item)); break; }
+    case "takeaway": case "take_away": {
+      const [item] = A(); const i = R.bag.indexOf(String(item));
+      if (i >= 0) R.bag.splice(i, 1); break; }
+    case "emptybag": case "empty_bag": { R.bag = []; break; }
+
+    case "remember": {
+      const [key, v] = A();
+      R.memory[String(key)] = (v === undefined ? 1 : v);
+      try { localStorage.setItem("simplepp-memory", JSON.stringify(R.memory)); } catch(e){}
+      break; }
+    case "forget": {
+      const [key] = A();
+      if (key === undefined) R.memory = {}; else delete R.memory[String(key)];
+      try { localStorage.setItem("simplepp-memory", JSON.stringify(R.memory)); } catch(e){}
+      break; }
+
+    case "soul": {
+      const [sp, speed] = A();
+      R.soul = { on:true, x:VW/2, y:VH/2, speed: speed || 2,
+                 sprite: sp ? Math.round(spriteArg(sp)) : 0, hurt:0 };
+      break; }
+    case "soulhide": case "soul_hide": { if (R.soul) R.soul.on = false; break; }
+    case "soulput": case "soul_put": {
+      const [x, y] = A(); if (R.soul){ R.soul.x = x || 0; R.soul.y = y || 0; } break; }
+    case "arena": {
+      const [x, y, w, h] = A();
+      R.arena = { x: x === undefined ? 100 : x, y: y === undefined ? 130 : y,
+                  w: w || 120, h: h || 80 };
+      break; }
+    case "noarena": case "no_arena": { R.arena = null; break; }
+    case "bullet": {
+      const [n] = A(); const k = Math.round(spriteArg(n));
+      if (R.bullets.indexOf(k) < 0) R.bullets.push(k);
+      ensureSprite(k); break; }
+    case "nobullet": case "no_bullet": {
+      const [n] = A(); const k = Math.round(spriteArg(n));
+      const i = R.bullets.indexOf(k); if (i >= 0) R.bullets.splice(i, 1); break; }
+
+    case "follow": {
+      const [who, whom, gap] = A();
+      const a = Math.round(spriteArg(who)), b2 = Math.round(spriteArg(whom));
+      R.followers = R.followers.filter(f => f.who !== a);
+      R.followers.push({ who:a, whom:b2, gap: Math.max(2, Math.round(gap) || 14), trail: [] });
+      ensureSprite(a); break; }
+    case "unfollow": case "stopfollow": case "stop_follow": {
+      const [who] = A(); const a = Math.round(spriteArg(who));
+      R.followers = R.followers.filter(f => f.who !== a); break; }
+
+    case "npc": {
+      const [n, what, face] = A(); const k = Math.round(spriteArg(n));
+      R.npcs[k] = { text: String(what), face: face ? Math.round(spriteArg(face)) : k };
+      ensureSprite(k); break; }
+
+    case "shake":  { const [n] = A(); R.shake = Math.max(1, Math.round(n) || 8); break; }
+    case "flash":  { const [n] = A(); R.flash = Math.max(1, Math.round(n) || 6); break; }
+    case "tint":   { const [c] = A(); R.tint = c === undefined || c === 0 ? null : String(c); break; }
 
     /* ---- models: pixel art with a depth to it (Models tab) ---- */
     case "voxel": case "voxelshow": case "voxel_show": {
@@ -3829,9 +4158,21 @@ function startWith(source){
   R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
   R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
   R.paused = false; R.roomSwaps = {};
+  /* what remember() kept lives through a restart — that is the whole point of it */
+  try { R.memory = JSON.parse(localStorage.getItem("simplepp-memory") || "{}"); } catch(e){ R.memory = {}; }
   R.sframe = {}; R.splay = {};   // which frame each sprite shows, and what is playing
   R.vox = {}; R.thick = {}; R.thickAll = 0;   // models, and how thick a flat sprite is in 3D
+  R.extraDraw = [];
+  R.box = null; R.lastChoice = null; R.choiceHit = null; R.boxSpeed = 2;
+  R.stats = {}; R.bag = []; R.memory = R.memory || {};
+  R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
+  R.npcs = {}; R.shake = 0; R.flash = 0; R.tint = null;
   R.vox = {}; R.thick = {}; R.thickAll = 0;   // models, and how thick a flat sprite is in 3D
+  R.extraDraw = [];
+  R.box = null; R.lastChoice = null; R.choiceHit = null; R.boxSpeed = 2;
+  R.stats = {}; R.bag = []; R.memory = R.memory || {};
+  R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
+  R.npcs = {}; R.shake = 0; R.flash = 0; R.tint = null;
   R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0;
   R.vars.coins = 0;                      // coin() counts into this one
   KEYBIND = {};
@@ -3855,6 +4196,8 @@ function doReset(){
   R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
   R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
   R.paused = false; R.roomSwaps = {};
+  /* what remember() kept lives through a restart — that is the whole point of it */
+  try { R.memory = JSON.parse(localStorage.getItem("simplepp-memory") || "{}"); } catch(e){ R.memory = {}; }
   R.sframe = {}; R.splay = {};   // which frame each sprite shows, and what is playing
   R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0;
   R.clicks = []; R.vars.coins = 0;
@@ -3956,10 +4299,12 @@ function step(){
   R.texts = [];
 
   R.extra = [];
+  R.extraDraw = [];
+  stepTextbox();
 
   if (R.hard){
     if (!hardLoop()) return false;
-    stepBehaviours(); stepCamera();
+    stepBehaviours(); stepCamera(); stepRpg();
     R.frame++; render(); return true;
   }
 
@@ -4002,12 +4347,14 @@ function step(){
   stepRoles();
   stepCoinSpots();
   stepCamera();
+  stepRpg();
   if (R.three) step3D();
   if (R.resetting){ doReset(); return false; }
   R.lastButtons = R.buttons.map(b => b.label);
   R.clicks = []; R.uiClicks = []; R.spriteClicks = [];
   R.lastKeys = Object.assign({}, R.keys);
   R.keyHits = {};
+  R.choiceHit = null;
   if (R.roomChanged){ if (R.roomChangedAge++ >= 1) R.roomChanged = 0; }
   R.frame++;
   render();
@@ -4024,7 +4371,12 @@ function render(){
   if (R.three){ render3D(); drawHUD(); return; }
 
   // the camera shifts the world, never the writing on top of it
-  const ox = Math.round(VW / 2 - R.cam.x), oy = Math.round(VH / 2 - R.cam.y);
+  let ox = Math.round(VW / 2 - R.cam.x), oy = Math.round(VH / 2 - R.cam.y);
+  if (R.shake > 0){                       // shake() rattles the whole world
+    const k = Math.min(4, R.shake);
+    ox += Math.round((Math.random() * 2 - 1) * k);
+    oy += Math.round((Math.random() * 2 - 1) * k);
+  }
 
   const bg = roomCanvas();
   if (bg) sctx.drawImage(bg, Math.round(roomPaint.ox + ox), Math.round(roomPaint.oy + oy));
@@ -4094,7 +4446,32 @@ function drawHUD(){
     sctx.strokeRect(b.x + .5, b.y - 1.5, w - 1, 13);
     sctx.fillStyle = "#e8ecf5"; sctx.fillText(label, b.x + 5, b.y + 2);
   }
+  drawArena();
+  for (const d of (R.extraDraw || [])){
+    if (d.kind === "hpbar"){
+      const frac = d.st.max ? Math.max(0, d.st.hp / d.st.max) : 0;
+      sctx.fillStyle = "#000";  sctx.fillRect(d.x - 1, d.y - 1, d.w + 2, 8);
+      sctx.fillStyle = "#3a3a3a"; sctx.fillRect(d.x, d.y, d.w, 6);
+      sctx.fillStyle = frac > .3 ? "#00e436" : "#ff004d";
+      sctx.fillRect(d.x, d.y, Math.round(d.w * frac), 6);
+      sctx.font = "8px ui-monospace,monospace"; sctx.fillStyle = "#fff";
+      const label = Math.ceil(d.st.hp) + "/" + d.st.max;
+      const lw = sctx.measureText(label).width;
+      /* a bar near the right edge puts its number on the other side */
+      const lx = (d.x + d.w + 5 + lw > VW) ? d.x - lw - 5 : d.x + d.w + 5;
+      sctx.fillText(label, Math.max(2, lx), d.y + 6);
+    }
+  }
   if (R.dialogue) drawDialogue();
+  if (R.box) drawTextbox();
+  if (R.tint){
+    sctx.save(); sctx.globalAlpha = .3;
+    sctx.fillStyle = R.tint; sctx.fillRect(0, 0, VW, VH); sctx.restore();
+  }
+  if (R.flash > 0){
+    sctx.save(); sctx.globalAlpha = Math.min(1, R.flash / 6);
+    sctx.fillStyle = "#fff"; sctx.fillRect(0, 0, VW, VH); sctx.restore();
+  }
 }
 
 /* dialogue("...") — a black box along the bottom, words wrapped to fit */
@@ -5319,6 +5696,67 @@ function mazeRoom(tile){
    TEMPLATES — whole projects, ready to run
    ========================================================= */
 const TEMPLATES = [
+  {
+    em:"⚔️", name:"Little RPG", mode:"easy",
+    desc:"Walk up to somebody and they talk to you. Then a fight: pick from a menu, dodge what comes at you, watch the hit points go down.",
+    sprites:["face","brick","star"],
+    rooms:[() => borderRoom(2)],
+    code:`# LITTLE RPG
+# sprite 1 = you, 2 = wall, 3 = the one you meet
+#
+# Two halves. Walk about until you bump into sprite 3, then it
+# turns into a fight. Z talks, and Z picks from the menu.
+
+when start
+  room(1)
+  put(1, 60, 110)
+  put(3, 230, 110)
+  show(1)
+  show(3)
+  horizontal(1, 2)
+  vertical(1, 2)
+  collision(1, 3)
+  npc(3, "* Somebody blocks the path.\\n* They do not look pleased.")
+  stats(1, 20, 4, 1)
+  stats(3, 15, 3, 0)
+  set(fighting, 0)
+end
+
+every frame unless fighting == 1
+  if nearnpc() == 3
+    print("press Z to talk", 96, 200)
+    if pressed("z")
+      talk(3, "* Somebody blocks the path.\\n* They do not look pleased.")
+      set(fighting, 1)
+    end
+  end
+end
+
+every frame unless fighting == 0
+  hpbar(1, 6, 6, 70)
+  hpbar(3, 246, 6, 68)
+  if dead(3)
+    ending("You win!")
+  end
+  if dead(1)
+    ending("You lost...")
+  end
+  if chose("Fight")
+    attack(1, 3)
+    sfx(1)
+    damage(1, 2)
+    talk(3, "* You hit for " + lasthit + ".\\n* They hit back.")
+  end
+  if chose("Mercy")
+    ending("Peace. Nobody got hurt.")
+  end
+  if talking()
+  else
+    askmenu("* What do you do?", "Fight", "Mercy")
+  end
+end
+`
+  },
   {
     em:"🌟", name:"Catch the Star",
     desc:"Walk around and grab stars. Every catch scores a point and moves the star somewhere new.",
@@ -7910,6 +8348,74 @@ Notes
 · Sprite numbers start at 1 and never run out.
 · Anything after <code>#</code> is a comment.
 · Variables work anywhere a number does: <code>move(1, speed, 0)</code>
+
+<b style="color:var(--accent2)">Role-playing games</b>
+The pieces an Undertale or a Deltarune is made of. None of them need any of
+the others, so you can take one and leave the rest.
+
+<b>Talking</b>
+<code>textbox("* Hello.")</code>      a black box along the bottom that types
+                          itself out. Z skips to the end, Z again closes it.
+<code>talk(3, "* Hi.")</code>         the same, with sprite 3's face in the box
+<code>askmenu("Now what?", "Fight", "Mercy")</code>
+                          types the question, then lets you pick with the
+                          arrow keys and Z
+<code>menu("Fight", "Mercy")</code>   just the choices, no question
+<code>if chose("Fight")</code>        true on the frame that one was picked
+<code>picked()</code>                 the last thing picked, as words
+<code>if talking()</code>             is a box on screen right now?
+<code>textspeed(4)</code>             how slowly it types (1 is fastest)
+<code>closebox()</code>               shut it from code
+
+<b>Hit points</b>
+<code>stats(1, 20, 4, 1)</code>       sprite 1 has 20 hit points, 4 attack,
+                          1 defence
+<code>attack(1, 3)</code>             1 hits 3, working out the damage.
+                          <code>lasthit</code> holds how much it was.
+<code>damage(1, 3)</code>             take 3 off, ignoring attack
+<code>heal(1, 5)</code>               put 5 back on
+<code>hpbar(1, 6, 6, 70)</code>       a bar on screen, with the numbers
+<code>if hp(1) < 5</code>             how many are left (<code>maxhp()</code> too)
+<code>if dead(2)</code>               are they out? (<code>alive()</code> is the other way)
+
+<b>Things you are carrying</b>
+<code>give("Potion")</code>           put one in the bag
+<code>takeaway("Potion")</code>       take one out
+<code>if have("Potion")</code>        is there one?
+<code>if howmany("Potion") > 1</code> how many
+<code>if bagsize() > 0</code>         anything at all?
+
+<b>Things the game remembers</b>
+<code>remember("metdog", 1)</code>    kept even when the game restarts, or
+                          the browser is closed and opened again
+<code>if remembered("metdog")</code>  did that happen?
+<code>memoryof("metdog")</code>       what was kept
+<code>forget("metdog")</code>         drop it (<code>forget()</code> drops the lot)
+
+<b>People to walk up to</b>
+<code>npc(3, "* Hello!")</code>       sprite 3 has something to say
+<code>if nearnpc() == 3</code>        standing next to them
+<code>follow(2, 1, 14)</code>         sprite 2 walks the path sprite 1 walked,
+                          fourteen steps behind — a party member
+<code>unfollow(2)</code>              stop that
+
+<b>The white box, and the heart in it</b>
+<code>arena(100, 130, 120, 80)</code> the white box to dodge inside
+<code>soul(0, 2)</code>              a red heart you steer with the arrows.
+                          Put a sprite number first to use that instead.
+<code>bullet(5)</code>                sprite 5 hurts the heart
+<code>if soulhit()</code>            true the frame it is hit — it gives you
+                          the number of whatever hit it
+<code>soulput(160, 170)</code>        move the heart there
+<code>noarena()</code>  <code>soulhide()</code>    put it all away again
+
+<b>Making it feel like something happened</b>
+<code>shake(10)</code>               rattle the screen
+<code>flash(8)</code>                white, then back
+<code>tint("#4400ff")</code>          a colour over everything
+
+  ✦ Templates has <b>Little RPG</b>, which is all of this in one short
+  program: walk up to somebody, they talk, then a fight with a menu.
 
 <b style="color:var(--accent2)">Models — pixel art with a depth to it</b>
 The <b>▤ Models</b> tab draws a stack of pictures instead of one. Layer 1 is

@@ -49,7 +49,8 @@ hide(1)
 - **Help** — every command, with a search box that looks through all four modes
   and tells you which one each answer belongs to. Press **/** to jump to it.
 - **Learn** — short steps, each with a button that loads and runs the code.
-- **Templates** — ten complete games to open, run and take apart.
+- **Templates** — eleven complete games to open, run and take apart, starting
+  with **Little RPG**: walk up to somebody, they talk, then a fight with a menu.
 - **Changelog** — see [CHANGELOG.md](CHANGELOG.md).
 
 The **⋯** button at the top right holds everything else: five **themes** for
@@ -145,6 +146,31 @@ collision(1, 3)        sprite 1 cannot walk into sprite 3 (any mode)
 touchinginroom(1, 3)   touching a tile painted into the room?
 pause()  resume()      stop and start; P toggles it too
 roomhide(12, 3)        every sprite-12 tile acts like a 3; roomshow(12) undoes it
+```
+
+### Role-playing games
+
+The pieces an Undertale or a Deltarune is made of, each on its own line and
+none of them needing the others:
+
+```
+textbox("* Hello.")        a box along the bottom that types itself out
+talk(3, "* Hi.")           ...with sprite 3's face in it
+askmenu("Now what?", "Fight", "Mercy")   pick with the arrows and Z
+if chose("Fight")          true on the frame that one was picked
+stats(1, 20, 4, 1)         20 hit points, 4 attack, 1 defence
+attack(1, 3)               1 hits 3; lasthit holds how much
+hpbar(1, 6, 6, 70)         a bar on screen with the numbers
+if dead(2)                 are they out?
+give("Potion")             if have("Potion"), howmany("Potion"), takeaway()
+remember("metdog", 1)      kept even after the browser closes
+if remembered("metdog")
+npc(3, "* Hello!")         if nearnpc() == 3
+follow(2, 1, 14)           a party member walking your path behind you
+arena(100, 130, 120, 80)   the white box
+soul(0, 2)                 a red heart you steer inside it
+bullet(5)                  sprite 5 hurts the heart; if soulhit()
+shake(10)  flash(8)  tint("#4400ff")
 ```
 
 `if ... else ... end` and `else if` work in Normal mode and up.
