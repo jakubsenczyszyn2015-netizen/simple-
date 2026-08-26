@@ -46,7 +46,7 @@
     background:#12141a; color:#e8ecf5; font:14px/1.6 inherit; tab-size:2;
   }
   #stage-wrap{background:#0c0e13;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px}
-  #stage-frame{display:flex;align-items:center;justify-content:center}
+  #stage-frame{display:flex;align-items:center;justify-content:center;position:relative}
   #stage-frame:fullscreen{
     width:100vw; height:100vh; background:#000;
   }
@@ -54,6 +54,66 @@
   #stage-frame:-webkit-full-screen{width:100vw;height:100vh;background:#000}
 
   canvas{image-rendering:pixelated; background:#000; border:1px solid var(--line); border-radius:4px}
+
+  /* ---- touch controls: a d-pad and buttons drawn over the stage ---- */
+  #touchpad{
+    display:none; position:absolute; left:0; right:0; bottom:0; height:100%;
+    pointer-events:none; z-index:8; user-select:none; -webkit-user-select:none;
+    -webkit-touch-callout:none; touch-action:none;
+  }
+  body.touch #touchpad{display:block}
+  #touchpad .tgroup{position:absolute; bottom:12px; pointer-events:none}
+  #touchpad .dpad{left:12px; display:grid; grid-template-columns:repeat(3,48px); grid-template-rows:repeat(3,48px); gap:3px}
+  #touchpad .acts{right:12px; display:grid; grid-template-columns:repeat(2,56px); gap:7px; justify-items:stretch}
+  .tbtn{
+    pointer-events:auto; touch-action:none; -webkit-tap-highlight-color:transparent;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(28,31,40,.62); color:#e8ecf5; border:2px solid rgba(232,236,245,.35);
+    border-radius:10px; font:700 17px/1 ui-monospace,Menlo,Consolas,monospace; cursor:pointer;
+  }
+  .tbtn.round{width:56px; height:56px; border-radius:50%; font-size:19px; justify-self:center}
+  .tbtn.wide{height:38px; font-size:13px}
+  .tbtn.down{background:var(--accent); color:#0b1017; border-color:var(--accent)}
+  #touchpad .sp{visibility:hidden}
+  #stage-frame:fullscreen #touchpad .dpad,
+  #stage-frame:-webkit-full-screen #touchpad .dpad{left:24px}
+  #stage-frame:fullscreen #touchpad .acts,
+  #stage-frame:-webkit-full-screen #touchpad .acts{right:24px}
+
+  /* ---- phones and small windows ---- */
+  @media (max-width: 900px){
+    header{padding:5px 7px; gap:4px}
+    header h1{font-size:13px; margin:0 4px 0 0}
+    button{padding:5px 8px; font-size:12px}
+    .lbl{display:none}                       /* tabs shrink to just their number */
+    .tabs{gap:3px}
+    .spacer{display:none}
+    #modeline{font-size:11px; padding:4px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+    main{overflow:auto}
+    /* without this a long unbroken line (the mode blurb) props the column open */
+    .view, .view > *, .col{min-width:0}
+    .view{flex-direction:column}
+    #v-code{flex-direction:column}
+    /* the inline flex:1 on these columns has to be beaten to share the screen */
+    #v-code > .col:first-child{flex:0 0 auto !important; height:auto}
+    #code{flex:0 0 auto !important; height:27vh; min-height:130px; padding:9px; font-size:13px}
+    #stage-wrap{flex:0 0 auto !important; width:100%; padding:6px; gap:5px}
+    #console{height:70px; font-size:11px}
+    #stage-frame{max-width:100%}
+    #stage-wrap canvas{max-width:100%; height:auto !important}
+    #stage-info, #fps-label, #coords{display:none}
+    .pane{border-right:0; border-bottom:1px solid var(--line); max-height:40vh; width:100% !important}
+    .modal{max-width:94vw !important; max-height:86vh !important}
+    #touchpad .dpad{grid-template-columns:repeat(3,44px); grid-template-rows:repeat(3,44px)}
+    #touchpad .acts{grid-template-columns:repeat(2,50px)}
+    .tbtn.round{width:50px;height:50px}
+  }
+  @media (max-width: 560px){
+    header h1{display:none}
+    #stage-wrap .row label{font-size:11px}
+  }
+
   #console{
     height:130px; overflow:auto; background:#0c0e13; border-top:1px solid var(--line);
     padding:8px 12px; color:var(--dim); font-size:12px; white-space:pre-wrap;
@@ -75,7 +135,7 @@
   /* ---- paint ---- */
   #paint-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:#0c0e13}
   #palette{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
-  .sw{aspect-ratio:1;border-radius:4px;border:2px solid transparent;cursor:pointer}
+  .sw{height:26px;aspect-ratio:1;border-radius:4px;border:2px solid transparent;cursor:pointer}
   .sw.on{border-color:#fff}
   .sw.eraser{background:
     linear-gradient(45deg,#444 25%,transparent 25%,transparent 75%,#444 75%),
@@ -84,7 +144,7 @@
 
   /* ---- template gallery ---- */
   #overlay,#png-ov,#lib-ov,#export-ov,#packs-ov{
-    position:fixed; inset:0; background:rgba(8,10,14,.82); z-index:50;
+    position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(8,10,14,.82); z-index:50;
     display:none; align-items:center; justify-content:center; padding:24px;
   }
   #overlay.on,#png-ov.on,#lib-ov.on,#export-ov.on,#packs-ov.on{display:flex}
@@ -179,13 +239,13 @@
 <header>
   <h1>Simple<span>++</span></h1>
   <div class="tabs">
-    <button id="t-code" class="on" onclick="tab('code')">1 · Code</button>
-    <button id="t-paint" onclick="tab('paint')">2 · Paint</button>
-    <button id="t-rooms" onclick="tab('rooms')">3 · Rooms</button>
-    <button id="t-music" onclick="tab('music')">4 · Music</button>
-    <button id="t-learn" onclick="tab('learn')">★ · Learn</button>
-    <button id="t-help" onclick="tab('help')">? · Help</button>
-    <button id="t-changes" onclick="tab('changes')">≡ · Changelog</button>
+    <button id="t-code" class="on" onclick="tab('code')" title="Code">1<span class="lbl"> · Code</span></button>
+    <button id="t-paint" onclick="tab('paint')" title="Paint">2<span class="lbl"> · Paint</span></button>
+    <button id="t-rooms" onclick="tab('rooms')" title="Rooms">3<span class="lbl"> · Rooms</span></button>
+    <button id="t-music" onclick="tab('music')" title="Music">4<span class="lbl"> · Music</span></button>
+    <button id="t-learn" onclick="tab('learn')" title="Learn">★<span class="lbl"> · Learn</span></button>
+    <button id="t-help" onclick="tab('help')" title="Help">?<span class="lbl"> · Help</span></button>
+    <button id="t-changes" onclick="tab('changes')" title="Changelog">≡<span class="lbl"> · Changelog</span></button>
   </div>
   <div class="modepick" title="How much the language does for you">
     <button id="m-easy"   onclick="setMode('easy')">Easy</button>
@@ -199,6 +259,7 @@
   <button onclick="openGallery()" style="background:#4a3a80;border-color:#6a55b8">✦ Templates</button>
   <button onclick="run()" style="background:#2e7d32;border-color:#2e7d32">▶ Run</button>
   <button onclick="stop()">■ Stop</button>
+  <button id="touch-btn" onclick="toggleTouch()" title="on-screen arrow keys and buttons">📱 Touch</button>
   <label id="ai-remember-wrap" style="display:none;align-items:center;gap:4px">
     <input id="ai-remember" type="checkbox" checked style="width:auto">🧠 remember
   </label>
@@ -223,6 +284,25 @@
     <div id="stage-wrap" class="col" style="flex:none">
       <div id="stage-frame">
         <canvas id="stage" width="320" height="240" style="width:480px;height:360px"></canvas>
+        <div id="touchpad">
+          <div class="tgroup dpad">
+            <div class="tbtn sp"></div>
+            <div class="tbtn" data-key="up">▲</div>
+            <div class="tbtn sp"></div>
+            <div class="tbtn" data-key="left">◀</div>
+            <div class="tbtn sp"></div>
+            <div class="tbtn" data-key="right">▶</div>
+            <div class="tbtn sp"></div>
+            <div class="tbtn" data-key="down">▼</div>
+            <div class="tbtn sp"></div>
+          </div>
+          <div class="tgroup acts">
+            <div class="tbtn wide" data-key="c">C</div>
+            <div class="tbtn wide" data-key="space">SPC</div>
+            <div class="tbtn round" data-key="x">X</div>
+            <div class="tbtn round" data-key="z">Z</div>
+          </div>
+        </div>
       </div>
       <div class="row" style="justify-content:center">
         <button id="fs-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
@@ -1583,7 +1663,7 @@ stage.addEventListener("mousedown", e => { R.clickedStage = true; stageClick(e);
 /* was this button clicked? */
 function wasClicked(label, line){
   label = String(label);
-  if (!R.buttons.some(b => b.label === label) && !R.lastButtons?.includes(label))
+  if (!R.buttons.some(b => b.label === label) && !(R.lastButtons && R.lastButtons.indexOf(label) >= 0))
     throw new Err("there is no button called \u201c" + label + "\u201d — add one with titleoption(\"" + label + "\")", line || 0);
   return R.clicks.includes(label);
 }
@@ -1867,7 +1947,7 @@ const TONES = [0, 660, 440, 330, 880, 220, 110];
 function beep(n){
   n = Math.max(1, Math.min(TONES.length - 1, Math.round(n) || 1));
   try {
-    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    audio = audioCtx();
     const o = audio.createOscillator(), g = audio.createGain();
     o.type = n >= 5 ? "square" : "triangle";
     o.frequency.value = TONES[n];
@@ -1909,6 +1989,59 @@ window.addEventListener("keyup", e => {
   const k = keyNameOf(e);
   if (k) R.keys[k] = false;
 });
+
+/* ---------- touch controls ----------
+   The on-screen buttons press the same keys the keyboard does, so every game
+   that works with arrows and Z works on a phone with no extra code. */
+function pressKey(k, down){
+  if (down){
+    if (!R.keys[k]) R.keyHits[k] = true;
+    R.keys[k] = true;
+  } else {
+    R.keys[k] = false;
+  }
+}
+const IS_TOUCH = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+function touchOn(){ return document.body.classList.contains("touch"); }
+function toggleTouch(on){
+  const want = (on === undefined) ? !touchOn() : !!on;
+  document.body.classList.toggle("touch", want);
+  const b = $("touch-btn");
+  if (b){ b.classList.toggle("on", want); b.textContent = want ? "\ud83d\udcf1 Touch on" : "\ud83d\udcf1 Touch"; }
+  if (!want) for (const el of document.querySelectorAll("#touchpad .tbtn")){
+    el.classList.remove("down");
+    if (el.dataset.key) R.keys[el.dataset.key] = false;
+  }
+  try { localStorage.setItem("simplepp-touch", want ? "1" : "0"); } catch(e){}
+  return want;
+}
+function buildTouchpad(){
+  const pad = $("touchpad");
+  if (!pad) return;
+  /* iOS 12 has no PointerEvent, so this listens for touch and mouse separately */
+  for (const el of pad.querySelectorAll(".tbtn[data-key]")){
+    const k = el.dataset.key;
+    const down = e => { e.preventDefault(); el.classList.add("down"); pressKey(k, true); };
+    const up   = e => { e.preventDefault(); el.classList.remove("down"); pressKey(k, false); };
+    el.addEventListener("touchstart", down, { passive:false });
+    el.addEventListener("touchend", up, { passive:false });
+    el.addEventListener("touchcancel", up, { passive:false });
+    el.addEventListener("mousedown", down);
+    el.addEventListener("mouseup", up);
+    el.addEventListener("mouseleave", up);
+  }
+  /* a finger that slides off a button must not leave that key stuck down */
+  pad.addEventListener("touchmove", e => e.preventDefault(), { passive:false });
+  window.addEventListener("blur", () => {
+    for (const el of pad.querySelectorAll(".tbtn.down")){
+      el.classList.remove("down");
+      if (el.dataset.key) R.keys[el.dataset.key] = false;
+    }
+  });
+  let saved = null;
+  try { saved = localStorage.getItem("simplepp-touch"); } catch(e){}
+  toggleTouch(saved === null ? IS_TOUCH : saved === "1");
+}
 
 /* ---------- statement execution ---------- */
 class Stop { }
@@ -3372,7 +3505,10 @@ function fitStage(){
 }
 document.addEventListener("fullscreenchange", fitStage);
 document.addEventListener("webkitfullscreenchange", fitStage);
-window.addEventListener("resize", () => { if (fullscreenOn()) fitStage(); });
+/* an exported game fills the screen, so turning the phone has to re-fit it */
+function refit(){ if (fullscreenOn() || document.body.classList.contains("play-only")) fitStage(); }
+window.addEventListener("resize", refit);
+window.addEventListener("orientationchange", () => setTimeout(refit, 250));
 
 /* F does it too, as long as you aren't typing */
 window.addEventListener("keydown", e => {
@@ -4383,10 +4519,18 @@ function isBindish(l){
   return /\b(bind|rebind|remap|wasd)\b|\binstead of\b/.test(l) ||
          /\b(left|right|up|down|space|z|x|c|enter)\b\s*(?:key|button)?\s*(?:=|to|is|as|be|becomes?)\s*(?:the\s+)?"?[a-z0-9]\b/.test(l);
 }
+/* Safari 12 (iOS 12.5) has no ?., no ?? and no String.matchAll — these do the same jobs */
+function firstSet(){ for (let i = 0; i < arguments.length; i++){ const v = arguments[i]; if (v !== undefined && v !== null) return v; } return undefined; }
+function allMatches(str, re){
+  const rx = new RegExp(re.source, re.flags.indexOf("g") < 0 ? re.flags + "g" : re.flags);
+  const out = []; let m;
+  while ((m = rx.exec(String(str))) !== null){ out.push(m); if (m[0] === "") rx.lastIndex++; }
+  return out;
+}
 function tidy(t){ return String(t || "").trim().replace(/^["'\u201c]+|["'\u201d.,]+$/g, "").trim(); }
 function quoted(line){
   const m = line.match(/"([^"]*)"|'([^']*)'|“([^”]*)”/);
-  return m ? (m[1] ?? m[2] ?? m[3]) : null;
+  return m ? firstSet(m[1], m[2], m[3]) : null;
 }
 
 /* every rule: a test, and what it adds to the plan */
@@ -4394,14 +4538,14 @@ const AI_RULES = [
   { id:"title",
     test: l => /\b(title|start|menu|front)\s*(screen|page)?\b/.test(l) && !/option|button/.test(l),
     apply: (l, P, raw) => {
-      P.title = tidy(quoted(raw) || raw.match(/(?:called|named|saying|says)\s+(.+)$/i)?.[1] || "My Game");
+      P.title = tidy(quoted(raw) || (raw.match(/(?:called|named|saying|says)\s+(.+)$/i) || [])[1] || "My Game");
       return "a title screen saying \u201c" + P.title + "\u201d";
     } },
 
   { id:"option",
     test: l => /\b(option|extra|another)\b.*\bbutton\b|\bbutton\b.*\b(called|named)\b/.test(l),
     apply: (l, P, raw) => {
-      const name = tidy(quoted(raw) || raw.match(/(?:called|named|saying)\s+(.+)$/i)?.[1] || "Options");
+      const name = tidy(quoted(raw) || (raw.match(/(?:called|named|saying)\s+(.+)$/i) || [])[1] || "Options");
       P.options.push(name);
       if (!P.title) P.title = "My Game";
       return "a button called \u201c" + name + "\u201d";
@@ -4426,9 +4570,9 @@ const AI_RULES = [
   { id:"collide", perClause:true,
     test: l => /\bcollision\b|\bcollid\w*\b|\bcannot pass\b|\bpass through\b|\bblocked by\b|\bblocks?\b|\bstops?\b|\bbumps?\b|\bsolid\b/.test(l),
     apply: (l, P) => {
-      let all = [...l.matchAll(/sprite\s*#?\s*(\d+)/g)].map(m => +m[1]);
+      let all = allMatches(l, /sprite\s*#?\s*(\d+)/g).map(m => +m[1]);
       // "1 collides with 2" — bare numbers count as sprites too
-      if (all.length < 2) all = [...l.matchAll(/\b(\d+)\b/g)].map(m => +m[1]);
+      if (all.length < 2) all = allMatches(l, /\b(\d+)\b/g).map(m => +m[1]);
       const mentionsPlayer = /\bplayer\b|\bme\b|\byou\b/.test(l);
 
       if (all.length >= 2){
@@ -4521,8 +4665,8 @@ const AI_RULES = [
     test: l => /\b(chase|chases|follow|follows|hunt|hunts|after you)\b/.test(l) &&
                !/\bcamera\b|\bview\b|\bscroll\w*\b/.test(l),
     apply: (l, P) => {
-      const all = [...l.matchAll(/sprite\s*#?\s*(\d+)/g)].map(m => +m[1]);
-      const who = all[0] ?? 4, whom = all[1] ?? P.player;
+      const all = allMatches(l, /sprite\s*#?\s*(\d+)/g).map(m => +m[1]);
+      const who = firstSet(all[0], 4), whom = firstSet(all[1], P.player);
       P.chasers.push({ who, whom, smart: P.gravity || /smart|jump/.test(l),
                        speed: /\b(fast|quick|speedy)\b/.test(l) ? 2 : (P.chaseSpeed || 1) });
       return "sprite " + who + " chases sprite " + whom;
@@ -4531,8 +4675,8 @@ const AI_RULES = [
   { id:"bounce", perClause:true,
     test: l => /\bbounce[sd]? (off|around|about)\b|\bpong\b|\bball\b/.test(l),
     apply: (l, P) => {
-      const all = [...l.matchAll(/sprite\s*#?\s*(\d+)/g)].map(m => +m[1]);
-      const who = all[0] ?? 5, off = all[1] ?? P.grounds[0] ?? 2;
+      const all = allMatches(l, /sprite\s*#?\s*(\d+)/g).map(m => +m[1]);
+      const who = firstSet(all[0], 5), off = firstSet(all[1], P.grounds[0], 2);
       P.bounces.push({ who, off });
       return "sprite " + who + " bounces off sprite " + off;
     } },
@@ -4540,9 +4684,9 @@ const AI_RULES = [
   { id:"animate", perClause:true,
     test: l => /\b(animate|animated|animation|flip|cycle|frames)\b/.test(l),
     apply: (l, P) => {
-      const all = [...l.matchAll(/\d+/g)].map(m => +m[0]);
+      const all = allMatches(l, /\d+/g).map(m => +m[0]);
       const who = spriteIn(l, P.player);
-      const frames = [...l.matchAll(/sprites?\s*([\d,\s and]+)/g)].map(m => m[1])[0];
+      const frames = allMatches(l, /sprites?\s*([\d,\s and]+)/g).map(m => m[1])[0];
       let list = frames ? frames.split(/[^\d]+/).filter(Boolean).map(Number) : all.slice(1);
       if (list.length < 2) list = [who, who + 1];
       P.anims.push({ who, list });
@@ -4573,7 +4717,7 @@ const AI_RULES = [
   { id:"dialogue",
     test: l => /\b(dialogue|dialog|speech|talks?|speaks?|tells? me|greets?)\b/.test(l),
     apply: (l, P, raw) => {
-      const t = tidy(quoted(raw) || raw.match(/(?:dialogue|dialog|says?|tells? me|speaks?)\s+(.+)$/i)?.[1] || "Hello!");
+      const t = tidy(quoted(raw) || (raw.match(/(?:dialogue|dialog|says?|tells? me|speaks?)\s+(.+)$/i) || [])[1] || "Hello!");
       P.dialogue = t;
       return "a dialogue box saying \u201c" + t + "\u201d";
     } },
@@ -4581,7 +4725,7 @@ const AI_RULES = [
   { id:"threed",
     test: l => /\b3d\b|\bthree ?d\b|\bfirst person\b|\bdoom\b|\bmaze in 3d\b/.test(l),
     apply: (l, P) => {
-      const all = [...l.matchAll(/sprite\s*#?\s*(\d+)/g)].map(m => +m[1]);
+      const all = allMatches(l, /sprite\s*#?\s*(\d+)/g).map(m => +m[1]);
       // "sprite 2 walls and sprite 3 coins" says which is which; otherwise take them in order
       const named = t => {
         const m = l.match(new RegExp("sprite\\s*#?\\s*(\\d+)[^.]{0,18}?\\b" + t)) ||
@@ -4626,7 +4770,7 @@ const AI_RULES = [
     test: l => /\b(put|place|position|spawn|starts? at|goes at|at)\b/.test(l) && /sprite\s*#?\s*\d+/.test(l),
     apply: (l, P) => {
       const n = spriteIn(l, 0);
-      const nums = [...l.matchAll(/\b(\d+)\b/g)].map(m => +m[1]);
+      const nums = allMatches(l, /\b(\d+)\b/g).map(m => +m[1]);
       const rest = nums.filter((v, i) => !(v === n && i === nums.indexOf(n)));
       if (!n || rest.length < 2) return null;
       P.places[n] = { x: rest[rest.length-2], y: rest[rest.length-1] };
@@ -4655,8 +4799,8 @@ const AI_RULES = [
     test: l => (/\b(say|says|display|write|print|message)\b/.test(l) || /"[^"]+"/.test(l)) &&
                !isBindish(l),
     apply: (l, P, raw) => {
-      const t = tidy(quoted(raw) || raw.match(/(?:say|says|display|write|print)\s+(.+)$/i)?.[1] || "Hello!");
-      const xy = [...l.matchAll(/\b(\d+)\b/g)].map(m => +m[1]);
+      const t = tidy(quoted(raw) || (raw.match(/(?:say|says|display|write|print)\s+(.+)$/i) || [])[1] || "Hello!");
+      const xy = allMatches(l, /\b(\d+)\b/g).map(m => +m[1]);
       P.texts.push({ t, x: xy.length >= 2 ? xy[xy.length-2] : 6, y: xy.length >= 2 ? xy[xy.length-1] : 6 });
       return "the words \u201c" + t + "\u201d on screen";
     } },
@@ -5279,8 +5423,28 @@ const musicState = { playing:false, song:0, step:0, timer:null, el:null, loop:tr
 
 function audioCtx(){
   audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+  /* iOS starts every audio context asleep and only lets a real tap wake it */
+  if (audio.state === "suspended" && audio.resume) { try { audio.resume(); } catch(e){} }
   return audio;
 }
+/* the first touch anywhere on the page unlocks sound for the whole session */
+(function unlockAudio(){
+  const go = function(){
+    try {
+      const ac = audioCtx();
+      const s = ac.createBufferSource();
+      s.buffer = ac.createBuffer(1, 1, 22050);
+      s.connect(ac.destination);
+      s.start(0);
+    } catch(e){}
+    document.removeEventListener("touchend", go, true);
+    document.removeEventListener("mousedown", go, true);
+    document.removeEventListener("keydown", go, true);
+  };
+  document.addEventListener("touchend", go, true);
+  document.addEventListener("mousedown", go, true);
+  document.addEventListener("keydown", go, true);
+})();
 function blip(freq, wave, len){
   try {
     const ac = audioCtx();
@@ -6140,6 +6304,16 @@ Notes
 · Sprite numbers start at 1 and never run out.
 · Anything after <code>#</code> is a comment.
 · Variables work anywhere a number does: <code>move(1, speed, 0)</code>
+
+<b style="color:var(--accent2)">On a phone or a tablet</b>
+· <b>📱 Touch</b> puts arrow buttons and Z / X / C / SPACE over the
+  stage. They press the very same keys the keyboard does, so a game written
+  for arrows and <code>when key z</code> already works on a phone — there is
+  nothing extra to write.
+· It turns itself on when the browser says there is a touch screen, and the
+  button turns it on or off by hand at any time. The choice is remembered.
+· Exported games carry the buttons with them.
+· Everything here runs on iOS 12.5 and up.
 `;
 
 const HELP_EASY_EXTRA = `
@@ -6700,7 +6874,7 @@ buildPalette(); buildTools(); buildRoomTools(); setPaintZoom(project.zoom || 512
 $("sprite-size").value = SW;
 $("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
 setFps(project.fps || 60);
-buildLessons(); buildReleases(); buildHelp();
+buildLessons(); buildReleases(); buildHelp(); buildTouchpad();
 setMode(project.mode || "normal", true);
 drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
 drawStageInfo();
