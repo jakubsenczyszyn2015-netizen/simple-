@@ -1921,6 +1921,60 @@ function evalExpr(src, line){
       case "tile": return tileAtPixel(args[0], args[1]);
       case "free": return isFree(args[0], args[1] || 0, args[2] || 0);
       case "key": return !!R.keys[String(args[0]).toLowerCase()];
+      /* ---- maths ---- */
+      case "min":   return Math.min.apply(null, args.map(Number));
+      case "max":   return Math.max.apply(null, args.map(Number));
+      case "abs":   return Math.abs(+args[0]);
+      case "round": return Math.round(+args[0]);
+      case "floor": case "down": return Math.floor(+args[0]);
+      case "ceil":  case "up":   return Math.ceil(+args[0]);
+      case "sqrt":  return Math.sqrt(Math.max(0, +args[0]));
+      case "sin":   return Math.sin((+args[0]) * Math.PI / 180);
+      case "cos":   return Math.cos((+args[0]) * Math.PI / 180);
+      case "clamp": return Math.max(+args[1], Math.min(+args[2], +args[0]));
+      case "between": return (+args[0]) >= (+args[1]) && (+args[0]) <= (+args[2]);
+      case "pick":  return args[Math.floor(Math.random() * args.length)];
+      case "chance": return Math.random() * 100 < (+args[0]);
+      case "distance": {
+        const a = actor(args[0]), b2 = actor(args[1]);
+        const dx = (a.x + a.w/2) - (b2.x + b2.w/2), dy = (a.y + a.h/2) - (b2.y + b2.h/2);
+        return Math.round(Math.sqrt(dx*dx + dy*dy)); }
+      case "angleto": case "angle_to": {
+        const a = actor(args[0]), b2 = actor(args[1]);
+        const d = Math.atan2((b2.y + b2.h/2) - (a.y + a.h/2), (b2.x + b2.w/2) - (a.x + a.w/2));
+        return Math.round(((d * 180 / Math.PI) + 360) % 360); }
+
+      /* ---- words ---- */
+      case "join":   return args.map(String).join("");
+      case "upper":  return String(args[0]).toUpperCase();
+      case "lower":  return String(args[0]).toLowerCase();
+      case "length": case "howlong": return String(args[0]).length;
+      case "letter": {
+        const t = String(args[0]);
+        return t.charAt(Math.max(0, Math.round(args[1]) - 1)); }
+      case "piece": {
+        const parts = String(args[0]).split(String(args[1] === undefined ? " " : args[1]));
+        return parts[Math.max(0, Math.round(args[2]) - 1)] || ""; }
+      case "contains": case "includes":
+        return String(args[0]).toLowerCase().indexOf(String(args[1]).toLowerCase()) >= 0;
+      case "number":  { const v = parseFloat(args[0]); return isNaN(v) ? 0 : v; }
+      case "words":   return String(args[0]).trim().split(/\s+/).length;
+
+      /* ---- timers ---- */
+      case "timerdone": case "timer_done": {
+        const k = String(args[0]);
+        return R.timers[k] !== undefined && R.timers[k] <= 0; }
+      case "timerleft": case "timer_left": {
+        const v = R.timers[String(args[0])]; return v === undefined ? 0 : v; }
+      case "everysecond": case "every_second": {
+        const n = Math.max(1, Math.round(args[0]) || 1);
+        return R.frame % Math.round(R.fps * n) === 0; }
+      case "everyframes": case "every_frames": {
+        const n = Math.max(1, Math.round(args[0]) || 1);
+        return R.frame % n === 0; }
+      case "frame":  return R.frame;
+      case "seconds": return Math.floor(R.frame / (R.fps || 60));
+
       case "chose": case "chosen": {
         const want = String(args[0]);
         return R.choiceHit !== null && R.choiceHit !== undefined &&
@@ -1989,7 +2043,7 @@ sctx.imageSmoothingEnabled = false;
 
 const R = {
   running:false, prog:null, actors:{}, vars:{}, keys:{},
-  extraDraw:[], vox:{}, thick:{}, stats:{}, bag:[], memory:{},
+  extraDraw:[], vox:{}, thick:{}, stats:{}, bag:[], memory:{}, timers:{}, ink:"#ffffff",
   followers:[], bullets:[], npcs:{}, sframe:{}, splay:{},
   room:0, texts:[], frame:0, waitFrames:0, raf:0, startDone:false,
   title:null, buttons:[], clicks:[], titlesShown:{},   // title screens
@@ -2402,6 +2456,7 @@ function stepRpg(){
   stepFollowers();
   if (R.shake > 0) R.shake--;
   if (R.flash > 0) R.flash--;
+  for (const k in R.timers) if (R.timers[k] > 0) R.timers[k]--;
 }
 /* a follower keeps to where the leader was a moment ago, so a line of
    them strings out behind rather than piling up on the same spot */
@@ -3579,6 +3634,15 @@ const QUESTIONS = {
   click_button:'if click_button("Options")',
   buttonclicked:'if clicked("Play")',   button_clicked:'if clicked("Play")',
   visible:"if visible(1)",              key:"if key(space)",
+  min:"set(n, min(3, 7))",              max:"set(n, max(3, 7))",
+  abs:"set(n, abs(0 - 5))",             sqrt:"set(n, sqrt(16))",
+  pick:'set(n, pick(1, 2, 3))',         chance:"if chance(30)",
+  distance:"if distance(1, 2) < 20",    angleto:"set(a, angleto(1, 2))",
+  clamp:"set(n, clamp(x(1), 0, 320))",  between:"if between(x(1), 10, 90)",
+  upper:'print(upper("hi"), 6, 6)',     letter:'set(c, letter("cat", 1))',
+  length:'if length(name) > 3',         contains:'if contains(name, "a")',
+  timerdone:'if timerdone("wait")',     everysecond:"if everysecond(1)",
+  seconds:'print(seconds(), 6, 6)',     frame:"if frame > 60",
   chose:'if chose("Fight")',            picked:'print(picked(), 6, 6)',
   talking:"if talking()",               hp:"if hp(1) < 3",
   maxhp:"if hp(1) == maxhp(1)",         dead:"if dead(2)",
@@ -3619,6 +3683,97 @@ function runCall(st){
   switch (name){
     case "show":  { const [n] = A(); ensureSprite(Math.round(n)); actor(n).on = true;  break; }
     case "hide":  { const [n] = A(); actor(n).on = false; break; }
+
+    /* ---- drawing straight onto the screen ---- */
+    case "ink": { const [c] = A(); R.ink = String(c || "#ffffff"); break; }
+    case "rect": case "box": {
+      const [x, y, w, h, c] = A();
+      R.extraDraw.push({ kind:"rect", x:x||0, y:y||0, w:w||0, h:h||0, c: c || R.ink, fill:true }); break; }
+    case "outline": {
+      const [x, y, w, h, c] = A();
+      R.extraDraw.push({ kind:"rect", x:x||0, y:y||0, w:w||0, h:h||0, c: c || R.ink, fill:false }); break; }
+    case "circle": case "disc": {
+      const [x, y, r, c] = A();
+      R.extraDraw.push({ kind:"circle", x:x||0, y:y||0, r:r||4, c: c || R.ink }); break; }
+    case "line": {
+      const [x1, y1, x2, y2, c] = A();
+      R.extraDraw.push({ kind:"line", x1:x1||0, y1:y1||0, x2:x2||0, y2:y2||0, c: c || R.ink }); break; }
+    case "pixel": case "dot": {
+      const [x, y, c] = A();
+      R.extraDraw.push({ kind:"rect", x:x||0, y:y||0, w:1, h:1, c: c || R.ink, fill:true }); break; }
+    case "bigprint": case "big_print": {
+      const [t, x, y, size, c] = A();
+      R.extraDraw.push({ kind:"text", t:String(t), x:x||0, y:y||0,
+                         size: Math.max(6, Math.round(size) || 16), c: c || R.ink, mid:false }); break; }
+    case "middleprint": case "middle_print": case "centreprint": case "centerprint": {
+      const [t, y, size, c] = A();
+      R.extraDraw.push({ kind:"text", t:String(t), x:VW/2, y: y === undefined ? VH/2 : y,
+                         size: Math.max(6, Math.round(size) || 16), c: c || R.ink, mid:true }); break; }
+    case "background": case "bg": {
+      const [c] = A(); R.bgColour = String(c || "#000000"); break; }
+
+    /* ---- one-line movement ---- */
+    case "towards": {
+      const [n, tx, ty, speed] = A(); const a = actor(n);
+      const dx = (tx || 0) - a.x, dy = (ty || 0) - a.y;
+      const d = Math.sqrt(dx*dx + dy*dy) || 1;
+      const sp = speed === undefined ? 2 : speed;
+      a.x += dx / d * sp; a.y += dy / d * sp; break; }
+    case "wrap": {
+      const [n] = A(); const a = actor(n);
+      if (a.x > VW) a.x = -a.w; else if (a.x + a.w < 0) a.x = VW;
+      if (a.y > VH) a.y = -a.h; else if (a.y + a.h < 0) a.y = VH;
+      break; }
+    case "keepon": case "keep_on": case "keepinside": {
+      const [n] = A(); const a = actor(n);
+      a.x = Math.max(0, Math.min(VW - a.w, a.x));
+      a.y = Math.max(0, Math.min(VH - a.h, a.y));
+      break; }
+    case "push": {
+      const [n, deg, speed] = A(); const a = actor(n);
+      const r = (deg || 0) * Math.PI / 180, sp = speed === undefined ? 2 : speed;
+      a.x += Math.cos(r) * sp; a.y += Math.sin(r) * sp; break; }
+
+    /* ---- timers ---- */
+    case "timer": {
+      const [name, frames] = A();
+      R.timers[String(name)] = Math.max(0, Math.round(frames) || 0); break; }
+    case "stoptimer": case "stop_timer": { delete R.timers[String(A()[0])]; break; }
+
+    /* ---- keeping a game between visits ---- */
+    case "savegame": case "save_game": {
+      const [slot] = A();
+      try {
+        localStorage.setItem("simplepp-slot-" + (slot === undefined ? 1 : Math.round(slot)),
+          JSON.stringify({ vars: R.vars, bag: R.bag, room: R.room,
+                           stats: R.stats, memory: R.memory,
+                           where: (function(){ const o = {}; for (const k in R.actors)
+                             o[k] = { x:R.actors[k].x, y:R.actors[k].y, on:R.actors[k].on }; return o; })() }));
+        R.vars.saved = 1;
+      } catch(e){ log("there was no room to save the game", "err"); }
+      break; }
+    case "loadgame": case "load_game": {
+      const [slot] = A();
+      try {
+        const raw = localStorage.getItem("simplepp-slot-" + (slot === undefined ? 1 : Math.round(slot)));
+        if (!raw){ R.vars.loaded = 0; break; }
+        const g = JSON.parse(raw);
+        R.vars = Object.assign(R.vars, g.vars || {});
+        R.bag = (g.bag || []).slice();
+        R.stats = g.stats || {};
+        R.memory = Object.assign(R.memory, g.memory || {});
+        if (g.room !== undefined) R.room = g.room;
+        for (const k in (g.where || {})){
+          const a = actor(+k);
+          a.x = g.where[k].x; a.y = g.where[k].y; a.on = g.where[k].on;
+        }
+        R.vars.loaded = 1;
+      } catch(e){ R.vars.loaded = 0; }
+      break; }
+    case "erasesave": case "erase_save": {
+      const [slot] = A();
+      try { localStorage.removeItem("simplepp-slot-" + (slot === undefined ? 1 : Math.round(slot))); } catch(e){}
+      break; }
 
     /* ---- role-playing games ---- */
     case "textbox": case "text_box": {
@@ -4164,12 +4319,14 @@ function startWith(source){
   R.vox = {}; R.thick = {}; R.thickAll = 0;   // models, and how thick a flat sprite is in 3D
   R.extraDraw = [];
   R.box = null; R.lastChoice = null; R.choiceHit = null; R.boxSpeed = 2;
+  R.timers = {}; R.ink = "#ffffff"; R.bgColour = null;
   R.stats = {}; R.bag = []; R.memory = R.memory || {};
   R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
   R.npcs = {}; R.shake = 0; R.flash = 0; R.tint = null;
   R.vox = {}; R.thick = {}; R.thickAll = 0;   // models, and how thick a flat sprite is in 3D
   R.extraDraw = [];
   R.box = null; R.lastChoice = null; R.choiceHit = null; R.boxSpeed = 2;
+  R.timers = {}; R.ink = "#ffffff"; R.bgColour = null;
   R.stats = {}; R.bag = []; R.memory = R.memory || {};
   R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
   R.npcs = {}; R.shake = 0; R.flash = 0; R.tint = null;
@@ -4364,7 +4521,7 @@ function step(){
 function render(){
   if (R.ending) return drawEnding();
 
-  sctx.fillStyle = "#000";
+  sctx.fillStyle = R.bgColour || "#000";
   sctx.fillRect(0, 0, VW, VH);
 
   if (R.title){ drawTitle(); return; }   // nothing else shows behind a title screen
@@ -4448,6 +4605,30 @@ function drawHUD(){
   }
   drawArena();
   for (const d of (R.extraDraw || [])){
+    if (d.kind === "rect"){
+      sctx.fillStyle = sctx.strokeStyle = d.c;
+      if (d.fill) sctx.fillRect(d.x, d.y, d.w, d.h);
+      else { sctx.lineWidth = 1; sctx.strokeRect(d.x + .5, d.y + .5, d.w - 1, d.h - 1); }
+      continue;
+    }
+    if (d.kind === "circle"){
+      sctx.fillStyle = d.c;
+      sctx.beginPath(); sctx.arc(d.x, d.y, Math.max(.5, d.r), 0, Math.PI * 2); sctx.fill();
+      continue;
+    }
+    if (d.kind === "line"){
+      sctx.strokeStyle = d.c; sctx.lineWidth = 1;
+      sctx.beginPath(); sctx.moveTo(d.x1 + .5, d.y1 + .5); sctx.lineTo(d.x2 + .5, d.y2 + .5); sctx.stroke();
+      continue;
+    }
+    if (d.kind === "text"){
+      sctx.font = d.size + "px ui-monospace,Menlo,monospace";
+      sctx.fillStyle = d.c;
+      sctx.textAlign = d.mid ? "center" : "left";
+      sctx.fillText(d.t, d.x, d.y + d.size);
+      sctx.textAlign = "left";
+      continue;
+    }
     if (d.kind === "hpbar"){
       const frac = d.st.max ? Math.max(0, d.st.hp / d.st.max) : 0;
       sctx.fillStyle = "#000";  sctx.fillRect(d.x - 1, d.y - 1, d.w + 2, 8);
@@ -8348,6 +8529,61 @@ Notes
 · Sprite numbers start at 1 and never run out.
 · Anything after <code>#</code> is a comment.
 · Variables work anywhere a number does: <code>move(1, speed, 0)</code>
+
+<b style="color:var(--accent2)">Drawing on the screen yourself</b>
+<code>rect(10, 10, 40, 20)</code>     a filled box
+<code>outline(10, 10, 40, 20)</code>  just the edge of one
+<code>circle(160, 120, 20)</code>     a filled circle
+<code>line(0, 0, 320, 240)</code>     a straight line
+<code>pixel(50, 50)</code>            one dot
+<code>ink("#ff0000")</code>           the colour the ones above use
+<code>background("#102030")</code>    the colour behind everything
+<code>bigprint("SCORE", 10, 10, 24)</code>  writing at any size
+<code>middleprint("GO!", 100, 32)</code>    ...in the middle of the screen
+
+  Each of them takes a colour as its last number if you want one just for
+  that shape: <code>circle(160, 120, 20, "#ffff00")</code>.
+
+<b style="color:var(--accent2)">Sums</b>
+<code>min(3, 7)</code>  <code>max(3, 7)</code>  <code>abs(0 - 5)</code>  <code>sqrt(16)</code>
+<code>round(2.6)</code>  <code>floor(2.9)</code>  <code>ceil(2.1)</code>
+<code>sin(90)</code>  <code>cos(0)</code>             in degrees, not the other thing
+<code>clamp(v, 0, 100)</code>         keep a number between two others
+<code>if between(x(1), 10, 90)</code>
+<code>pick(1, 2, 3)</code>            one of them, at random
+<code>if chance(30)</code>            true three times in ten
+<code>if distance(1, 2) < 20</code>   how far apart two sprites are
+<code>angleto(1, 2)</code>            which way sprite 2 is from sprite 1
+
+<b style="color:var(--accent2)">Words</b>
+<code>join("a", "b")</code>  <code>upper(s)</code>  <code>lower(s)</code>  <code>length(s)</code>
+<code>letter("cat", 2)</code>         the second letter — "a"
+<code>piece("a,b,c", ",", 2)</code>   the second piece — "b"
+<code>if contains(name, "a")</code>
+<code>number("42")</code>             words into a number
+<code>words("one two")</code>         how many words
+
+<b style="color:var(--accent2)">Moving without doing the maths</b>
+<code>towards(1, 300, 200, 3)</code>  walk sprite 1 at that spot
+<code>push(1, 45, 2)</code>           move it at an angle
+<code>wrap(1)</code>                  off one edge, back on the other
+<code>keepon(1)</code>                never let it leave the screen
+
+<b style="color:var(--accent2)">Waiting for things</b>
+<code>timer("wait", 60)</code>        count sixty frames down
+<code>if timerdone("wait")</code>     has it got there?
+<code>timerleft("wait")</code>        how many are left
+<code>if everysecond(1)</code>        true once a second
+<code>if everyframes(10)</code>       true every ten frames
+<code>frame</code>  <code>seconds()</code>          how long the game has been going
+
+<b style="color:var(--accent2)">Keeping a game between visits</b>
+<code>savegame(1)</code>              write everything into slot 1: variables,
+                          hit points, the bag, the room, and where every
+                          sprite is standing
+<code>loadgame(1)</code>              put it all back. <code>loaded</code> says whether
+                          there was anything to load.
+<code>erasesave(1)</code>             throw that slot away
 
 <b style="color:var(--accent2)">Role-playing games</b>
 The pieces an Undertale or a Deltarune is made of. None of them need any of

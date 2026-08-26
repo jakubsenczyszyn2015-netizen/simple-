@@ -148,6 +148,31 @@ pause()  resume()      stop and start; P toggles it too
 roomhide(12, 3)        every sprite-12 tile acts like a 3; roomshow(12) undoes it
 ```
 
+### Drawing, sums, words, timers, saving
+
+```
+rect(10,10,40,20)  outline(...)  circle(160,120,20)  line(...)  pixel(50,50)
+ink("#ff0000")     background("#102030")
+bigprint("SCORE", 10, 10, 24)   middleprint("GO!", 100, 32)
+
+min  max  abs  sqrt  round  floor  ceil  sin  cos
+clamp(v, 0, 100)   between(v, 10, 90)   pick(1, 2, 3)   chance(30)
+distance(1, 2)     angleto(1, 2)
+
+join  upper  lower  length  letter("cat", 2)  piece("a,b,c", ",", 2)
+contains(s, "a")   number("42")   words("one two")
+
+towards(1, 300, 200, 3)   push(1, 45, 2)   wrap(1)   keepon(1)
+
+timer("wait", 60)  timerdone("wait")  timerleft("wait")
+everysecond(1)     everyframes(10)    frame   seconds()
+
+savegame(1)   loadgame(1)   erasesave(1)
+```
+
+`savegame()` writes variables, hit points, the bag, the room and where every
+sprite is standing, and it stays there after the browser is closed.
+
 ### Role-playing games
 
 The pieces an Undertale or a Deltarune is made of, each on its own line and
