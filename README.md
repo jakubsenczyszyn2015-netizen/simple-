@@ -23,6 +23,12 @@ hide(1)
   how big the drawing area is. Sprites are 16×16 by default and can be set to 8,
   24, 32, 48 or 64 — the room grid adjusts to match. Unlimited sprites, numbered
   1, 2, 3, and up.
+- **Frames** — a sprite can hold more than one picture. **+ Frame**, **⧉ Copy**,
+  **🗑 Delete** and **▶ Preview** sit under the drawing; `play(1, 6)` flips
+  through them in the game. Not the same as `animate()`, which flips between
+  different sprite *numbers* — this keeps a walking player as sprite 1.
+- **Names** — give a sprite a name in the Paint tab and it works anywhere the
+  number does: `show("player")` is `show(1)`.
 - **Rooms** — stamp any sprite onto a tile grid with pencil, fill, line, square
   and circle tools. A room is either one screen or **endless**, for open worlds
   you explore with `camera(1)`. Unlimited rooms, shown from code with `room(2)`.

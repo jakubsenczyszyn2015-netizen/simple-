@@ -244,18 +244,25 @@
   #console .ok{color:var(--accent)}
 
   /* ---- sprite list ---- */
-  .sprites{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px}
+  .sprites{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:6px}
   .chip{
     background:var(--panel2); border:2px solid transparent; border-radius:6px;
     padding:4px; cursor:pointer; text-align:center;
   }
   .chip.on{border-color:var(--accent)}
   .chip canvas{width:100%;height:auto;display:block;border:0;background:var(--void);border-radius:3px}
-  .chip b{font-size:11px;color:var(--dim);font-weight:700}
+  .chip b{font-size:10px;color:var(--dim);font-weight:700;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .chip.on b{color:var(--accent)}
+  .chip em{
+    display:block; font-style:normal; font-size:9px; color:var(--accent2);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.3;
+  }
 
   /* ---- paint ---- */
-  #paint-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:var(--void)}
+  #paint-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--void);padding:10px;min-width:0;overflow:auto}
+  #frame-bar{width:100%;max-width:560px;display:flex;flex-direction:column;gap:7px;align-items:center}
+  #frame-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+  #frame-strip .chip{width:54px}
   #palette{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
   .sw{height:26px;aspect-ratio:1;border-radius:4px;border:2px solid transparent;cursor:pointer}
   .sw.on{border-color:var(--fg); box-shadow:var(--glow)}
@@ -495,11 +502,26 @@
         <option value="64">64 × 64 — big</option>
       </select>
       <div id="size-note" class="hint" style="margin-bottom:10px"></div>
+      <h3>Name</h3>
+      <input id="sprite-name" type="text" maxlength="24" placeholder="player, ground…"
+             autocomplete="off" oninput="renameSprite(this.value)"
+             style="width:100%;background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+      <div class="hint" style="margin:4px 0 10px">a name works anywhere the number does — <code>show("player")</code></div>
       <div id="sprite-list" class="sprites"></div>
     </div>
 
     <div id="paint-wrap">
       <canvas id="paint" width="512" height="512" style="width:512px;height:512px"></canvas>
+      <div id="frame-bar">
+        <div class="row" style="justify-content:center;gap:5px">
+          <b id="frame-label" class="hint">Frame 1 of 1</b>
+          <button onclick="addFrame(false)" title="a new empty frame">+ Frame</button>
+          <button onclick="addFrame(true)" title="a copy of this frame">⧉ Copy</button>
+          <button id="frame-del" onclick="delFrame()" title="throw this frame away">🗑 Delete</button>
+          <button id="frame-play" onclick="togglePreview()" title="watch it move">▶ Preview</button>
+        </div>
+        <div id="frame-strip" class="sprites"></div>
+      </div>
     </div>
 
     <div class="pane col" style="width:196px;flex:none">
@@ -810,8 +832,57 @@ const $ = id => document.getElementById(id);
 const sprite = n => project.sprites[n - 1];
 
 function ensureSprite(n){
+  n = Math.round(typeof spriteArg === "function" ? spriteArg(n) : n) || 0;
   while (project.sprites.length < n) project.sprites.push(blankSprite());
   return sprite(n);
+}
+
+/* ---------- animation frames ----------
+   A sprite is one picture. Give it more and it can move on its own.
+   Frame 1 stays exactly where it has always been, in project.sprites, so
+   every project ever saved still opens; the extra frames live beside it in
+   project.frames, keyed by sprite number, and cost nothing when unused. */
+let curFrame = 0;
+function extraFrames(n){
+  const f = project.frames && project.frames[n];
+  return (f && f.length) ? f : null;
+}
+function frameCount(n){ const f = extraFrames(n); return 1 + (f ? f.length : 0); }
+function frameData(n, i){
+  if (!i) return ensureSprite(n);
+  const f = extraFrames(n);
+  return (f && f[i - 1]) || ensureSprite(n);
+}
+function setFrames(n, list){
+  if (!project.frames) project.frames = {};
+  if (!list || !list.length) delete project.frames[n];
+  else project.frames[n] = list;
+}
+/* which frame of sprite n is on screen right now */
+function liveFrame(n){
+  const total = frameCount(n);
+  if (total < 2) return 0;
+  const f = (R.sframe && R.sframe[n]) || 0;
+  return ((f % total) + total) % total;
+}
+
+/* ---------- sprite names ----------
+   Numbers never run out, but "player" is easier to remember than 1. A name
+   is just a label on a number: show("player") and show(1) are the same call. */
+function spriteName(n){ return (project.names && project.names[n]) || ""; }
+function setSpriteName(n, name){
+  name = String(name || "").trim().slice(0, 24);
+  if (!project.names) project.names = {};
+  if (!name) delete project.names[n];
+  else project.names[n] = name;
+}
+/* "player" -> 1. An unknown name gives 0 so the caller can leave it alone. */
+function spriteByName(name){
+  const want = String(name || "").trim().toLowerCase();
+  if (!want || !project.names) return 0;
+  for (const k in project.names)
+    if (String(project.names[k]).toLowerCase() === want) return +k;
+  return 0;
 }
 
 /* =========================================================
@@ -838,10 +909,12 @@ const spriteCache = new Map();
    tiles meant 76,800 of them per frame, which is why big levels crawled.
    Each sprite is now painted once onto its own little canvas and copied
    with a single drawImage. */
-function spriteCanvas(n){
-  const hit = spriteCache.get(n);
+function spriteCanvas(n, frame){
+  const f = (frame === undefined) ? liveFrame(n) : frame;
+  const key = f ? n + "@" + f : n;
+  const hit = spriteCache.get(key);
   if (hit && hit.epoch === SPRITE_EPOCH) return hit.cv;
-  const s = project.sprites[n - 1];
+  const s = f ? frameData(n, f) : project.sprites[n - 1];
   if (!s) return null;
   const cv = document.createElement("canvas");
   cv.width = SW; cv.height = SH;
@@ -854,12 +927,12 @@ function spriteCanvas(n){
       c.fillRect(x, y, 1, 1);
     }
   }
-  spriteCache.set(n, { epoch: SPRITE_EPOCH, cv });
+  spriteCache.set(key, { epoch: SPRITE_EPOCH, cv });
   return cv;
 }
 
-function blit(ctx, n, px, py, scale = 1){
-  const cv = spriteCanvas(Math.round(n));
+function blit(ctx, n, px, py, scale = 1, frame){
+  const cv = spriteCanvas(Math.round(n), frame);
   if (!cv) return;
   ctx.drawImage(cv, px, py, SW * scale, SH * scale);
 }
@@ -894,11 +967,11 @@ function roomCanvas(){
   return cv;
 }
 
-function thumb(n, size = 48){
+function thumb(n, size = 48, frame){
   const cv = document.createElement("canvas");
   cv.width = cv.height = SW;
   const c = cv.getContext("2d");
-  blit(c, n, 0, 0, 1);
+  blit(c, n, 0, 0, 1, frame === undefined ? 0 : frame);
   cv.style.width = cv.style.height = size + "px";
   return cv;
 }
@@ -910,7 +983,7 @@ const paintCv = $("paint"), paintCtx = paintCv.getContext("2d");
 function PZnow(){ return paintCv.width / SW; }   // how big one pixel is in the editor
 
 function drawPaint(){
-  const s = ensureSprite(curSprite + 1);
+  const s = paintTarget();
   paintCtx.fillStyle = themeVar("--void", "#0c0e13");
   paintCtx.fillRect(0, 0, paintCv.width, paintCv.height);
 
@@ -947,6 +1020,7 @@ function drawPaint(){
     paintCtx.globalAlpha = 1;
   }
   $("p-id").textContent = $("p-id2").textContent = curSprite + 1;
+  drawFrameStrip();
 }
 
 /* ---------- drawing tools ---------- */
@@ -981,10 +1055,10 @@ function cellAt(e){
 }
 function put(x, y, colour){
   if (x < 0 || y < 0 || x >= SW || y >= SH) return;
-  ensureSprite(curSprite + 1)[y*SW+x] = colour;
+  paintTarget()[y*SW+x] = colour;
 }
 function floodFill(x, y, colour){
-  const s = ensureSprite(curSprite + 1);
+  const s = paintTarget();
   const from = s[y*SW+x];
   if (from === colour) return;
   const queue = [[x, y]];
@@ -1035,7 +1109,7 @@ paintCv.addEventListener("mousedown", e => {
   const colour = erase ? -1 : curColor;
 
   if (curTool === "pick" && !erase){
-    const v = ensureSprite(curSprite + 1)[c.y*SW+c.x];
+    const v = paintTarget()[c.y*SW+c.x];
     if (v >= 0){ curColor = v; refreshPalette(); }
     painting = 0; return;
   }
@@ -1062,7 +1136,15 @@ window.addEventListener("mouseup", e => {
 });
 paintCv.addEventListener("contextmenu", e => e.preventDefault());
 
-function afterPaint(){ drawPaint(); drawSpriteList(); save(); }
+function afterPaint(){ SPRITE_EPOCH++; drawPaint(); drawSpriteList(); save(); }
+
+/* the pixels the tools write to: the open frame of the selected sprite */
+function paintTarget(){
+  const n = curSprite + 1;
+  if (curFrame && curFrame < frameCount(n)) return frameData(n, curFrame);
+  curFrame = 0;
+  return ensureSprite(n);
+}
 
 /* ---------- colours you choose yourself ---------- */
 function addColour(){
@@ -1098,22 +1180,111 @@ function drawSpriteList(){
   drawStageInfo();
   const box = $("sprite-list"); box.innerHTML = "";
   project.sprites.forEach((_, i) => {
+    const n = i + 1;
     const d = document.createElement("div");
     d.className = "chip" + (i === curSprite ? " on" : "");
-    d.appendChild(thumb(i + 1));
-    const b = document.createElement("b"); b.textContent = i + 1;
+    d.appendChild(thumb(n));
+    const nm = spriteName(n), count = frameCount(n);
+    const b = document.createElement("b");
+    b.textContent = count > 1 ? n + " \u25b8" + count : String(n);   // ▸3 = three frames
     d.appendChild(b);
-    d.onclick = () => { curSprite = i; drawPaint(); drawSpriteList(); };
+    if (nm){
+      const em = document.createElement("em");
+      em.textContent = nm;
+      d.appendChild(em);
+    }
+    d.title = nm ? nm + " (sprite " + n + ")" : "sprite " + n;
+    d.onclick = () => { stopPreview(); curSprite = i; curFrame = 0; drawPaint(); drawSpriteList(); };
     box.appendChild(d);
   });
+  const box2 = $("sprite-name");
+  if (box2 && document.activeElement !== box2) box2.value = spriteName(curSprite + 1);
 }
 
-function addSprite(){ project.sprites.push(blankSprite()); curSprite = project.sprites.length - 1; drawPaint(); drawSpriteList(); save(); }
-function copySprite(){ project.sprites.push(sprite(curSprite + 1).slice()); curSprite = project.sprites.length - 1; drawPaint(); drawSpriteList(); save(); }
+/* ---------- the frame strip under the drawing ---------- */
+let previewTimer = null;
+function drawFrameStrip(){
+  const n = curSprite + 1, total = frameCount(n);
+  const label = $("frame-label"), strip = $("frame-strip");
+  if (!label || !strip) return;
+  label.textContent = "Frame " + (curFrame + 1) + " of " + total;
+  const del = $("frame-del"); if (del) del.disabled = total < 2;
+  strip.innerHTML = "";
+  for (let i = 0; i < total; i++){
+    const d = document.createElement("div");
+    d.className = "chip" + (i === curFrame ? " on" : "");
+    d.appendChild(thumb(n, 40, i));
+    const b = document.createElement("b"); b.textContent = i + 1;
+    d.appendChild(b);
+    d.onclick = () => { stopPreview(); curFrame = i; drawPaint(); };
+    strip.appendChild(d);
+  }
+}
+function addFrame(copy){
+  stopPreview();
+  const n = curSprite + 1;
+  const list = (extraFrames(n) || []).slice();
+  list.push(copy ? frameData(n, curFrame).slice() : blankSprite());
+  setFrames(n, list);
+  curFrame = list.length;              // frame 0 is the original, so this is the new one
+  afterPaint();
+}
+function delFrame(){
+  stopPreview();
+  const n = curSprite + 1;
+  if (frameCount(n) < 2){ alert("A sprite always keeps one frame."); return; }
+  if (curFrame === 0){
+    /* dropping frame 1 promotes the next one, so the sprite keeps its number */
+    const list = extraFrames(n).slice();
+    project.sprites[n - 1] = list.shift();
+    setFrames(n, list);
+  } else {
+    const list = extraFrames(n).slice();
+    list.splice(curFrame - 1, 1);
+    setFrames(n, list);
+    curFrame = Math.min(curFrame, frameCount(n) - 1);
+  }
+  afterPaint();
+}
+function stopPreview(){
+  if (!previewTimer) return;
+  clearInterval(previewTimer); previewTimer = null;
+  const b = $("frame-play"); if (b){ b.textContent = "\u25b6 Preview"; b.classList.remove("on"); }
+}
+function togglePreview(){
+  if (previewTimer){ stopPreview(); drawPaint(); return; }
+  const n = curSprite + 1;
+  if (frameCount(n) < 2){ alert("Add a second frame first \u2014 then Preview plays them in turn."); return; }
+  const b = $("frame-play"); if (b){ b.textContent = "\u25a0 Stop"; b.classList.add("on"); }
+  previewTimer = setInterval(() => {
+    if (curSprite + 1 !== n){ stopPreview(); return; }
+    curFrame = (curFrame + 1) % frameCount(n);
+    drawPaint();
+  }, 140);
+}
+
+/* ---------- naming a sprite ---------- */
+function renameSprite(v){
+  setSpriteName(curSprite + 1, v);
+  drawSpriteList(); drawTileList(); save();
+}
+
+function addSprite(){ project.sprites.push(blankSprite()); curSprite = project.sprites.length - 1; curFrame = 0; drawPaint(); drawSpriteList(); save(); }
+function copySprite(){
+  const from = curSprite + 1;
+  project.sprites.push(sprite(from).slice());
+  const n = project.sprites.length;
+  const f = extraFrames(from);
+  if (f) setFrames(n, f.map(a => a.slice()));    // a copy brings its frames along
+  const nm = spriteName(from);
+  if (nm) setSpriteName(n, nm + " 2");
+  curSprite = n - 1; curFrame = 0;
+  drawPaint(); drawSpriteList(); save();
+}
 /* mirror the drawing itself, not just how it is shown */
 function flipSpriteH(){
   if (project.secret) return;
-  const s = ensureSprite(curSprite + 1);
+  const s = paintTarget();
   for (let y = 0; y < SH; y++)
     for (let x = 0; x < SW / 2; x++){
       const a = y*SW + x, b = y*SW + (SW - 1 - x);
@@ -1123,7 +1294,7 @@ function flipSpriteH(){
 }
 function flipSpriteV(){
   if (project.secret) return;
-  const s = ensureSprite(curSprite + 1);
+  const s = paintTarget();
   for (let y = 0; y < SH / 2; y++)
     for (let x = 0; x < SW; x++){
       const a = y*SW + x, b = (SH - 1 - y)*SW + x;
@@ -1132,7 +1303,15 @@ function flipSpriteV(){
   drawPaint(); drawSpriteList(); drawRoom(); save();
 }
 
-function clearSprite(){ project.sprites[curSprite] = blankSprite(); drawPaint(); drawSpriteList(); save(); }
+function clearSprite(){
+  const n = curSprite + 1;
+  if (curFrame){
+    const f = extraFrames(n).slice();
+    f[curFrame - 1] = blankSprite();
+    setFrames(n, f);
+  } else project.sprites[curSprite] = blankSprite();
+  afterPaint();
+}
 
 /* ---------- palette ---------- */
 function buildPalette(){
@@ -1567,6 +1746,10 @@ function evalExpr(src, line){
       case "tile": return tileAtPixel(args[0], args[1]);
       case "free": return isFree(args[0], args[1] || 0, args[2] || 0);
       case "key": return !!R.keys[String(args[0]).toLowerCase()];
+      case "frames":  return frameCount(Math.round(spriteArg(args[0])));
+      case "frameof": case "frame_of": return liveFrame(Math.round(spriteArg(args[0]))) + 1;
+      case "playing": return !!R.splay[Math.round(spriteArg(args[0]))];
+      case "spriteof": case "sprite_of": return spriteByName(args[0]) || 0;
       default: throw new Err("I don't know '" + name + "'", line);
     }
   }
@@ -1602,8 +1785,18 @@ const R = {
   hard:null
 };
 
+/* Anywhere a sprite number is wanted, its name does just as well:
+   show("player") and show(1) are the same call. A string that isn't a
+   name is left alone, so move("Hello!", 10, 0) still moves writing. */
+function spriteArg(v){
+  if (typeof v === "string"){
+    const n = spriteByName(v);
+    if (n) return n;
+  }
+  return v;
+}
 function actor(n){
-  n = Math.round(n);
+  n = Math.round(spriteArg(n));
   if (!R.actors[n]) R.actors[n] = {
     id:n, x:0, y:0, on:false, w:SW, h:SH, mySolids:[],
     grav:null, hor:null, ver:null, anim:null,
@@ -1887,6 +2080,26 @@ function stepBehaviours(){
         a.anim.i = (a.anim.i + 1) % a.anim.list.length;
       }
     }
+  }
+  stepFrames();
+}
+
+/* Sprites told to play their own frames move one step on. This is not the
+   same as animate(), which flips between different sprite numbers — this
+   flips between the pictures inside one sprite, so a walking player stays
+   sprite 1. */
+function stepFrames(){
+  for (const k in R.splay){
+    const p = R.splay[k];
+    if (!p) continue;
+    const total = frameCount(+k);
+    if (total < 2) continue;
+    p.t++;
+    if (p.t < p.speed) continue;
+    p.t = 0;
+    const next = (R.sframe[k] || 0) + 1;
+    if (next >= total && p.once){ R.sframe[k] = total - 1; R.splay[k] = null; }
+    else R.sframe[k] = next % total;
   }
 }
 
@@ -2259,7 +2472,7 @@ function exec(list){
 }
 
 /* a few names are both a question and a command, so they must not be caught */
-const COMMANDS_TOO = new Set(["button", "room", "size", "speak", "print", "move"]);
+const COMMANDS_TOO = new Set(["button", "room", "size", "speak", "print", "move", "frame"]);
 
 const EASY_ONLY = ["gravity","jump","horizontal","vertical","animate","playerspeed","player_speed",
                    "player","coin","death","lives","lifes","spring","boing","bounce","chase","smartchase",
@@ -2297,6 +2510,9 @@ const QUESTIONS = {
   click_button:'if click_button("Options")',
   buttonclicked:'if clicked("Play")',   button_clicked:'if clicked("Play")',
   visible:"if visible(1)",              key:"if key(space)",
+  frames:"if frames(1) > 1",            frameof:"if frameof(1) == 2",
+  frame_of:"if frame_of(1) == 2",       playing:"if playing(1)",
+  spriteof:'set(n, spriteof("player"))', sprite_of:'set(n, sprite_of("player"))',
   x:"if x(1) > 100",                    y:"if y(1) > 100",
   tile:"if tile(80, 64) == 2",          random:"set(n, random(10))",
   mousex:"set(mx, mousex())",           mousey:"set(my, mousey())",
@@ -2324,6 +2540,28 @@ function runCall(st){
   switch (name){
     case "show":  { const [n] = A(); ensureSprite(Math.round(n)); actor(n).on = true;  break; }
     case "hide":  { const [n] = A(); actor(n).on = false; break; }
+
+    /* ---- a sprite's own frames (Paint tab: + Frame) ---- */
+    case "play": {
+      const [n, speed] = A(); const k = Math.round(spriteArg(n));
+      if (frameCount(k) < 2)
+        throw new Err("sprite " + k + " only has one frame \u2014 draw another with + Frame in the Paint tab", st.n);
+      R.splay[k] = { t:0, speed: Math.max(1, Math.round(speed) || 6), once:false };
+      break; }
+    case "playonce": case "play_once": {
+      const [n, speed] = A(); const k = Math.round(spriteArg(n));
+      R.sframe[k] = 0;
+      R.splay[k] = { t:0, speed: Math.max(1, Math.round(speed) || 6), once:true };
+      break; }
+    case "stopplay": case "stop_play": {
+      const [n] = A(); const k = Math.round(spriteArg(n));
+      R.splay[k] = null; R.sframe[k] = 0; break; }
+    case "frame": {
+      const [n, f] = A(); const k = Math.round(spriteArg(n));
+      const total = frameCount(k);
+      R.splay[k] = null;
+      R.sframe[k] = Math.max(0, Math.min(total - 1, (Math.round(f) || 1) - 1));
+      break; }
     case "move":  { const [n,dx,dy] = A();
                     if (typeof n === "string"){          // move("Hello!", 10, 0) shifts that writing
                       const m = R.textMoves[n] || { dx:0, dy:0 };
@@ -2699,6 +2937,7 @@ function startWith(source){
   R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
   R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
   R.paused = false; R.roomSwaps = {};
+  R.sframe = {}; R.splay = {};   // which frame each sprite shows, and what is playing
   R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0;
   R.vars.coins = 0;                      // coin() counts into this one
   KEYBIND = {};
@@ -2722,6 +2961,7 @@ function doReset(){
   R.flips = {}; R.roomChanged = 0; R.coinSpots = []; closeChat();
   R.vehicles = []; R.riding = null; R.ending = null; R.lastKeys = {}; R.keyHits = {};
   R.paused = false; R.roomSwaps = {};
+  R.sframe = {}; R.splay = {};   // which frame each sprite shows, and what is playing
   R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0;
   R.clicks = []; R.vars.coins = 0;
   R.acc = 0; R.lastT = undefined;
@@ -3792,6 +4032,8 @@ function changeSpriteSize(n, quiet){
   project.spriteSize = SW;
 
   project.sprites = project.sprites.map(sp => resampleSprite(sp, oldW, oldH, SW, SH));
+  if (project.frames) for (const k in project.frames)      // the extra frames go with them
+    project.frames[k] = project.frames[k].map(sp => resampleSprite(sp, oldW, oldH, SW, SH));
   project.rooms = oldRooms.map(old => {
     const room = new Array(COLS * ROWS).fill(0);
     for (let y = 0; y < ROWS; y++){
@@ -4448,7 +4690,7 @@ function loadTemplate(i){
     code:    t.code
   };
   setMode(project.mode, true);
-  curSprite = 0; curRoom = 0; curTile = 1;
+  curSprite = 0; curRoom = 0; curTile = 1; curFrame = 0; stopPreview();
   $("code").value = project.code;
   drawPaint(); drawSpriteList(); drawRoom(); drawRoomList(); drawTileList();
   save(); closeGallery(); tab("code");
@@ -5744,7 +5986,7 @@ function spriteToPngUrl(n, scale){
   cv.width = SW * scale; cv.height = SH * scale;
   const c = cv.getContext("2d");
   c.imageSmoothingEnabled = false;
-  const src = spriteCanvas(n);
+  const src = spriteCanvas(n, curFrame);      // whichever frame is open in the editor
   if (src) c.drawImage(src, 0, 0, cv.width, cv.height);
   return cv.toDataURL("image/png");
 }
@@ -5772,7 +6014,7 @@ function exportSheetPng(){
   const c = cv.getContext("2d");
   c.imageSmoothingEnabled = false;
   for (let i = 0; i < n; i++){
-    const src = spriteCanvas(i + 1);
+    const src = spriteCanvas(i + 1, 0);
     if (src) c.drawImage(src, (i % cols) * SW * scale, Math.floor(i / cols) * SH * scale,
                          SW * scale, SH * scale);
   }
@@ -6120,6 +6362,7 @@ function gameNow(name, author){
     spriteSize: SW, roomMode: project.roomMode || "limited",
     songs: (project.songs || []).map(sg => ({ ...sg, grid: sg.grid.slice() })),
     sprites: project.sprites, rooms: project.rooms,
+    frames: project.frames || null, names: project.names || null,
     palette: PALETTE.slice(),      // without this, colours you added came back black
     fps: project.fps || 60, zoom: project.zoom || 512,
     saved: Date.now()
@@ -6171,6 +6414,11 @@ function libLoad(g){
               roomMode: g.roomMode || "limited",
               songs: (g.songs || []).map(sg => ({ ...sg, grid: (sg.grid || []).slice() })),
               fps: g.fps || 60, zoom: g.zoom || 512 };
+  if (g.frames){                 // the extra animation frames, if it has any
+    project.frames = {};
+    for (const k in g.frames) project.frames[k] = g.frames[k].map(a => a.slice());
+  }
+  if (g.names) project.names = Object.assign({}, g.names);
   if (fixed.guessed)
     log("this game was saved before colours travelled with the file — " +
         fixed.guessed + " of them had to be guessed", "err");
@@ -6183,7 +6431,7 @@ function libLoad(g){
   // code of the one you had open before.
   $("code").value = project.code;
 
-  curSprite = 0; curRoom = 0; curTile = 1;
+  curSprite = 0; curRoom = 0; curTile = 1; curFrame = 0; stopPreview();
   PALETTE = project.palette.slice();
   if (curColor >= PALETTE.length) curColor = 8;
   buildPalette(); SPRITE_EPOCH++; ROOM_EPOCH++;
@@ -6496,6 +6744,37 @@ Notes
 · Sprite numbers start at 1 and never run out.
 · Anything after <code>#</code> is a comment.
 · Variables work anywhere a number does: <code>move(1, speed, 0)</code>
+
+<b style="color:var(--accent2)">A sprite's own frames</b>
+Draw a sprite more than once and it can move on its own. In the Paint tab,
+<b>+ Frame</b> adds an empty one, <b>⧉ Copy</b> adds a copy of the one you
+are looking at, <b>🗑 Delete</b> throws one away and <b>▶ Preview</b>
+plays them. The strip under the drawing switches between them.
+
+<code>play(1, 6)</code>            sprite 1 flips through its own frames,
+                          a new one every 6 game frames
+<code>playonce(1, 6)</code>        the same, but it stops on the last frame
+<code>stopplay(1)</code>           stop, and go back to frame 1
+<code>frame(1, 2)</code>           hold sprite 1 on frame 2
+<code>if frames(1) > 1</code>      how many frames sprite 1 has
+<code>if frameof(1) == 3</code>    which one it is showing
+<code>if playing(1)</code>         is it flipping through them right now?
+
+  This is not the same as <code>animate()</code>, which flips between
+  different sprite <em>numbers</em>. <code>play()</code> flips between the
+  pictures inside one sprite, so a walking player stays sprite 1.
+
+<b style="color:var(--accent2)">Names</b>
+The <b>Name</b> box in the Paint tab gives a sprite a name. After that the
+name works anywhere the number does:
+
+<code>show("player")</code>        exactly the same as <code>show(1)</code>
+<code>move("player", 3, 0)</code>  ...and so on, for every command
+<code>collision("player", "wall")</code>
+<code>set(n, spriteof("player"))</code>  the number behind a name
+
+  A name no sprite has is left alone, so <code>move("Hello!", 10, 0)</code>
+  still moves writing.
 
 <b style="color:var(--accent2)">Themes</b>
 · <b>⋯</b> at the top right holds five looks for the editor: <b>Classic</b>
