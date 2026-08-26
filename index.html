@@ -402,6 +402,14 @@
     <button id="m-hard"   onclick="setMode('hard')">Hard</button>
     <button id="m-ai"     onclick="setMode('ai')">AI</button>
   </div>
+  <select id="lang" onchange="setLang(this.value)" style="display:none;
+          background:var(--panel2);color:var(--fg);border:var(--bw) solid var(--line);
+          border-radius:var(--r);padding:5px 7px;font:inherit">
+    <option value="js">JavaScript</option>
+    <option value="python">Python</option>
+    <option value="lua">Lua</option>
+    <option value="cpp">C++</option>
+  </select>
   <div class="spacer"></div>
   <label id="ai-remember-wrap" style="display:none;align-items:center;gap:4px">
     <input id="ai-remember" type="checkbox" checked style="width:auto">🧠 remember
@@ -5163,16 +5171,121 @@ function setMode(m, quiet){
   $("ai-remember-wrap").style.display = ai ? "flex" : "none";
   $("ai-key-btn").style.display = ai ? "inline-block" : "none";
   if (ai) $("ai-key-btn").textContent = aiKey() ? "⚡ " + aiConf().label : "⚡ Real AI";
+  const hard = m === "hard";
+  $("lang").style.display = hard ? "inline-block" : "none";
+  if (hard){
+    $("lang").value = project.lang || "js";
+    showLangLine();
+  }
   buildHelp(); buildLessons();
   if (changed && !quiet){
     stop();
     if (confirm("Switch to " + MODES[m].label + " mode?\n\nThe editor will load the " +
                 MODES[m].label + " starter program. Your sprites and rooms are kept.")){
-      $("code").value = STARTERS[m];
+      $("code").value = (m === "hard") ? hardStarter(project.lang || "js") : STARTERS[m];
     }
     save();
   }
 }
+
+/* ---------- which language Hard mode is written in ---------- */
+function showLangLine(){
+  const lang = project.lang || "js";
+  $("modeline").innerHTML =
+    "<b>Hard mode · " + LANGS[lang].label + "</b> — " + LANGS[lang].note +
+    (lang === "js" ? "" :
+      ' <span style="color:var(--dim)">· enough of the language to write a game, ' +
+      'not all of it — the <b>?&nbsp;Help</b> tab lists what is in.</span>');
+}
+function setLang(v){
+  if (!LANGS[v]) return;
+  const was = project.lang || "js";
+  project.lang = v;
+  showLangLine();
+  save();
+  if (was !== v && confirm("Write Hard mode in " + LANGS[v].label + "?\n\n" +
+      "The editor will load the " + LANGS[v].label + " starter. Your sprites and rooms are kept.")){
+    $("code").value = hardStarter(v);
+    stop(); save();
+  }
+}
+/* the same little game, four times over */
+function hardStarter(lang){
+  if (lang === "python") return HARD_PY;
+  if (lang === "lua")    return HARD_LUA;
+  if (lang === "cpp")    return HARD_CPP;
+  return STARTERS.hard;
+}
+
+const HARD_PY = `# HARD MODE — Python
+# The engine is called S. A function named start() runs once,
+# and frame() runs sixty times a second.
+
+x = 150
+y = 110
+
+def start():
+    S.show(1)
+    S.put(1, x, y)
+
+def frame():
+    global x, y
+    if S.keys.left:
+        x = x - 3
+    if S.keys.right:
+        x = x + 3
+    if S.keys.up:
+        y = y - 3
+    if S.keys.down:
+        y = y + 3
+    S.put(1, x, y)
+    S.print("x is " + str(int(x)), 6, 6)
+`;
+
+const HARD_LUA = `-- HARD MODE — Lua
+-- The engine is called S. A function named start() runs once,
+-- and frame() runs sixty times a second.
+
+local x = 150
+local y = 110
+
+function start()
+  S.show(1)
+  S.put(1, x, y)
+end
+
+function frame()
+  if S.keys.left then x = x - 3 end
+  if S.keys.right then x = x + 3 end
+  if S.keys.up then y = y - 3 end
+  if S.keys.down then y = y + 3 end
+  S.put(1, x, y)
+  S.print("x is " .. math.floor(x), 6, 6)
+end
+`;
+
+const HARD_CPP = `// HARD MODE — C++
+// The engine is called S. A function named start() runs once,
+// and frame() runs sixty times a second.
+// Types are read and thrown away — there is no compiler here.
+
+int x = 150;
+int y = 110;
+
+void start(){
+  S.show(1);
+  S.put(1, x, y);
+}
+
+void frame(){
+  if (S.keys.left)  x = x - 3;
+  if (S.keys.right) x = x + 3;
+  if (S.keys.up)    y = y - 3;
+  if (S.keys.down)  y = y + 3;
+  S.put(1, x, y);
+  S.print("x is " + x, 6, 6);
+}
+`;
 
 const STARTERS = {
   get ai(){ return AI_STARTER; },      // defined further down, so read it lazily
@@ -5263,6 +5376,260 @@ onFrame(() => {
 /* =========================================================
    HARD MODE — run the editor contents as JavaScript
    ========================================================= */
+/* =========================================================
+   OTHER LANGUAGES IN HARD MODE
+   Hard mode runs JavaScript. These turn Python, Lua or C++ into
+   the same JavaScript first, so the engine underneath never
+   changes — the S. commands, onStart and onFrame are identical
+   whichever one you pick.
+
+   This is a translator for the part of each language you would
+   actually write a game in, not the whole language: no classes,
+   no modules, no pointers, no standard library beyond what Help
+   lists. It says so on the tin, and it says so on screen.
+
+   Every generated line is mapped back to the line you wrote, so
+   an error still points at your code and not at the translation.
+   ========================================================= */
+const LANGS = {
+  js:     { label:"JavaScript", note:"the real thing — this is what the engine speaks" },
+  python: { label:"Python",     note:"indentation, def, elif, for i in range(), and / or / not" },
+  lua:    { label:"Lua",        note:"function … end, local, then / do, ~=, .., nil" },
+  cpp:    { label:"C++",        note:"types are ignored, cout maps to S.log, otherwise C-like" }
+};
+let LANG_MAP = [];      // generated line -> the line you wrote
+
+/* Leave anything inside quotes alone while rewriting the rest of a line. */
+const MASK_A = "", MASK_B = "";
+function maskStrings(line, fn){
+  const held = [];
+  const masked = line.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, m => {
+    held.push(m);
+    return MASK_A + (held.length - 1) + MASK_B;
+  });
+  const done = fn(masked);
+  return done.replace(new RegExp(MASK_A + "(\\d+)" + MASK_B, "g"), (m, i) => held[+i]);
+}
+/* split "a, b, c" on the commas that are not inside brackets */
+function splitTop(text){
+  const out = []; let depth = 0, cur = "";
+  for (let i = 0; i < text.length; i++){
+    const ch = text.charAt(i);
+    if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    if (ch === "," && depth === 0){ out.push(cur.trim()); cur = ""; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+/* ---------- Python ---------- */
+function pythonToJs(src){
+  const out = [], map = [];
+  const stack = [];            // how far each open block was indented
+  const seen = {};             // names already declared, so x = 1 gets a let
+  const lines = src.split("\n");
+  const push = (text, srcLine) => { out.push(text); map.push(srcLine); };
+
+  for (let i = 0; i < lines.length; i++){
+    const bare = lines[i].replace(/\t/g, "    ");
+    const trimmed = bare.trim();
+    if (trimmed === ""){ push("", i + 1); continue; }
+    const indent = bare.length - bare.replace(/^ +/, "").length;
+    const isElse = /^(elif|else)\b/.test(trimmed);
+
+    /* close every block we have come back out of */
+    while (stack.length && indent <= stack[stack.length - 1]){
+      stack.pop();
+      push("}", i + 1);
+      if (isElse) break;
+    }
+
+    let line = trimmed;
+    if (line.charAt(0) === "#"){ push("//" + line.slice(1), i + 1); continue; }
+    /* the outer variable is already in scope here, so this line has nothing to do */
+    if (/^(global|nonlocal)\b/.test(line)){ push("// " + line, i + 1); continue; }
+    if (/^pass\s*$/.test(line)){ push(";", i + 1); continue; }
+
+    const opensBlock = /:\s*$/.test(line) || /:\s*#/.test(line);
+    line = maskStrings(line, t => t.replace(/\s*#.*$/, ""));   // a trailing comment
+    line = line.replace(/:\s*$/, "");
+    line = pyExpr(line);
+
+    let m;
+    if (/^def\s+/.test(line)){
+      line = line.replace(/^def\s+(\w+)\s*\((.*)\)$/, "function $1($2)");
+    } else if (/^for\s+/.test(line)){
+      m = line.match(/^for\s+(\w+)\s+in\s+range\((.+)\)$/);
+      if (m){
+        const a = splitTop(m[2]), v = m[1];
+        if (a.length === 1)      line = "for (let " + v + " = 0; " + v + " < " + a[0] + "; " + v + "++)";
+        else if (a.length === 2) line = "for (let " + v + " = " + a[0] + "; " + v + " < " + a[1] + "; " + v + "++)";
+        else                     line = "for (let " + v + " = " + a[0] + "; " + v + " < " + a[1] + "; " + v + " += " + a[2] + ")";
+      } else {
+        m = line.match(/^for\s+(\w+)\s+in\s+(.+)$/);
+        if (m) line = "for (const " + m[1] + " of " + m[2] + ")";
+      }
+    } else if (/^elif\b/.test(line)){
+      line = "else if (" + line.replace(/^elif\s+/, "") + ")";
+    } else if (/^(if|while)\b/.test(line)){
+      line = line.replace(/^(if|while)\s+(.*)$/, "$1 ($2)");
+    } else if (/^else$/.test(line)){
+      line = "else";
+    } else {
+      /* a plain name = value needs declaring the first time it is used */
+      const asg = line.match(/^([A-Za-z_]\w*)\s*=(?!=)/);
+      if (asg && !seen[asg[1]]){ seen[asg[1]] = 1; line = "let " + line; }
+      if (!/[{};]$/.test(line)) line += ";";
+    }
+    if (opensBlock){ line += "{"; stack.push(indent); }
+    push(line, i + 1);
+  }
+  while (stack.length){ stack.pop(); push("}", lines.length); }
+  LANG_MAP = map;
+  return out.join("\n");
+}
+/* the parts of Python that are only a different spelling */
+function pyExpr(line){
+  return maskStrings(line, t => t
+    .replace(/\bnot\s+/g, "!")
+    .replace(/\band\b/g, "&&")
+    .replace(/\bor\b/g, "||")
+    .replace(/\bTrue\b/g, "true")
+    .replace(/\bFalse\b/g, "false")
+    .replace(/\bNone\b/g, "null")
+    .replace(/\blen\s*\(([^()]*)\)/g, "($1).length")
+    .replace(/\bstr\s*\(/g, "String(")
+    .replace(/\bint\s*\(/g, "Math.trunc(")
+    .replace(/\bfloat\s*\(/g, "Number(")
+    .replace(/\bmath\./g, "Math.")
+    .replace(/\/\//g, "/"));
+}
+
+/* ---------- Lua ---------- */
+function luaToJs(src){
+  const out = [], map = [];
+  const lines = src.split("\n");
+  const push = (t, n) => { out.push(t); map.push(n); };
+
+  for (let i = 0; i < lines.length; i++){
+    let line = lines[i].trim();
+    if (line === ""){ push("", i + 1); continue; }
+    if (/^--/.test(line)){ push("//" + line.slice(2), i + 1); continue; }
+    line = maskStrings(line, t => t.replace(/\s+--.*$/, ""));
+
+    line = maskStrings(line, t => t
+      .replace(/~=/g, "!=")
+      .replace(/\bnot\s+/g, "!")
+      .replace(/\band\b/g, "&&")
+      .replace(/\bor\b/g, "||")
+      .replace(/\bnil\b/g, "null")
+      .replace(/\.\./g, " + ")
+      .replace(/#(\w+)/g, "$1.length")
+      .replace(/\bmath\./g, "Math.")
+      .replace(/\blocal\b/g, "let"));
+
+    let m;
+    /* if x then y end, all on one line — very common in Lua */
+    if ((m = line.match(/^if\s+(.+?)\s+then\s+(.+?)\s+end;?$/))){
+      push("if (" + m[1] + "){ " + luaBody(m[2]) + " }", i + 1); continue;
+    }
+    if ((m = line.match(/^while\s+(.+?)\s+do\s+(.+?)\s+end;?$/))){
+      push("while (" + m[1] + "){ " + luaBody(m[2]) + " }", i + 1); continue;
+    }
+    if ((m = line.match(/^for\s+(\w+)\s*=\s*(.+?)\s*,\s*(.+?)\s+do\s+(.+?)\s+end;?$/))){
+      const v = m[1];
+      push("for (let " + v + " = " + m[2] + "; " + v + " <= " + m[3] + "; " + v + "++){ " +
+           luaBody(m[4]) + " }", i + 1);
+      continue;
+    }
+    if (/^end\b/.test(line)){ push("}" + line.slice(3), i + 1); continue; }
+    if (/^else\s*$/.test(line)){ push("} else {", i + 1); continue; }
+    if (/^elseif\b/.test(line)){
+      push("} else if (" + line.replace(/^elseif\s+/, "").replace(/\s*then$/, "") + "){", i + 1);
+      continue;
+    }
+    if ((m = line.match(/^function\s+(\w+)\s*\((.*)\)$/))){
+      push("function " + m[1] + "(" + m[2] + "){", i + 1); continue;
+    }
+    if ((m = line.match(/^(?:let\s+)?(\w+)\s*=\s*function\s*\((.*)\)$/))){
+      push("let " + m[1] + " = function(" + m[2] + "){", i + 1); continue;
+    }
+    if ((m = line.match(/^if\s+(.*)\s+then$/))){ push("if (" + m[1] + "){", i + 1); continue; }
+    if ((m = line.match(/^while\s+(.*)\s+do$/))){ push("while (" + m[1] + "){", i + 1); continue; }
+    if ((m = line.match(/^for\s+(\w+)\s*=\s*(.+?)\s*,\s*(.+?)(?:\s*,\s*(.+?))?\s+do$/))){
+      const step = m[4] || "1", v = m[1];
+      push("for (let " + v + " = " + m[2] + "; " + v + " <= " + m[3] + "; " + v + " += " + step + "){", i + 1);
+      continue;
+    }
+    if ((m = line.match(/^for\s+(\w+)\s*,\s*(\w+)\s+in\s+ipairs\s*\((.+)\)\s+do$/))){
+      const list = m[3];
+      push("for (let " + m[1] + " = 1; " + m[1] + " <= (" + list + ").length; " + m[1] + "++){ const " +
+           m[2] + " = (" + list + ")[" + m[1] + " - 1];", i + 1);
+      continue;
+    }
+    if (!/[{};]$/.test(line)) line += ";";
+    push(line, i + 1);
+  }
+  LANG_MAP = map;
+  return out.join("\n");
+}
+
+/* the inside of a one-line Lua block, which may itself hold several statements */
+function luaBody(text){
+  return text.split(";").map(t => t.trim()).filter(Boolean)
+             .map(t => /[{}]$/.test(t) ? t : t + ";").join(" ");
+}
+
+/* ---------- C++ ---------- */
+function cppToJs(src){
+  const out = [], map = [];
+  const lines = src.split("\n");
+  const TYPES = /\b(?:unsigned\s+)?(?:int|float|double|bool|char|long|short|auto|size_t|string)\s+(?=[A-Za-z_])/g;
+  for (let i = 0; i < lines.length; i++){
+    let line = lines[i];
+    if (/^\s*#\s*include/.test(line) || /^\s*using\s+namespace/.test(line)){
+      out.push(""); map.push(i + 1); continue;
+    }
+    /* cout << a << " " << b << endl;  becomes  S.log(a, " ", b); */
+    const cout = line.match(/^\s*(?:std::)?cout\s*<<\s*(.+?);?\s*$/);
+    if (cout){
+      const bits = cout[1].split("<<")
+        .map(t => t.trim())
+        .filter(t => t && !/^(?:std::)?endl$/.test(t) && t !== ";")
+        .map(t => t.replace(/;$/, ""));
+      out.push("S.log(" + bits.join(", ") + ");");
+      map.push(i + 1);
+      continue;
+    }
+    line = maskStrings(line, t => t
+      .replace(/\bstd::/g, "")
+      .replace(/\bnullptr\b/g, "null")
+      .replace(/\bprintf\s*\(/g, "S.log(")
+      .replace(/\bconst\s+auto\b/g, "const")
+      .replace(/\bvoid\s+(?=\w+\s*\()/g, "function ")
+      .replace(/\b(?:int|float|double|bool|auto|string)\s+(?=\w+\s*\([^)]*\)\s*\{?\s*$)/g, "function ")
+      .replace(TYPES, "let "));
+    out.push(line); map.push(i + 1);
+  }
+  LANG_MAP = map;
+  return out.join("\n");
+}
+
+function translate(code, lang){
+  LANG_MAP = [];
+  if (lang === "python") return pythonToJs(code);
+  if (lang === "lua")    return luaToJs(code);
+  if (lang === "cpp")    return cppToJs(code);
+  return code;
+}
+/* an error in the generated code has to point at the line you wrote */
+function sourceLine(genLine){
+  if (!LANG_MAP.length) return genLine;
+  return LANG_MAP[Math.max(0, Math.min(LANG_MAP.length - 1, genLine - 1))] || genLine;
+}
+
 function runHard(){
   const starts = [], frames = [], keyHandlers = [];
   const S = {
@@ -5292,11 +5659,27 @@ function runHard(){
   const onFrame = fn => frames.push(fn);
   const onKey   = (k, fn) => keyHandlers.push({ k:String(k).toLowerCase(), fn });
 
+  const lang = project.lang || "js";
+  let code;
   try {
-    new Function("S", "onStart", "onFrame", "onKey", '"use strict";' + project.code)
+    code = translate(project.code, lang);
+  } catch(e){
+    return log(LANGS[lang].label + " — this line could not be read: " + e.message, "err");
+  }
+  /* Whichever language you write in, a function called start, frame or key
+     is wired up for you. onStart/onFrame/onKey still work as well. */
+  const shim = "\n;if (typeof start === 'function') onStart(start);" +
+               "\n;if (typeof frame === 'function') onFrame(frame);" +
+               "\n;if (typeof update === 'function') onFrame(update);" +
+               "\n;if (typeof draw === 'function') onFrame(draw);\n";
+  try {
+    new Function("S", "onStart", "onFrame", "onKey", '"use strict";' + code + shim)
       (S, onStart, onFrame, onKey);
   } catch(e){
-    return log("JavaScript error — " + e.message, "err");
+    let where = "";
+    const m = String(e.stack || "").match(/<anonymous>:(\d+):/);
+    if (m) where = " (about line " + sourceLine(+m[1] - 2) + ")";
+    return log(LANGS[lang].label + " error" + where + " — " + e.message, "err");
   }
   R.hard = { starts, frames, keyHandlers };
   return true;
@@ -5309,7 +5692,11 @@ function hardLoop(){
     for (const f of h.frames) f();
     for (const k of h.keyHandlers) if (R.keys[k.k]) k.fn();
   } catch(e){
-    log("JavaScript error — " + e.message, "err");
+    const lang = project.lang || "js";
+    let where = "";
+    const m = String(e.stack || "").match(/<anonymous>:(\d+):/);
+    if (m) where = " (about line " + sourceLine(+m[1] - 2) + ")";
+    log(LANGS[lang].label + " error" + where + " — " + e.message, "err");
     stop(); return false;
   }
   return true;
@@ -8137,7 +8524,7 @@ function gameNow(name, author){
   return {
     v: 3,
     name, author: author || "",
-    mode: project.mode, code: project.code,
+    mode: project.mode, lang: project.lang || "js", code: project.code,
     spriteSize: SW, roomMode: project.roomMode || "limited",
     songs: (project.songs || []).map(sg => ({ ...sg, grid: sg.grid.slice() })),
     sprites: project.sprites, rooms: project.rooms,
@@ -8188,7 +8575,7 @@ function libLoad(g){
   applySpriteSize(g.spriteSize || 16);      // before anything is copied, so the sizes line up
   ROOM_MODE = g.roomMode || "limited";
   const fixed = repairPalette(g);
-  project = { mode:g.mode || "normal", code:g.code || "",
+  project = { mode:g.mode || "normal", lang:g.lang || "js", code:g.code || "",
               sprites:(g.sprites||[]).map(a => a.slice()),
               rooms:(g.rooms||[]).map(copyRoom),
               palette: fixed.pal.slice(), spriteSize: SW,
@@ -8997,6 +9384,50 @@ classes, <code>for</code>, <code>while</code>, closures, <code>Math</code>, temp
 back with the JavaScript message, not a friendly one — you asked for Hard.
 
 The Paint and Rooms tabs work exactly the same in every mode.
+
+<b style="color:var(--accent2)">Writing it in Python, Lua or C++</b>
+The dropdown next to the mode buttons changes the language. The engine
+underneath does not change: <code>S.</code>, <code>onStart</code> and
+<code>onFrame</code> are the same whichever you pick, and a function called
+<code>start</code>, <code>frame</code>, <code>update</code> or <code>draw</code>
+is wired up for you automatically, so you rarely need onStart at all.
+
+<b>This is a translator, not the real language.</b> There is no Python in a
+browser tab — what happens is that your code is turned into JavaScript before
+it runs. It handles the part of each language you would write a game in, and
+nothing beyond that. Errors still point at the line you wrote.
+
+<b>Python</b> — indentation for blocks, <code>def</code>, <code>if</code> /
+<code>elif</code> / <code>else</code>, <code>while</code>,
+<code>for i in range(a, b, c)</code>, <code>for x in list</code>,
+<code>and</code> / <code>or</code> / <code>not</code>,
+<code>True</code> / <code>False</code> / <code>None</code>,
+<code>len</code>, <code>str</code>, <code>int</code>, <code>float</code>,
+<code>math.</code>, <code>#</code> comments, <code>global</code>,
+<code>pass</code>.
+Not in: classes, imports, list comprehensions, decorators, dicts with
+<code>:</code>, <code>try</code>/<code>except</code>, f-strings.
+
+<b>Lua</b> — <code>function … end</code>, <code>local</code>,
+<code>if … then … elseif … else … end</code> (on one line or several),
+<code>while … do … end</code>, <code>for i = 1, 10 do … end</code>,
+<code>for i, v in ipairs(t) do … end</code>, <code>~=</code>,
+<code>..</code>, <code>#t</code>, <code>nil</code>,
+<code>and</code> / <code>or</code> / <code>not</code>, <code>math.</code>,
+<code>--</code> comments.
+Not in: metatables, <code>pairs</code>, multiple returns, goto, coroutines.
+Remember Lua counts from 1 and the engine counts from 0.
+
+<b>C++</b> — types are read and thrown away, because there is no compiler
+here: <code>int</code>, <code>float</code>, <code>double</code>,
+<code>bool</code>, <code>char</code>, <code>auto</code>,
+<code>std::string</code> all just mean "a variable".
+<code>void name(){ }</code> becomes a function,
+<code>cout &lt;&lt; a &lt;&lt; endl;</code> becomes <code>S.log(a)</code>,
+<code>#include</code> and <code>using namespace</code> are ignored.
+Everything else is close enough to JavaScript to pass straight through.
+Not in: classes, templates, pointers, references, the standard library,
+operator overloading — and nothing is type-checked.
 `;
 
 let helpText = "";

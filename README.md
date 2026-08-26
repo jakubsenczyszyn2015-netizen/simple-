@@ -99,16 +99,36 @@ does know. It reads round the wording: "can't walk through", "bumps into" and
 "is blocked by" all mean collision, and *gold*, *gems* and *treasure* all mean
 coin.
 
-**Hard** — plain JavaScript. The engine arrives as `S`, and you register
-`onStart()`, `onFrame()` and `onKey()` callbacks:
+**Hard** — real code. The engine arrives as `S`, and a function called
+`start`, `frame`, `update` or `draw` is wired up for you (`onStart()`,
+`onFrame()` and `onKey()` still work):
 
 ```js
-onFrame(() => {
+function frame(){
   const me = S.sprite(1);
   if (S.keys.left) me.x -= 3;
-  S.print(`x is ${me.x}`, 6, 6);
-});
+  S.print("x is " + me.x, 6, 6);
+}
 ```
+
+A dropdown beside the mode buttons switches the language to **Python**, **Lua**
+or **C++**:
+
+```python
+def frame():
+    global x
+    if S.keys.left:
+        x = x - 3
+    S.print("x is " + str(int(x)), 6, 6)
+```
+
+**This is a translator, not the real language.** There is no Python in a
+browser tab; your code is turned into JavaScript before it runs. It covers the
+part of each language you would write a game in — blocks, `if`/`elif`/`else`,
+loops, functions, the usual operators, `len`/`str`/`int`, `math.`, comments —
+and nothing beyond that: no classes, imports, metatables, templates or
+pointers. Help lists exactly what is in each one. Errors point at the line you
+wrote, not at the translation.
 
 ### More Easy blocks
 

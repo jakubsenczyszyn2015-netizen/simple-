@@ -19,7 +19,10 @@ const must = ['function stopSong','function playSong','function drawSongList','f
   'function installPainter','function modelFromSprite',
   'function openTextbox','function drawTextbox','function stepRpg','function stepFollowers',
   'case "askmenu"','case "stats"','case "attack"','case "soul"','case "npc"','case "follow"',
-  'function statsOf','function soulHits','function drawArena'];
+  'function statsOf','function soulHits','function drawArena',
+  'function pythonToJs','function luaToJs','function cppToJs','function translate',
+  'function setLang','function hardStarter','id="lang"','function sourceLine',
+  'case "rect"','case "towards"','case "savegame"','case "timer"'];
 const missing = must.filter(m => !h.includes(m));
 
 // iOS 12.5 runs Safari 12, which cannot parse or run any of these
