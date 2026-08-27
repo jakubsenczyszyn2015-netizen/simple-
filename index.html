@@ -8970,11 +8970,26 @@ const PACKS = [
   { name:"Space pack", about:"A ship, rocks, a star field tile and a laser bolt.",
     keys:["ship","rock","stars","bolt","alien","shield"] },
   { name:"Dungeon pack", about:"Walls, a door, a key, a chest, a torch and a slime.",
-    keys:["dwall","dfloor","door2","key2","chest","torch","slime"] }
+    keys:["dwall","dfloor","door2","key2","chest","torch","slime"] },
+  { name:"Big character", about:"A character two sprites tall. Adding it gives you the top half and the legs \u2014 stand one on top of the other and you have somebody twice the usual size.",
+    keys:["rangerTop","rangerLegs"], tall:true }
 ];
 
 /* the extra artwork the packs need */
 Object.assign(ART, {
+  /* A character two sprites tall: the top half is the head and body, the
+     bottom half is the legs, so it works at the usual 16x16 without anybody
+     having to change the sprite size. Original artwork, free to use. */
+  rangerTop: art([
+    ".....33333......","....3333333.....","...333333333....",".3333333333333..",
+    ".3333333333333..","....fffffff.....","...ff0fff0ff....","...fffffffff....",
+    "....ff000fff....",".....fffff......","......ffff......","...4444444444...",
+    "..444444444444..","..44a4444444a4..",".f44a444444a44f.",".f444a4444a444f."]),
+  rangerLegs: art([
+    ".f4444aaaa4444f.",".f444aaaaaa444f.","..444aaaaaa444..","..444444444444..",
+    "...1111....1111.","...1111....1111.","...1111....1111.","...1111....1111.",
+    "...1111....1111.","...1111....1111.","..11111..11111..","..44444..44444..",
+    ".444444.444444..",".444444.444444..","5555555.5555555.","5555555.5555555."]),
   runner: art([
     "................","......7777......",".....799997.....",".....790097.....",
     ".....799997.....","......8888......",".....888888.....","....88888888....",
@@ -9106,8 +9121,14 @@ function drawPacks(){
   back.onclick = () => { packOpen = -1; drawPacks(); };
   const all = document.createElement("button");
   all.textContent = "Add all " + pk.keys.length;
-  all.onclick = () => { pk.keys.forEach(addPackSprite); closePacks();
-                        log("added " + pk.keys.length + " sprites from " + pk.name, "ok"); };
+  all.onclick = () => {
+    const added = pk.keys.map(addPackSprite);
+    closePacks();
+    log("added " + pk.keys.length + " sprites from " + pk.name, "ok");
+    if (pk.tall && added.length === 2)
+      log("stack them: put(" + added[0] + ", x, y) for the top and put(" +
+          added[1] + ", x, y + 16) for the legs", "ok");
+  };
   head.append(back, all);
   box.appendChild(head);
 
@@ -9130,7 +9151,9 @@ function drawPacks(){
     b.style.fontSize = "11px";
     d.appendChild(b);
     d.onclick = () => { const n = addPackSprite(k); closePacks();
-                        log("added " + k + " as sprite " + n, "ok"); };
+                        log("added " + k + " as sprite " + n, "ok");
+                        if (pk.tall) log("this one is half a character \u2014 add the other half " +
+                                         "too, then put(top, x, y) and put(legs, x, y + 16)", "ok"); };
     grid.appendChild(d);
   });
   box.appendChild(grid);
