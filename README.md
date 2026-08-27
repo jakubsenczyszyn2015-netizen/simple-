@@ -59,9 +59,12 @@ hide(1)
 - **Changelog** — see [CHANGELOG.md](CHANGELOG.md).
 
 The **⋯** button at the top right holds everything else: five **themes** for
-the editor (Classic, Modern, Retro, Futuristic, Video game), the touch
-controls, Export, My Games, and Save/Load. A theme changes the editor and
-never the game, so what you make looks the same to everyone who plays it.
+the editor (Classic, Modern, Retro, Futuristic, Video game), each in **light**
+and **dark** for ten looks in all; **🎨 Make one** for a theme of your own —
+every colour a picker, plus corner roundness, edge thickness, lettering, and a
+PNG on the buttons (stretched, or 9-sliced so the corners stay sharp). Also
+the touch controls, Export, My Games, and Save/Load. A theme changes the editor
+and never the game, so what you make looks the same to everyone who plays it.
 
 ## Four modes
 

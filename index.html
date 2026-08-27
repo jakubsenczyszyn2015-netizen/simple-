@@ -76,6 +76,59 @@
     --pad-bg:rgba(8,11,26,.66); --pad-line:rgba(34,229,255,.45);
   }
 
+  /* ---- the other shade of each theme ----
+     The block above each theme is its natural shade; these are the other
+     one. Nothing else in the sheet changes: the whole page is variables,
+     so a light Retro is the same rules with different values. */
+  html[data-theme="classic"][data-shade="light"]{
+    --bg:#eef1f7; --panel:#ffffff; --panel2:#e3e8f2; --line:#c3cbdb;
+    --fg:#16202e; --dim:#5d6a80; --accent:#0d6ea8; --accent2:#a5651a; --bad:#c1352f;
+    --ink:#ffffff; --void:#dfe5f0; --on-accent:#ffffff;
+    --ok:#1d6b2a; --ok2:#25863a; --plum:#4a3a80; --plum2:#6a55b8;
+    --sea:#1f4f6b; --sea2:#2d6f95; --amber:#8a6330; --amber2:#a97a3c;
+    --pad-bg:rgba(255,255,255,.8); --pad-line:rgba(22,32,46,.35);
+    --shadow:0 1px 2px rgba(20,30,60,.08);
+  }
+  html[data-theme="modern"][data-shade="dark"]{
+    --bg:#12151b; --panel:#1a1e26; --panel2:#232833; --line:#333b49;
+    --fg:#e7ebf3; --dim:#8d97a9; --accent:#5b8cff; --accent2:#ff9f4a; --bad:#ff6b6b;
+    --ink:#161a21; --void:#0e1116; --on-accent:#ffffff;
+    --ok:#15803d; --ok2:#16a34a; --plum:#6d28d9; --plum2:#8b5cf6;
+    --sea:#0369a1; --sea2:#0284c7; --amber:#b45309; --amber2:#d97706;
+    --pad-bg:rgba(26,30,38,.78); --pad-line:rgba(231,235,243,.35);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.28);
+  }
+  /* retro in the light is a paper terminal: dark ink on warm white */
+  html[data-theme="retro"][data-shade="light"]{
+    --bg:#efe9d5; --panel:#e6dfc6; --panel2:#dcd3b4; --line:#8c7f55;
+    --fg:#2b2412; --dim:#6d6242; --accent:#7a5a00; --accent2:#a03000; --bad:#a01414;
+    --ink:#f6f1e0; --void:#e2dac0; --on-accent:#f6f1e0;
+    --ok:#3f6b20; --ok2:#4f8a2a; --plum:#5c4a2f; --plum2:#7a6540;
+    --sea:#2f6b5c; --sea2:#3f8a76; --amber:#8a6510; --amber2:#a87f1a;
+    --glow:none;
+    --pad-bg:rgba(239,233,213,.82); --pad-line:rgba(43,36,18,.45);
+    --scan:repeating-linear-gradient(rgba(0,0,0,0) 0 2px, rgba(0,0,0,.07) 2px 4px);
+  }
+  html[data-theme="futuristic"][data-shade="light"]{
+    --bg:#eef4fb; --panel:#ffffff; --panel2:#e0ecf8; --line:#a9c6e2;
+    --fg:#0d2233; --dim:#4d6d88; --accent:#0090b0; --accent2:#b0009a; --bad:#c8103a;
+    --ink:#f7fbff; --void:#dceaf6; --on-accent:#ffffff;
+    --ok:#0f766e; --ok2:#14b8a6; --plum:#5b21b6; --plum2:#8b5cf6;
+    --sea:#0e5a8a; --sea2:#1a8fd0; --amber:#a05a00; --amber2:#e08a00;
+    --glow:0 0 8px rgba(0,144,176,.28);
+    --pad-bg:rgba(255,255,255,.8); --pad-line:rgba(0,144,176,.4);
+    --shadow:0 0 0 1px rgba(0,144,176,.12), 0 6px 20px rgba(13,34,51,.08);
+  }
+  html[data-theme="game"][data-shade="light"]{
+    --bg:#dcefff; --panel:#ffffff; --panel2:#c6e2ff; --line:#3b6ec4;
+    --fg:#0d2140; --dim:#41608f; --accent:#e0a400; --accent2:#d33a3a; --bad:#c81e1e;
+    --ink:#f2f8ff; --void:#bcd9f7; --on-accent:#241a00;
+    --ok:#1e9e3a; --ok2:#2ecc4f; --plum:#7b2fd6; --plum2:#a45cff;
+    --sea:#0090b8; --sea2:#22c6e8; --amber:#d17a00; --amber2:#ffa726;
+    --pad-bg:rgba(255,255,255,.82); --pad-line:rgba(59,110,196,.5);
+    --shadow:0 3px 0 rgba(13,33,64,.22);
+  }
+
   html[data-theme="game"]{
     --bg:#1b2a6b; --panel:#243a94; --panel2:#2f4bbd; --line:#0d1640;
     --fg:#ffffff; --dim:#b9c8ff; --accent:#ffd400; --accent2:#ff5a5a; --bad:#ff3b3b;
@@ -138,6 +191,18 @@
   .b-export{background:var(--sea); border-color:var(--sea2); color:#fff}
   .b-lib{background:var(--amber); border-color:var(--amber2); color:#fff}
   .b-run,.b-gallery,.b-export,.b-lib{text-shadow:0 1px 0 rgba(0,0,0,.25)}
+
+  /* buttons can wear a picture, when a custom theme says so */
+  html[data-skin="on"] button:not(.tbtn):not(.sw){
+    background-image:var(--btn-img);
+    background-size:100% 100%;
+    background-repeat:no-repeat;
+    border-image:var(--btn-img) var(--btn-slice) fill / var(--btn-slice-px) / 0 stretch;
+  }
+  html[data-skin="slice"] button:not(.tbtn):not(.sw){
+    background-image:none;
+    border-image:var(--btn-img) var(--btn-slice) fill / var(--btn-slice-px) / 0 repeat;
+  }
 
   /* retro draws scanlines over the whole page */
   body::after{
@@ -300,11 +365,11 @@
     background-size:10px 10px;background-position:0 0,5px 5px}
 
   /* ---- template gallery ---- */
-  #overlay,#png-ov,#lib-ov,#packs-ov{
+  #overlay,#png-ov,#lib-ov,#packs-ov,#theme-ov{
     position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(8,10,14,.82); z-index:50;
     display:none; align-items:center; justify-content:center; padding:24px;
   }
-  #overlay.on,#png-ov.on,#lib-ov.on,#packs-ov.on{display:flex}
+  #overlay.on,#png-ov.on,#lib-ov.on,#packs-ov.on,#theme-ov.on{display:flex}
   .modal{
     background:var(--panel); border:1px solid var(--line); border-radius:12px;
     max-width:900px; width:100%; max-height:100%; overflow:auto; padding:20px;
@@ -440,6 +505,11 @@
         <button data-theme="retro"      onclick="setTheme('retro')">Retro</button>
         <button data-theme="futuristic" onclick="setTheme('futuristic')">Futuristic</button>
         <button data-theme="game"       onclick="setTheme('game')">Video game</button>
+        <button data-theme="custom"     onclick="setTheme('custom')">Mine</button>
+      </div>
+      <div class="row" style="gap:4px;margin-top:5px">
+        <button id="shade-btn" onclick="toggleShade()" style="flex:1">\u263e Dark</button>
+        <button onclick="closeMore();openThemeMaker()" style="flex:1">🎨 Make one</button>
       </div>
       <div class="mm-head">Play</div>
       <button id="touch-btn" onclick="toggleTouch()">📱 Touch controls</button>
@@ -928,6 +998,74 @@
     </p>
     <div id="cards" class="cards"></div>
     <div style="margin-top:16px;text-align:right"><button onclick="closeGallery()">Close</button></div>
+  </div>
+</div>
+
+<div id="theme-ov" onclick="if(event.target===this) closeThemeMaker()">
+  <div class="modal" style="max-width:660px">
+    <h2>Make your own look</h2>
+    <p class="sub">
+      Every colour in the editor is one of these. Change one and the whole
+      window changes with it, straight away.
+    </p>
+    <div id="theme-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px"></div>
+
+    <h3 style="margin:16px 0 8px;font-size:11px;letter-spacing:1.5px;color:var(--dim)">SHAPE</h3>
+    <div class="row" style="gap:14px">
+      <label style="font-size:12px;color:var(--dim)">Corners
+        <input id="th-radius" type="range" min="0" max="20" step="1"
+               oninput="setCustom('radius', this.value)" style="width:120px;vertical-align:middle">
+        <span id="th-radius-v"></span>
+      </label>
+      <label style="font-size:12px;color:var(--dim)">Edges
+        <input id="th-border" type="range" min="0" max="4" step="1"
+               oninput="setCustom('border', this.value)" style="width:80px;vertical-align:middle">
+        <span id="th-border-v"></span>
+      </label>
+      <label style="font-size:12px;color:var(--dim)">Lettering
+        <select id="th-font" onchange="setCustom('font', this.value)"
+                style="background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+          <option value="mono">typewriter</option>
+          <option value="sans">plain</option>
+          <option value="serif">bookish</option>
+          <option value="round">rounded</option>
+          <option value="courier">old typewriter</option>
+        </select>
+      </label>
+    </div>
+
+    <h3 style="margin:16px 0 8px;font-size:11px;letter-spacing:1.5px;color:var(--dim)">
+      A PICTURE ON THE BUTTONS
+    </h3>
+    <div class="row" style="gap:8px">
+      <button onclick="document.getElementById('th-btn-file').click()">🖼 Choose a PNG</button>
+      <button onclick="setCustom('btnImage', null)">✕ No picture</button>
+      <label style="font-size:12px;color:var(--dim)">
+        <select id="th-btn-mode" onchange="setCustom('btnMode', this.value)"
+                style="background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+          <option value="stretch">stretch it</option>
+          <option value="slice">keep the corners sharp</option>
+        </select>
+      </label>
+      <label style="font-size:12px;color:var(--dim)">corner size
+        <input id="th-slice" type="range" min="1" max="24" step="1"
+               oninput="setCustom('btnSlice', this.value)" style="width:100px;vertical-align:middle">
+        <span id="th-slice-v"></span>
+      </label>
+    </div>
+    <input id="th-btn-file" type="file" accept="image/*" style="display:none" onchange="pickButtonSkin(this)">
+    <div id="th-btn-note" class="hint" style="margin-top:6px"></div>
+
+    <div class="row" style="margin-top:18px;justify-content:space-between">
+      <div class="row" style="gap:6px">
+        <button onclick="customFrom('classic')">Start from Classic</button>
+        <button onclick="customFrom('modern')">Modern</button>
+        <button onclick="customFrom('retro')">Retro</button>
+        <button onclick="customFrom('futuristic')">Futuristic</button>
+        <button onclick="customFrom('game')">Video game</button>
+      </div>
+      <button onclick="closeThemeMaker()">Done</button>
+    </div>
   </div>
 </div>
 
@@ -2789,24 +2927,28 @@ const THEMES = {
   modern:     "Modern",
   retro:      "Retro",
   futuristic: "Futuristic",
-  game:       "Video game"
+  game:       "Video game",
+  custom:     "Mine"
 };
-let THEME = "classic";
+/* which shade each theme is when you have not said */
+const THEME_NATURAL = { classic:"dark", modern:"light", retro:"dark",
+                        futuristic:"dark", game:"dark", custom:"dark" };
+let THEME = "classic", SHADE = "dark";
+
 function setTheme(name, quiet){
   if (!THEMES[name]) name = "classic";
   THEME = name;
-  document.documentElement.setAttribute("data-theme", name);
+  document.documentElement.setAttribute("data-theme", name === "custom" ? (customTheme().base || "classic") : name);
+  applyShade();
+  applyCustom();
   for (const b of document.querySelectorAll("#theme-pick button"))
     b.classList.toggle("on", b.dataset.theme === name);
   try { localStorage.setItem("simplepp-theme", name); } catch(e){}
   /* the sprite and room pictures are drawn onto canvases, not styled by CSS,
      so they have to be redrawn to pick the new background up */
   if (!quiet){
-    if (typeof drawPaint === "function") drawPaint();
-    if (typeof drawSpriteList === "function") drawSpriteList();
-    if (typeof drawRoom === "function") drawRoom();
-    if (typeof render === "function") render();
-    log("theme: " + THEMES[name], "ok");
+    redrawEverything();
+    log("theme: " + THEMES[name] + " \u00b7 " + SHADE, "ok");
   }
 }
 /* canvases are painted by hand, so they have to ask what the theme's colours are */
@@ -2816,10 +2958,200 @@ function themeVar(name, fallback){
     return v || fallback;
   } catch(e){ return fallback; }
 }
+/* Light or dark, on top of whichever theme is chosen. Every theme has both;
+   the block in the sheet is its natural shade and the other one is written
+   out beside it, so a light Retro is the same rules with different values. */
+function applyShade(){
+  document.documentElement.setAttribute("data-shade", SHADE);
+  const b = $("shade-btn");
+  if (b){
+    b.textContent = SHADE === "light" ? "\u2600 Light" : "\u263e Dark";
+    b.title = SHADE === "light" ? "switch to dark" : "switch to light";
+  }
+}
+function setShade(v, quiet){
+  SHADE = v === "light" ? "light" : "dark";
+  applyShade();
+  try { localStorage.setItem("simplepp-shade", SHADE); } catch(e){}
+  if (!quiet) redrawEverything();
+}
+function toggleShade(){ setShade(SHADE === "light" ? "dark" : "light"); }
+
+/* ---------- a theme of your own ----------
+   The whole editor is CSS variables, so making your own theme is nothing
+   more than writing your own values over the top. It is kept in this
+   browser rather than in the game, because it is how you like to look at
+   the editor and not part of what you made. */
+const CUSTOM_FIELDS = [
+  { k:"bg",      label:"Behind everything" },
+  { k:"panel",   label:"Panels" },
+  { k:"panel2",  label:"Buttons" },
+  { k:"line",    label:"Lines and edges" },
+  { k:"fg",      label:"Writing" },
+  { k:"dim",     label:"Quiet writing" },
+  { k:"accent",  label:"The chosen one" },
+  { k:"accent2", label:"The other highlight" },
+  { k:"ink",     label:"The code box" },
+  { k:"void",    label:"Behind the stage" }
+];
+let CUSTOM = null;
+function customTheme(){
+  if (CUSTOM) return CUSTOM;
+  try { CUSTOM = JSON.parse(localStorage.getItem("simplepp-customtheme") || "null"); } catch(e){}
+  if (!CUSTOM) CUSTOM = {
+    base:"classic",
+    bg:"#14161c", panel:"#1c1f28", panel2:"#232734", line:"#333a4a",
+    fg:"#e8ecf5", dim:"#8b95ab", accent:"#5ac8fa", accent2:"#ffd166",
+    ink:"#12141a", void:"#0c0e13",
+    radius:6, border:1, font:"mono",
+    btnImage:null, btnMode:"stretch", btnSlice:8
+  };
+  return CUSTOM;
+}
+function saveCustom(){
+  try { localStorage.setItem("simplepp-customtheme", JSON.stringify(CUSTOM)); }
+  catch(e){ log("there was no room to keep that theme", "err"); }
+}
+const CUSTOM_FONTS = {
+  mono:   "14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",
+  sans:   "14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif",
+  serif:  "14px/1.5 Georgia,\"Times New Roman\",serif",
+  round:  "14px/1.45 ui-rounded,\"Trebuchet MS\",Verdana,sans-serif",
+  courier:"14px/1.5 \"Courier New\",ui-monospace,monospace"
+};
+function applyCustom(){
+  const root = document.documentElement;
+  const clear = ["--bg","--panel","--panel2","--line","--fg","--dim","--accent","--accent2",
+                 "--ink","--void","--r","--r2","--bw","--font","--on-accent","--btn-img",
+                 "--btn-slice","--btn-slice-px"];
+  for (const v of clear) root.style.removeProperty(v);
+  root.removeAttribute("data-skin");
+  if (THEME !== "custom") return;
+  const c = customTheme();
+  for (const f of CUSTOM_FIELDS) root.style.setProperty("--" + f.k, c[f.k]);
+  root.style.setProperty("--r", c.radius + "px");
+  root.style.setProperty("--r2", (c.radius * 2) + "px");
+  root.style.setProperty("--bw", c.border + "px");
+  root.style.setProperty("--font", CUSTOM_FONTS[c.font] || CUSTOM_FONTS.mono);
+  /* writing on an accent button has to be readable on whatever was picked */
+  root.style.setProperty("--on-accent", readableOn(c.accent));
+  if (c.btnImage){
+    root.style.setProperty("--btn-img", "url(" + c.btnImage + ")");
+    root.style.setProperty("--btn-slice", String(c.btnSlice));
+    root.style.setProperty("--btn-slice-px", c.btnSlice + "px");
+    root.setAttribute("data-skin", c.btnMode === "slice" ? "slice" : "on");
+  }
+}
+/* black or white, whichever stands out more against that colour */
+function readableOn(hex){
+  const h = String(hex).replace("#", "");
+  if (h.length < 6) return "#000000";
+  const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 145 ? "#101317" : "#ffffff";
+}
+function redrawEverything(){
+  if (typeof drawPaint === "function") drawPaint();
+  if (typeof drawSpriteList === "function") drawSpriteList();
+  if (typeof drawRoom === "function") drawRoom();
+  if (typeof drawSong === "function" && $("v-music")) drawSong();
+  if (typeof drawSfxWave === "function") drawSfxWave();
+  if (typeof drawVoxel === "function" && $("v-models")) drawVoxel();
+  if (typeof render === "function") render();
+}
+
+function openThemeMaker(){
+  setTheme("custom");
+  $("theme-ov").classList.add("on");
+  drawThemeMaker();
+}
+function closeThemeMaker(){ $("theme-ov").classList.remove("on"); }
+function setCustom(key, v){
+  const c = customTheme();
+  if (key === "radius" || key === "border" || key === "btnSlice") v = Math.round(+v) || 0;
+  c[key] = v;
+  saveCustom();
+  applyCustom();
+  drawThemeMaker();
+  redrawEverything();
+}
+/* start from a theme you already like, rather than from nothing */
+function customFrom(name){
+  const root = document.documentElement;
+  const was = root.getAttribute("data-theme");
+  root.setAttribute("data-theme", name);
+  root.style.cssText = "";
+  const cs = getComputedStyle(root);
+  const c = customTheme();
+  c.base = name;
+  for (const f of CUSTOM_FIELDS){
+    const v = cs.getPropertyValue("--" + f.k).trim();
+    if (v) c[f.k] = toHex(v);
+  }
+  const r = parseInt(cs.getPropertyValue("--r"), 10);
+  const bw = parseInt(cs.getPropertyValue("--bw"), 10);
+  if (!isNaN(r)) c.radius = r;
+  if (!isNaN(bw)) c.border = bw;
+  root.setAttribute("data-theme", was);
+  saveCustom();
+  setTheme("custom");
+  drawThemeMaker();
+}
+/* the browser hands colours back as rgb(); the pickers want #rrggbb */
+function toHex(v){
+  const m = String(v).match(/rgba?\(([^)]+)\)/);
+  if (!m) return /^#[0-9a-f]{6}$/i.test(v) ? v : "#000000";
+  const n = m[1].split(",").map(x => Math.max(0, Math.min(255, Math.round(parseFloat(x)))));
+  return "#" + n.slice(0, 3).map(x => ("0" + x.toString(16)).slice(-2)).join("");
+}
+function drawThemeMaker(){
+  const box = $("theme-fields"); if (!box) return;
+  const c = customTheme();
+  box.innerHTML = "";
+  for (const f of CUSTOM_FIELDS){
+    const l = document.createElement("label");
+    l.style.cssText = "display:flex;align-items:center;gap:8px;font-size:12px";
+    const inp = document.createElement("input");
+    inp.type = "color";
+    inp.value = c[f.k];
+    inp.style.cssText = "width:34px;height:26px;padding:0;border:1px solid var(--line);" +
+                        "border-radius:4px;background:none;cursor:pointer";
+    inp.oninput = () => setCustom(f.k, inp.value);
+    const t = document.createElement("span");
+    t.textContent = f.label;
+    l.append(inp, t);
+    box.appendChild(l);
+  }
+  const set = (id, v) => { const el = $(id); if (el) el.value = v; };
+  const say = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set("th-radius", c.radius); say("th-radius-v", c.radius + "px");
+  set("th-border", c.border); say("th-border-v", c.border + "px");
+  set("th-font", c.font);
+  set("th-btn-mode", c.btnMode);
+  set("th-slice", c.btnSlice); say("th-slice-v", c.btnSlice + "px");
+  say("th-btn-note", c.btnImage
+    ? "a picture is on the buttons \u2014 " + Math.round(c.btnImage.length / 1024) + " KB, kept in this browser"
+    : "no picture: the buttons use the colour above");
+}
+function pickButtonSkin(input){
+  const f = input.files && input.files[0];
+  input.value = "";
+  if (!f) return;
+  if (f.size > 400000){
+    alert("That picture is " + Math.round(f.size/1024) + " KB. A button skin wants to be " +
+          "small \u2014 try something under 100 KB.");
+    return;
+  }
+  const fr = new FileReader();
+  fr.onload = () => setCustom("btnImage", fr.result);
+  fr.readAsDataURL(f);
+}
+
 function loadTheme(){
-  let t = null;
-  try { t = localStorage.getItem("simplepp-theme"); } catch(e){}
-  setTheme(t || "classic", true);
+  let t = null, sh = null;
+  try { t = localStorage.getItem("simplepp-theme"); sh = localStorage.getItem("simplepp-shade"); } catch(e){}
+  const name = THEMES[t] ? t : "classic";
+  SHADE = sh === "light" || sh === "dark" ? sh : (THEME_NATURAL[name] || "dark");
+  setTheme(name, true);
 }
 
 /* ---------- the ⋯ menu ---------- */
@@ -5926,7 +6258,7 @@ function safeName(t){
 /* the whole editor, serialised clean, with the game injected into it */
 function standaloneHtml(game){
   const clone = document.documentElement.cloneNode(true);
-  clone.querySelectorAll("#overlay, #png-ov, #lib-ov, #packs-ov, #more-menu")
+  clone.querySelectorAll("#overlay, #png-ov, #lib-ov, #packs-ov, #theme-ov, #more-menu")
        .forEach(el => el.classList.remove("on"));
   /* The export is a snapshot of this page, so whichever tab is open here is
      the tab the exported file opens on — and a game shown behind the Export
@@ -9974,10 +10306,21 @@ name works anywhere the number does:
   still moves writing.
 
 <b style="color:var(--accent2)">Themes</b>
-· <b>⋯</b> at the top right holds five looks for the editor: <b>Classic</b>
-  (this one), <b>Modern</b> (light and plain), <b>Retro</b> (a green screen
-  with scanlines), <b>Futuristic</b> (neon) and <b>Video game</b> (bright and
-  chunky). The choice is remembered in this browser.
+· <b>⋯</b> at the top right holds five looks for the editor: <b>Classic</b>,
+  <b>Modern</b> (plain), <b>Retro</b> (a green screen with scanlines),
+  <b>Futuristic</b> (neon) and <b>Video game</b> (bright and chunky).
+· Every one comes in <b>light</b> and <b>dark</b> — the ☾/☀ button beside them
+  swaps over. Light Retro is a paper terminal; dark Modern is the plain one
+  at night. Ten looks in all.
+· <b>🎨 Make one</b> opens a maker where every colour is a picker: the
+  background, the panels, the buttons, the writing, the two highlights, the
+  code box and the stage surround, plus how round the corners are, how thick
+  the edges are and what the lettering looks like. <b>Start from</b> takes an
+  existing theme as a beginning rather than making you start from nothing.
+· You can put a <b>picture on the buttons</b>. <i>Stretch it</i> pulls the
+  picture to fit; <i>keep the corners sharp</i> uses the middle to stretch and
+  leaves the corners alone, which is how a proper button skin works.
+· All of it is remembered in this browser.
 · A theme changes the editor, never the game. Your game looks the same to
   everybody who plays it, whichever theme you wrote it in.
 
