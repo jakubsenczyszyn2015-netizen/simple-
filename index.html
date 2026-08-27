@@ -3284,19 +3284,34 @@ function buildTouchpad(){
    ========================================================= */
 
 /* ---------- a box that talks ---------- */
-/* A textbox can be several boxfuls in a row. Z runs to the end of the words,
-   Z again moves on to the next lot, and Z on the last one closes it. */
-function openTextbox(text, face, choices){
+/* A textbox can be several boxfuls in a row: give one call more than one lot
+   of words, or simply write another textbox on the next line. Z runs to the
+   end of the words, Z again moves on, and Z on the last one closes it.
+
+   `line` is the line of your program that asked. A textbox already waiting to
+   be read does not queue itself again from the same line, which is what makes
+   writing one inside "every frame" safe: it is the same line every time. Two
+   different lines each get their turn. */
+function openTextbox(text, face, choices, line){
   const pages = (text instanceof Array ? text : [text]).map(t => String(t === undefined ? "" : t));
   const who = face ? Math.round(spriteArg(face)) : 0;
-  /* Written inside "every frame", the same textbox would start itself again
-     sixty times a second and never finish a word. Asking for the one that is
-     already open does nothing. */
   const b0 = R.box;
-  if (b0 && !choices && !b0.choices && b0.face === who &&
-      b0.pages.length === pages.length && b0.pages.join("\u0000") === pages.join("\u0000")) return;
+
+  if (b0 && !choices && !b0.choices){
+    if (line !== undefined && b0.from.indexOf(line) >= 0) return;   // already had its turn
+    if (line === undefined && b0.pages.join("\u0000") === pages.join("\u0000")) return;
+    /* join the back of the queue rather than shoving the current one aside */
+    for (const t of pages){
+      b0.pages.push(t);
+      b0.faces.push(who);                 // each boxful keeps its own speaker
+      b0.from.push(line === undefined ? -1 : line);
+    }
+    return;
+  }
   R.box = {
     pages,
+    faces: pages.map(() => who),
+    from: pages.map(() => (line === undefined ? -1 : line)),
     page: 0,
     lines: pages[0].split("\n"),
     face: who,
@@ -3313,6 +3328,7 @@ function nextTextbox(){
   if (b.page < b.pages.length - 1){
     b.page++;
     b.lines = b.pages[b.page].split("\n");
+    b.face = b.faces[b.page] || 0;
     b.shown = 0; b.tick = 0; b.done = false;
     return true;
   }
@@ -4636,12 +4652,12 @@ function runCall(st){
       const all = A();
       const said = all.filter(v => typeof v !== "number");
       const face = all.filter(v => typeof v === "number")[0];
-      openTextbox(said.length ? said : [""], face || 0); break; }
+      openTextbox(said.length ? said : [""], face || 0, null, st.n); break; }
     case "talk": {
       const all = A();
       const who = all[0];
       const said = all.slice(1).filter(v => typeof v !== "number");
-      openTextbox(said.length ? said : [""], who); break; }
+      openTextbox(said.length ? said : [""], who, null, st.n); break; }
     case "next": case "nextbox": case "next_box": { nextTextbox(); break; }
     case "menu": {
       const opts = A().map(v => String(v));
@@ -10883,29 +10899,41 @@ the others, so you can take one and leave the rest.
                           itself out. Z skips to the end, Z again closes it.
 <code>talk(3, "* Hi.")</code>         the same, with sprite 3's face in the box
 
-<b>One after another.</b> Give it more than one lot of words and Z moves on
-to the next instead of closing:
+<b>One after another.</b> Just write another one on the next line. They
+<b>queue up</b> instead of the second shoving the first aside, and Z moves
+along them:
+
+<code>textbox("hello?")</code>
+<code>textbox("helloooooooooooooo?")</code>
+
+Each one keeps its own speaker, so two people can take turns:
+
+<code>talk(1, "I am sprite one.")</code>
+<code>talk(3, "And I am sprite three.")</code>
+
+  The arrow in the corner is a <b>▼</b> while there is more to come and a
+  <b>■</b> on the last one, with 1/2 beside it so you know where you are.
+
+<b>Or all in one</b>, if you would rather keep a speech together:
+
+<code>textbox("* The first one.", "* Then the second.", "* And the last.")</code>
+
+  A command can be spread over as many lines as you like — a line that
+  leaves a bracket open carries on into the next one:
 
 <code>textbox("* The first one.",</code>
 <code>        "* Then the second.",</code>
 <code>        "* And the last.")</code>
-<code>talk(3, "* Hello there.", "* Nice to meet you.")</code>
-
-  The arrow in the corner is a <b>▼</b> while there is more to come and a
-  <b>■</b> on the last one, with 1/3 beside it so you know where you are.
-
-  A command with a lot in it can be spread over as many lines as you like:
-  a line that leaves a bracket open carries on into the next one, and the
-  whole thing counts as the line it started on if anything goes wrong.
 
 <code>next()</code>                   move on from code instead of waiting
                           for Z — handy on a button
 <code>if morepages()</code>           is there another lot after this one?
 <code>pagenow()</code>                which one is showing, counting from 1
 
-  Asking for a textbox that is already on screen does nothing, so writing
-  one inside <code>every frame</code> is safe — it will not restart itself
-  sixty times a second.
+  A line of your program that has already had its turn will not queue
+  itself again while the box is still up, so writing a textbox inside
+  <code>every frame</code> is safe — it shows once rather than sixty times a
+  second. Two <i>different</i> lines each get their turn.
 <code>askmenu("Now what?", "Fight", "Mercy")</code>
                           types the question, then lets you pick with the
                           arrow keys and Z

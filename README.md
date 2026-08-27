@@ -210,8 +210,10 @@ none of them needing the others:
 ```
 textbox("* Hello.")        a box along the bottom that types itself out
 talk(3, "* Hi.")           ...with sprite 3's face in it
-textbox("* One.", "* Two.", "* Three.")   Z moves on to the next instead
-                           of closing; ▼ while there is more, ■ on the last
+textbox("hello?")          write another on the next line and they queue up:
+textbox("and hello again?")   Z moves along them instead of the second
+                           shoving the first aside. Each keeps its own face.
+textbox("* One.", "* Two.")   or all in one call, if you prefer
 next()                     move on from code.  morepages()  pagenow()
 ```
 
