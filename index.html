@@ -2455,6 +2455,10 @@ function showTitle(name, style){
 /* Every title screen takes a track number. titlemusic(2) sets one for
    whichever title comes next, which is how customtitle gets one without
    its list of steps becoming ambiguous. */
+/* Pressing Play lets "when start" run again, so every title has to remember
+   it has already been past — otherwise it comes back and the game never
+   begins. */
+function titleDone(name){ return !!R.titlesShown[String(name)]; }
 function playTitleTrack(track){
   const n = Math.round(track) || R.titleTrack || 0;
   if (n > 0) playSong(n, true);
@@ -4776,7 +4780,7 @@ function runCall(st){
     /* ---- title screens ---- */
     case "title": case "titlescreen": case "title_screen": {
       const [name, track] = A();
-      if (R.titlesShown[String(name)]) break;      // already dismissed, carry on
+      if (titleDone(name)) break;                  // already dismissed, carry on
       showTitle(name);
       playTitleTrack(track);
       collectTitleButtons(R.prog);
@@ -4924,15 +4928,18 @@ function runCall(st){
     /* ---- title screens, coming and going ---- */
     case "fancytitle": case "fancy_title": {
       const [nm, tr] = A();
+      if (titleDone(nm)) break;
       showTitle(nm, "drop"); playTitleTrack(tr);
       collectTitleButtons(R.prog); throw new Wait(0); }
     case "fanciertitle": case "fancier_title": {
       const [nm2, tr2] = A();
+      if (titleDone(nm2)) break;
       showTitle(nm2, "spin"); playTitleTrack(tr2);
       collectTitleButtons(R.prog); throw new Wait(0); }
     /* the showy ones */
     case "scrolltitle": case "scroll_title": {
       const [nm, tile, track] = A();
+      if (titleDone(nm)) break;
       R.titleTile = Math.round(tile) || 0;
       showTitle(nm, "plain");
       playTitleTrack(track);
@@ -4940,6 +4947,7 @@ function runCall(st){
 
     case "fanciesttitle": case "fanciest_title": {
       const [nm, spr, track] = A();
+      if (titleDone(nm)) break;
       showTitle(nm, "fanciest");
       R.titleAnim.sprite = Math.round(spr) || 1;
       ensureSprite(R.titleAnim.sprite);
@@ -4949,6 +4957,7 @@ function runCall(st){
     case "customtitle": case "custom_title": {
       const args = A();
       const nm = args[0];
+      if (titleDone(nm)) break;
       showTitle(nm, "custom");
       const script = [];
       const unknown = [];
@@ -4966,6 +4975,7 @@ function runCall(st){
 
     case "evenmorefancytitle": case "even_more_fancy_title": {
       const [nm, tr] = A();
+      if (titleDone(nm)) break;
       showTitle(nm, "custom");
       /* black, then the cube turns for a while, then the title lands on it */
       R.titleAnim.script = [
@@ -11425,6 +11435,23 @@ window.addEventListener("keydown", e => {
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.14.0", t:"Voxels, a band, and ten looks",
+    lines:[
+      "<b>Fixed: exporting to .html didn\u2019t work properly.</b> An export is a snapshot of the editor as it stands, and Export became its own tab last release \u2014 so exporting while looking at the Export tab gave you a file that opened on the Export tab, with the game running correctly behind a page of cards about exporting. From any other tab it worked, which is why it seemed random. Also: the \u201cit saved\u201d message went to the console, which lives in the Code tab, so from the Export tab nothing at all appeared to happen; and iOS 12 Safari has no download attribute, so the click silently did nothing there. All three are fixed.",
+      "<b>The Music tab is a band.</b> A song holds up to eight tracks at once, each with its own instrument: Piano, Bass guitar, Rock guitar, Electric guitar, Acoustic guitar, Tin whistle, Beepy, Soft and Drums. None of them are recordings \u2014 each is a recipe for one note, so they cost nothing in file size. Drums play by row like a drum machine. Twenty-five rows instead of fifteen, a choice of five notes / major / minor / every note, and up to eight pages of 32 steps so a song runs a while.",
+      "Music is booked on the sound card\u2019s own clock a quarter-second ahead rather than played when a timer fires, so it stays in time when the game is busy.",
+      "<b>Models are Voxels.</b> A box of little cubes you build in: drag turns it, <b>click a face</b> and a cube sticks to it, shift-click takes one off, scroll zooms. Wrap any sprite round the cubes and a brick sprite makes brick blocks, correct on every face. Clicking is exact \u2014 the faces are drawn again in flat ID colours and the pixel under the cursor says which one you meant.",
+      "<b>Turning voxels, one axis at a time:</b> <code>rotatex</code>, <code>rotatey</code>, <code>rotatez</code>, their <code>...by</code> versions, <code>spinx</code> / <code>spiny</code> / <code>spinz</code>, and <code>anglex()</code> / <code>angley()</code>.",
+      "<b>Nothing three-dimensional is pixelated now.</b> The 3D platformer draws each wall column with one stretched image instead of a fillRect per texture row, and the stage switches its own scaling between smooth and sharp depending on what is on it \u2014 so sprite games keep their hard edges.",
+      "<b>Every theme comes in light and dark</b>, so there are ten. Light Retro is a paper terminal; dark Modern is the plain one at night.",
+      "<b>\ud83c\udfa8 Make one</b> is a theme maker: every colour a picker, plus corner roundness, edge thickness and lettering, and a PNG on the buttons \u2014 stretched, or 9-sliced so the corners stay sharp.",
+      "<b>What players see before the game.</b> The Export tab can add an opening card that fades in and out with your own words, and a loading screen with your own text, a bar that tracks the real work, and a picture. Both have a \u201cSee it\u201d button.",
+      "<b><code>evenmorefancytitle(\"The Game\")</code></b> \u2014 a rainbow wireframe cube turning in 3D, a flash, then the title lands on it.",
+      "<b>Every title screen takes a music track</b>, and <code>titlemusic(2)</code> sets one for whichever comes next.",
+      "<b><code>customtitle</code> is a little script.</b> <code>customtitle(\"My Game\", \"colour #101040 20\", \"fade 30\", \"sfx 2\", \"glide 1 from 0 200 to 320 60 50\", \"flash\", \"drop\")</code> \u2014 fourteen steps, each with its own timing. Plain numbers still work.",
+      "<b><code>glide(1, 260, 180, 30)</code></b> slides a sprite there over thirty frames, easing in and out. <code>glideby()</code>, <code>stopglide()</code> and <code>gliding()</code> go with it.",
+      "<b>Pre-made</b> can hold a character two sprites tall \u2014 two halves that stack, so it works at the ordinary sprite size."
+    ] },
   { v:"0.13.0", t:"Phones, themes, models, sound effects and three more languages",
     lines:[
       "<b>It works on a phone.</b> Safari 12 — what iOS 12.5 runs — cannot parse <code>?.</code> or <code>??</code> and has no <code>matchAll</code>, and one of those anywhere in the file stops the whole script, so the page opened blank. All twenty-one are gone. The audio unlocks on the first tap the way iOS insists, and the test suite now fails the build if any of that syntax comes back.",

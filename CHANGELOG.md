@@ -3,6 +3,131 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.14.0 — Voxels, a band, and ten looks
+
+### Fixed
+- **Exporting to .html didn't work properly.** An export is a snapshot of the
+  editor as it stands, and Export became its own tab in 0.13.0 — so exporting
+  *while looking at the Export tab* produced a file that opened on the Export
+  tab, with the game running correctly behind a page of cards about exporting.
+  From any other tab it worked, which is why it seemed random. The clone is
+  forced onto the Code view now, and it was checked by exporting from all eight
+  tabs.
+- Two other things made a working export look broken. The "it saved" message
+  went to the console, which lives in the Code tab, so from the Export tab you
+  pressed the button and nothing at all happened; there is a result panel on
+  the Export tab now. And Safari on iOS 12 has no download attribute — it has
+  the property, undefined, so the old `in` test passed and the click silently
+  did nothing. The feature test checks the type, and where downloading is
+  impossible the file opens in a tab with the share-menu instructions.
+- `"\n"` in a string is a real new line.
+
+### Added — the Music tab is a band now
+- A song holds up to **eight tracks** playing at once, each with its own
+  instrument: **Piano, Bass guitar, Rock guitar, Electric guitar, Acoustic
+  guitar, Tin whistle, Beepy, Soft** and **Drums**.
+- None of them are recordings. Each is a recipe for one note — which shapes of
+  wave and in what mix, how fast it arrives, how long it rings, where the
+  filter sits and how far it closes. Rock guitar runs a saw through a
+  waveshaper curve, which is what a pedal does; the tin whistle is a sine with
+  vibrato and a little band-passed breath behind it. So they cost nothing in
+  file size.
+- **Drums** are a kit played by row like a drum machine: Kick and Kick 2 at the
+  bottom, then toms, clap, rim, snare, hats, ride and crash going up. Rows
+  above the kit are dark and refuse notes.
+- **Twenty-five rows** instead of fifteen, and a choice of five notes (nothing
+  sounds wrong), major, minor or every note.
+- **Up to eight pages** of 32 steps, so a song runs a while instead of
+  repeating every two bars. ◀ and ▶ move between them.
+- Notes are booked on the sound card's own clock a quarter-second ahead rather
+  than played when a timer fires, so the music stays in time when the game is
+  busy. Measured at 16.0 steps a second against a nominal 16.
+- The other tracks show through faintly behind the one you are editing; each
+  track has a volume and a mute.
+- Songs written before this had one grid and one wave. They open as a one-track
+  song at the same pitches with the nearest instrument, so they sound as they
+  did.
+
+### Added — Voxels
+- The Models tab is now **▣ Voxels**: a box of little cubes you build in
+  directly, rather than a stack of flat pictures. Drag turns it; **click a
+  face** and a cube sticks to it; **shift-click** or right-click takes one off;
+  scroll zooms; Front, Side and Top snap square on.
+- **Textured blocks.** Wrap any sprite round the cubes and a brick sprite makes
+  brick blocks, with the picture correct on every face. This works because the
+  projection is orthographic, which keeps each face an exact parallelogram, so
+  a sprite maps onto one with a plain affine transform.
+- **Picking is exact.** The visible faces are drawn again into a hidden canvas,
+  one flat colour each, and the pixel under the cursor says which face you
+  meant. No ray maths, no guessing.
+- Only faces with nothing in front of them are drawn — a 240-cube house is 488
+  faces, not 1440 — sorted back to front and shaded by which way they point.
+- **⬆ Build from a sprite** stands a drawing up and makes it however many cubes
+  deep you say.
+- **Turning, one axis at a time:** `rotatex`, `rotatey`, `rotatez`, and
+  `rotatexby` / `rotateyby` / `rotatezby`, `spinx` / `spiny` / `spinz`,
+  `anglex()` / `angley()`, and `stopspin()` halts all three. `rotate()` and
+  `spin()` still mean the flat one.
+- **Nothing three-dimensional is pixelated any more.** The 3D platformer draws
+  each wall column with one stretched image instead of a fillRect per texture
+  row — smoother, and faster — and the stage switches its own scaling between
+  smooth and sharp depending on what is on it, so sprite games keep their hard
+  edges.
+- Models built as layer stacks are converted on load: each picture becomes a
+  slice of cubes at that height.
+
+### Added — ten looks, and one of your own
+- Every theme now comes in **light and dark**. Light Retro is a paper terminal
+  with dark ink on warm white; dark Modern is the plain one at night. All ten
+  were measured for contrast and for being the shade they claim.
+- **🎨 Make one** is a theme maker: every colour is a picker — background,
+  panels, buttons, writing, quiet writing, the two highlights, the code box and
+  the stage surround — plus corner roundness, edge thickness and lettering.
+  **Start from** reads an existing theme so you begin from something you like.
+- Buttons can wear a **PNG**: stretched, or 9-sliced so the corners stay sharp
+  at any width.
+- Writing on an accent-coloured button picks black or white by luminance, so a
+  bright accent never leaves an unreadable button.
+
+### Added — what players see before the game
+- An **opening card** that fades in and out, with your own words and how many
+  seconds. Leave the words empty and it uses the game's name.
+- A **loading screen** with your own text, an optional bar, and a picture if
+  you want one. The bar tracks the real work — every sound and picture the game
+  embeds.
+- Both have a **See it** button, so you can watch them without exporting.
+
+### Added — title screens
+- **`evenmorefancytitle("The Game")`** turns a wireframe cube in 3D: eight
+  points rotated on all three axes with a little perspective, twelve edges each
+  a different colour cycling as it goes, then a white flash and the title drops
+  onto it. No fill, just lines.
+- **Every title screen takes a music track** as its last number, and
+  `titlemusic(2)` sets one for whichever title comes next — which is how
+  `customtitle` gets one without its list of steps becoming ambiguous.
+- **`customtitle` is a little script now.** A step can be written out with its
+  own timing and extras:
+
+  ```
+  customtitle("My Game", "colour #101040 20", "fade 30", "sfx 2",
+              "glide 1 from 0 200 to 320 60 50", "flash", "shake 20", "drop")
+  ```
+
+  Fourteen steps: `fade`, `drop`, `spin`, `zoom`, `flash`, `hold`, `colour`,
+  `flyby`, `glide`, `shake`, `say`, and `sfx` / `sound` / `music`, which take no
+  time and fire once as the play head passes. Plain numbers still work, and a
+  step it does not know is named in the error rather than skipped.
+
+### Added — gliding
+- `glide(1, 260, 180, 30)` slides a sprite there over thirty frames, easing in
+  and out so it starts and stops gently. `glideby(1, dx, dy, frames)`,
+  `stopglide(1)`, and `gliding(1)` says whether it is still on its way.
+
+### Added — Pre-made
+- Packs can hold a character **two sprites tall** — two halves that stack, so
+  it works at the ordinary sprite size. There is a ranger in there to start
+  with.
+
 ## 0.13.0 — Phones, themes, models, sound effects and three more languages
 
 The biggest release so far. Everything below is new since 0.12.1.
