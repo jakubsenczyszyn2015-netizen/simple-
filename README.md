@@ -210,6 +210,9 @@ none of them needing the others:
 ```
 textbox("* Hello.")        a box along the bottom that types itself out
 talk(3, "* Hi.")           ...with sprite 3's face in it
+textbox("* One.", "* Two.", "* Three.")   Z moves on to the next instead
+                           of closing; ▼ while there is more, ■ on the last
+next()                     move on from code.  morepages()  pagenow()
 askmenu("Now what?", "Fight", "Mercy")   pick with the arrows and Z
 if chose("Fight")          true on the frame that one was picked
 stats(1, 20, 4, 1)         20 hit points, 4 attack, 1 defence

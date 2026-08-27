@@ -2221,6 +2221,9 @@ function evalExpr(src, line){
                String(R.choiceHit).toLowerCase() === want.toLowerCase(); }
       case "picked": return R.lastChoice === null ? "" : R.lastChoice;
       case "talking": case "boxopen": case "box_open": return !!R.box;
+      case "morepages": case "more_pages":
+        return !!(R.box && R.box.page < R.box.pages.length - 1);
+      case "pagenow": case "page_now": return R.box ? R.box.page + 1 : 0;
       case "hp":     return statsOf(args[0]).hp;
       case "maxhp":  case "max_hp": return statsOf(args[0]).max;
       case "att":    case "power":  return statsOf(args[0]).att;
@@ -3240,13 +3243,40 @@ function buildTouchpad(){
    ========================================================= */
 
 /* ---------- a box that talks ---------- */
+/* A textbox can be several boxfuls in a row. Z runs to the end of the words,
+   Z again moves on to the next lot, and Z on the last one closes it. */
 function openTextbox(text, face, choices){
+  const pages = (text instanceof Array ? text : [text]).map(t => String(t === undefined ? "" : t));
+  const who = face ? Math.round(spriteArg(face)) : 0;
+  /* Written inside "every frame", the same textbox would start itself again
+     sixty times a second and never finish a word. Asking for the one that is
+     already open does nothing. */
+  const b0 = R.box;
+  if (b0 && !choices && !b0.choices && b0.face === who &&
+      b0.pages.length === pages.length && b0.pages.join("\u0000") === pages.join("\u0000")) return;
   R.box = {
-    lines: String(text).split("\n"),
-    face: face ? Math.round(spriteArg(face)) : 0,
-    shown: 0, tick: 0, done: false, page: 0,
+    pages,
+    page: 0,
+    lines: pages[0].split("\n"),
+    face: who,
+    shown: 0, tick: 0, done: false,
     choices: choices || null, pick: 0, chosen: null
   };
+}
+/* move on: to the next boxful if there is one, or shut the box */
+function nextTextbox(){
+  const b = R.box;
+  if (!b) return false;
+  const full = b.lines.join("\n");
+  if (b.shown < full.length){ b.shown = full.length; return true; }   // finish the words first
+  if (b.page < b.pages.length - 1){
+    b.page++;
+    b.lines = b.pages[b.page].split("\n");
+    b.shown = 0; b.tick = 0; b.done = false;
+    return true;
+  }
+  R.box = null;
+  return false;
 }
 function boxText(){ return R.box ? R.box.lines.join("\n") : ""; }
 function stepTextbox(){
@@ -3277,7 +3307,7 @@ function stepTextbox(){
     }
     return;
   }
-  if (R.keyHits.z || R.keyHits.enter || R.keyHits.space) R.box = null;
+  if (R.keyHits.z || R.keyHits.enter || R.keyHits.space) nextTextbox();
 }
 function drawTextbox(){
   const b = R.box; if (!b) return;
@@ -3316,8 +3346,14 @@ function drawTextbox(){
       sctx.fillText((i === b.pick ? "> " : "  ") + b.choices[i], x, cy);
     }
   } else if (b.done){
+    /* a triangle means "there is more"; a square means "that was the lot" */
+    const more = b.page < b.pages.length - 1;
     sctx.fillStyle = (R.frame % 40 < 22) ? "#ffd166" : "#000";
-    sctx.fillText("▼", VW - 20, top + boxH - 8);
+    sctx.fillText(more ? "\u25bc" : "\u25a0", VW - 20, top + boxH - 8);
+    if (b.pages.length > 1){
+      sctx.fillStyle = "#8b95ab";
+      sctx.fillText((b.page + 1) + "/" + b.pages.length, VW - 46, top + boxH - 8);
+    }
   }
 }
 
@@ -4402,6 +4438,7 @@ const QUESTIONS = {
   seconds:'print(seconds(), 6, 6)',     frame:"if frame > 60",
   chose:'if chose("Fight")',            picked:'print(picked(), 6, 6)',
   talking:"if talking()",               hp:"if hp(1) < 3",
+  morepages:"if morepages()",           pagenow:"if pagenow() == 2",
   maxhp:"if hp(1) == maxhp(1)",         dead:"if dead(2)",
   alive:"if alive(2)",                  have:'if have("Potion")',
   howmany:'if howmany("Potion") > 1',   bagsize:"if bagsize() > 0",
@@ -4552,9 +4589,14 @@ function runCall(st){
 
     /* ---- role-playing games ---- */
     case "textbox": case "text_box": {
-      const [t, face] = A(); openTextbox(t === undefined ? "" : t, face); break; }
+      const all = A();
+      openTextbox(all.length ? all : [""], 0); break; }
     case "talk": {
-      const [who, t] = A(); openTextbox(t === undefined ? "" : t, who); break; }
+      const all = A();
+      const who = all[0];
+      const said = all.slice(1);
+      openTextbox(said.length ? said : [""], who); break; }
+    case "next": case "nextbox": case "next_box": { nextTextbox(); break; }
     case "menu": {
       const opts = A().map(v => String(v));
       if (opts.length < 2) throw new Err("menu() needs at least two things to pick from", st.n);
@@ -10792,6 +10834,26 @@ the others, so you can take one and leave the rest.
 <code>textbox("* Hello.")</code>      a black box along the bottom that types
                           itself out. Z skips to the end, Z again closes it.
 <code>talk(3, "* Hi.")</code>         the same, with sprite 3's face in the box
+
+<b>One after another.</b> Give it more than one lot of words and Z moves on
+to the next instead of closing:
+
+<code>textbox("* The first one.",</code>
+<code>        "* Then the second.",</code>
+<code>        "* And the last.")</code>
+<code>talk(3, "* Hello there.", "* Nice to meet you.")</code>
+
+  The arrow in the corner is a <b>▼</b> while there is more to come and a
+  <b>■</b> on the last one, with 1/3 beside it so you know where you are.
+
+<code>next()</code>                   move on from code instead of waiting
+                          for Z — handy on a button
+<code>if morepages()</code>           is there another lot after this one?
+<code>pagenow()</code>                which one is showing, counting from 1
+
+  Asking for a textbox that is already on screen does nothing, so writing
+  one inside <code>every frame</code> is safe — it will not restart itself
+  sixty times a second.
 <code>askmenu("Now what?", "Fight", "Mercy")</code>
                           types the question, then lets you pick with the
                           arrow keys and Z
