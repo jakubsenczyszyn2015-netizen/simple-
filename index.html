@@ -280,6 +280,17 @@
   #vox-spin:active{cursor:grabbing}
   #frame-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
   #frame-strip .chip{width:54px}
+  /* ---- music tracks ---- */
+  .trk{
+    display:flex; align-items:center; gap:6px; padding:4px 6px; cursor:pointer;
+    background:var(--panel2); border:var(--bw) solid var(--line); border-radius:var(--r);
+    font-size:12px;
+  }
+  .trk.on{border-color:var(--accent)}
+  .trk i{width:10px;height:10px;border-radius:2px;flex:none}
+  .trk b{flex:1;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trk em{font-style:normal;color:var(--dim);font-size:11px}
+  .trk button{padding:1px 4px;font-size:11px;border:0;background:transparent}
   #palette{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
   .sw{height:26px;aspect-ratio:1;border-radius:4px;border:2px solid transparent;cursor:pointer}
   .sw.on{border-color:var(--fg); box-shadow:var(--glow)}
@@ -626,7 +637,7 @@
 
   <!-- ================= MUSIC ================= -->
   <section id="v-music" class="view">
-    <div class="pane col" style="width:210px;flex:none">
+    <div class="pane col" style="width:232px;flex:none">
       <h3>Songs</h3>
       <div class="row" style="margin-bottom:8px">
         <button onclick="addSong()">+ New</button>
@@ -634,6 +645,23 @@
         <button onclick="clearSong()">Clear</button>
       </div>
       <div id="song-list" class="list"></div>
+
+      <h3 style="margin-top:14px">Tracks in this song</h3>
+      <div id="track-list" class="list"></div>
+      <div class="row" style="margin-top:6px;gap:4px">
+        <button onclick="addTrack('piano')">+ Track</button>
+        <button onclick="delTrack()">Delete</button>
+      </div>
+      <label style="display:block;margin-top:8px;font-size:12px;color:var(--dim)">Instrument
+        <select id="track-inst" onchange="setTrackInst(this.value)"
+                style="width:100%;background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+        </select>
+      </label>
+      <label style="display:block;margin-top:6px;font-size:12px;color:var(--dim)">How loud
+        <input id="track-vol" type="range" min="0" max="100" step="1" value="70"
+               oninput="setTrackVol(this.value)" style="width:100%">
+      </label>
+
       <h3 style="margin-top:14px">From a file</h3>
       <button onclick="document.getElementById('musicfile').click()">🎵 Import mp3 / wav</button>
       <div class="hint" style="margin-top:6px">
@@ -645,21 +673,31 @@
       <div class="row" style="margin-bottom:10px">
         <button id="song-play" onclick="toggleSong()">▶ Play</button>
         <button onclick="stopSong()">■ Stop</button>
-        <label style="flex:1;min-width:170px">Speed <span id="tempo-label"></span>
-          <input id="tempo" type="range" min="60" max="240" step="5" value="120"
+        <label style="flex:1;min-width:150px">Speed <span id="tempo-label"></span>
+          <input id="tempo" type="range" min="50" max="260" step="5" value="120"
                  oninput="setTempo(this.value)" style="width:100%">
         </label>
-        <label style="min-width:130px">Sound
-          <select id="wave" onchange="setWave(this.value)"
+        <label style="min-width:150px;font-size:12px;color:var(--dim)">Notes it can use
+          <select id="song-scale" onchange="setScale(this.value)"
                   style="width:100%;background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
-            <option value="square">beepy</option>
-            <option value="triangle">soft</option>
-            <option value="sawtooth">buzzy</option>
-            <option value="sine">smooth</option>
           </select>
         </label>
+        <label style="min-width:104px;font-size:12px;color:var(--dim)">How long
+          <select id="song-pages" onchange="setSongPages(this.value)"
+                  style="width:100%;background:var(--void);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit">
+            <option value="1">1 page</option>
+            <option value="2">2 pages</option>
+            <option value="3">3 pages</option>
+            <option value="4">4 pages</option>
+            <option value="6">6 pages</option>
+            <option value="8">8 pages</option>
+          </select>
+        </label>
+        <button onclick="songPage(-1)" title="the page before">◀</button>
+        <span id="page-label" class="hint" style="min-width:74px;text-align:center">page 1 of 1</span>
+        <button onclick="songPage(1)" title="the next page">▶</button>
       </div>
-      <canvas id="song" width="768" height="384" style="width:100%;max-width:768px"></canvas>
+      <canvas id="song" width="1024" height="440" style="width:100%;max-width:1024px"></canvas>
       <div id="song-note" class="hint" style="margin-top:8px"></div>
     </div>
   </section>
@@ -1079,7 +1117,7 @@ function tab(name){
   }
   if (name === "paint") { PAINT_MODE = "sprite"; drawPaint(); drawSpriteList(); }
   if (name === "rooms") { drawRoom(); drawTileList(); drawRoomList(); }
-  if (name === "music") { drawSongList(); drawSong(); }
+  if (name === "music") { buildMusicMenus(); drawSongList(); drawSong(); }
   if (name === "models"){ PAINT_MODE = "model"; drawVoxel(); drawModelList(); buildVoxTools(); }
   if (name === "sfx")   { drawSfxList(); drawSfxPanel(); }
   if (name === "export"){ drawExportPanel(); drawExportSettings(); }
@@ -8171,47 +8209,292 @@ function showAICode(){
    like it belongs. A song can also be an imported file instead,
    in which case it plays as it is.
    ========================================================= */
-const SONG_STEPS = 32, SONG_ROWS = 15;
-/* C major pentatonic over three octaves — no wrong notes */
-const SCALE = [0, 2, 4, 7, 9];
-function rowFreq(row){
+const SONG_STEPS = 32;              // steps on one page
+let   SONG_ROWS  = 25;              // how many notes fit up the side
+
+/* Which notes a row can be. Pentatonic has no wrong notes, which is why it
+   is the default; the others are there when you know what you want. */
+const SCALES = {
+  penta:     { label:"five notes (nothing sounds wrong)", steps:[0, 2, 4, 7, 9],
+               names:["C","D","E","G","A"] },
+  major:     { label:"major",     steps:[0, 2, 4, 5, 7, 9, 11],
+               names:["C","D","E","F","G","A","B"] },
+  minor:     { label:"minor",     steps:[0, 2, 3, 5, 7, 8, 10],
+               names:["C","D","Eb","F","G","Ab","Bb"] },
+  chromatic: { label:"every note", steps:[0,1,2,3,4,5,6,7,8,9,10,11],
+               names:["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"] }
+};
+function scaleOf(sg){ return SCALES[(sg && sg.scale) || "penta"] || SCALES.penta; }
+function rowFreq(row, sg){
+  const sc = scaleOf(sg);
   const n = SONG_ROWS - 1 - row;                    // low notes at the bottom
-  const semis = SCALE[n % SCALE.length] + 12 * Math.floor(n / SCALE.length);
+  const semis = sc.steps[n % sc.steps.length] + 12 * Math.floor(n / sc.steps.length);
   return 220 * Math.pow(2, semis / 12);
 }
-function rowName(row){
-  const names = ["C", "D", "E", "G", "A"];
+function rowName(row, sg){
+  const sc = scaleOf(sg);
   const n = SONG_ROWS - 1 - row;
-  return names[n % SCALE.length] + (3 + Math.floor(n / SCALE.length));
+  return sc.names[n % sc.steps.length] + (3 + Math.floor(n / sc.steps.length));
 }
 
-function blankSong(){
-  return { grid: new Array(SONG_STEPS * SONG_ROWS).fill(0),
-           tempo: 120, wave: "square", audio: null, name: "" };
+/* =========================================================
+   INSTRUMENTS
+   Each one is a recipe for a single note: which shapes of wave,
+   how fast it arrives, how long it rings, and how bright it is.
+   That is enough to tell a piano from a bass from a tin whistle
+   without a single sample being loaded.
+   ========================================================= */
+const INSTRUMENTS = {
+  piano:   { label:"Piano",            kind:"tone", waves:[["triangle",1],["sine",.5]],
+             attack:.004, decay:1.5, cut:2600, gain:.30 },
+  bass:    { label:"Bass guitar",      kind:"tone", waves:[["sine",1],["triangle",.35]],
+             attack:.008, decay:1.1, cut:700,  gain:.42, octave:-2 },
+  rock:    { label:"Rock guitar",      kind:"tone", waves:[["sawtooth",1],["square",.4]],
+             attack:.004, decay:1.6, cut:2200, gain:.20, drive:38 },
+  electric:{ label:"Electric guitar",  kind:"tone", waves:[["sawtooth",1]],
+             attack:.006, decay:1.4, cut:3000, gain:.22, drive:12 },
+  acoustic:{ label:"Acoustic guitar",  kind:"tone", waves:[["triangle",1],["sawtooth",.30]],
+             attack:.003, decay:1.0, cut:3200, gain:.26 },
+  whistle: { label:"Tin whistle",      kind:"tone", waves:[["sine",1],["triangle",.18]],
+             attack:.05,  decay:2.4, cut:4200, gain:.24, vibrato:5.5, breath:.05, octave:1 },
+  beep:    { label:"Beepy (the old one)", kind:"tone", waves:[["square",1]],
+             attack:.004, decay:1.2, cut:5000, gain:.18 },
+  soft:    { label:"Soft",             kind:"tone", waves:[["triangle",1]],
+             attack:.01,  decay:1.4, cut:3000, gain:.24 },
+  drums:   { label:"Drums",            kind:"drums", gain:.5 }
+};
+const INST_ORDER = ["piano","bass","rock","electric","acoustic","whistle","beep","soft","drums"];
+
+/* A drum kit is played by row, not by pitch: the top rows are cymbals and
+   the bottom rows are the kick, the way a drum machine lays them out. */
+const DRUM_KIT = [
+  { n:"Crash",  type:"noise", freq:6000, dur:.55, q:.6 },
+  { n:"Ride",   type:"noise", freq:8000, dur:.30, q:1.2 },
+  { n:"Hat *",  type:"noise", freq:9000, dur:.22, q:2.5 },
+  { n:"Hat",    type:"noise", freq:9000, dur:.05, q:2.5 },
+  { n:"Snare",  type:"snare", freq:1600, dur:.19 },
+  { n:"Rim",    type:"noise", freq:2400, dur:.05, q:5 },
+  { n:"Clap",   type:"noise", freq:1400, dur:.14, q:1.4 },
+  { n:"Tom hi", type:"tom",   freq:320,  dur:.26 },
+  { n:"Tom mid",type:"tom",   freq:220,  dur:.30 },
+  { n:"Tom lo", type:"tom",   freq:150,  dur:.34 },
+  { n:"Kick",   type:"kick",  freq:110,  dur:.34 },
+  { n:"Kick 2", type:"kick",  freq:80,   dur:.42 }
+];
+/* The kit is laid out from the bottom up, so the kick is where a foot is.
+   There are fewer drums than rows, and the rows above the kit are nothing
+   at all rather than twelve more crashes. */
+function drumForRow(row){
+  const fromBottom = SONG_ROWS - 1 - row;
+  if (fromBottom >= DRUM_KIT.length) return null;
+  return DRUM_KIT[DRUM_KIT.length - 1 - fromBottom];
 }
-let curSong = 0;
+function drumName(row){ const d = drumForRow(row); return d ? d.n : ""; }
+
+/* a curve that squashes the loud part of a wave, which is what a guitar
+   pedal does and what makes it sound like a rock guitar rather than a saw */
+const driveCurves = {};
+function driveCurve(amount){
+  const key = String(amount);
+  if (driveCurves[key]) return driveCurves[key];
+  const n = 1024, curve = new Float32Array(n), k = amount;
+  for (let i = 0; i < n; i++){
+    const x = (i * 2) / n - 1;
+    curve[i] = (1 + k) * x / (1 + k * Math.abs(x));
+  }
+  driveCurves[key] = curve;
+  return curve;
+}
+
+/* Play one note of one instrument. `when` is a time on the audio clock, so
+   a whole step can be scheduled ahead and stay in time. */
+function playNote(inst, freq, when, dur, vol, row){
+  const spec = INSTRUMENTS[inst] || INSTRUMENTS.piano;
+  const ac = audioCtx();
+  const out = ac.createGain();
+  out.gain.value = Math.max(0, Math.min(1, vol === undefined ? 1 : vol)) * (spec.gain || .25);
+  out.connect(ac.destination);
+
+  if (spec.kind === "drums"){
+    const kit = drumForRow(row === undefined ? 0 : row);
+    if (kit) playDrum(ac, out, kit, when);
+    return;
+  }
+
+  const f = freq * Math.pow(2, (spec.octave || 0));
+  const filt = ac.createBiquadFilter();
+  filt.type = "lowpass";
+  filt.frequency.setValueAtTime(Math.min(12000, (spec.cut || 3000)), when);
+  filt.frequency.exponentialRampToValueAtTime(Math.max(180, (spec.cut || 3000) * .35), when + dur);
+
+  let tail = filt;
+  if (spec.drive){
+    const sh = ac.createWaveShaper();
+    sh.curve = driveCurve(spec.drive);
+    sh.oversample = "2x";
+    filt.connect(sh); tail = sh;
+  }
+  const env = ac.createGain();
+  const peak = 1;
+  env.gain.setValueAtTime(.0001, when);
+  env.gain.exponentialRampToValueAtTime(peak, when + (spec.attack || .005));
+  env.gain.exponentialRampToValueAtTime(.0001, when + dur * (spec.decay || 1.2));
+  tail.connect(env); env.connect(out);
+
+  const stopAt = when + dur * (spec.decay || 1.2) + .04;
+  for (const [wave, level] of spec.waves){
+    const o = ac.createOscillator();
+    o.type = wave;
+    o.frequency.setValueAtTime(f, when);
+    if (spec.vibrato){
+      const lfo = ac.createOscillator(), amp = ac.createGain();
+      lfo.frequency.value = spec.vibrato;
+      amp.gain.value = f * .012;
+      lfo.connect(amp); amp.connect(o.frequency);
+      lfo.start(when); lfo.stop(stopAt);
+    }
+    const g = ac.createGain(); g.gain.value = level;
+    o.connect(g); g.connect(filt);
+    o.start(when); o.stop(stopAt);
+  }
+  if (spec.breath){                       // the air in a whistle
+    const nz = noiseSource(ac);
+    const bp = ac.createBiquadFilter();
+    bp.type = "bandpass"; bp.frequency.value = f * 2; bp.Q.value = 1.5;
+    const bg = ac.createGain(); bg.gain.value = spec.breath;
+    nz.connect(bp); bp.connect(bg); bg.connect(filt);
+    nz.start(when); nz.stop(stopAt);
+  }
+}
+function playDrum(ac, out, kit, when){
+  const dur = kit.dur;
+  const env = ac.createGain();
+  env.gain.setValueAtTime(1, when);
+  env.gain.exponentialRampToValueAtTime(.0001, when + dur);
+  env.connect(out);
+  if (kit.type === "kick" || kit.type === "tom"){
+    const o = ac.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(kit.freq * (kit.type === "kick" ? 4 : 2), when);
+    o.frequency.exponentialRampToValueAtTime(kit.freq * .5, when + dur * .8);
+    o.connect(env);
+    o.start(when); o.stop(when + dur + .02);
+    return;
+  }
+  const nz = noiseSource(ac);
+  const f = ac.createBiquadFilter();
+  f.type = kit.type === "snare" ? "highpass" : "bandpass";
+  f.frequency.value = kit.freq;
+  if (kit.q) f.Q.value = kit.q;
+  nz.connect(f); f.connect(env);
+  nz.start(when); nz.stop(when + dur + .02);
+  if (kit.type === "snare"){          // a snare is noise with a body under it
+    const o = ac.createOscillator();
+    o.type = "triangle";
+    o.frequency.setValueAtTime(190, when);
+    o.frequency.exponentialRampToValueAtTime(120, when + dur);
+    const g = ac.createGain(); g.gain.value = .5;
+    o.connect(g); g.connect(env);
+    o.start(when); o.stop(when + dur + .02);
+  }
+}
+
+/* =========================================================
+   SONGS
+   A song is a stack of tracks, each with its own instrument, and
+   as many pages of 32 steps as you like — so it can run as long
+   as you want rather than stopping after two bars.
+   ========================================================= */
+function blankTrack(inst){
+  return { inst: inst || "piano", vol: 70, mute: false,
+           grid: new Array(SONG_STEPS * SONG_ROWS).fill(0) };
+}
+function blankSong(){
+  return { name:"", tempo:120, scale:"penta", pages:1, audio:null,
+           tracks:[blankTrack("piano")] };
+}
+let curSong = 0, curTrack = 0, curPage = 0;
 
 function songs(){
   if (!project.songs || !project.songs.length) project.songs = [blankSong()];
+  for (const sg of project.songs) fixSong(sg);
   return project.songs;
+}
+/* A song written before tracks existed had one grid and one wave. Turn it
+   into a one-track song so old projects open exactly as they sounded. */
+function fixSong(sg){
+  if (!sg) return sg;
+  if (!sg.tracks){
+    const inst = sg.wave === "square" ? "beep"
+               : sg.wave === "triangle" ? "soft"
+               : sg.wave === "sawtooth" ? "electric" : "piano";
+    const t = blankTrack(inst);
+    if (sg.grid && sg.grid.length){
+      /* the old grid was 15 rows; keep the notes where they sound the same */
+      const oldRows = 15;
+      for (let r = 0; r < oldRows; r++)
+        for (let c = 0; c < SONG_STEPS; c++)
+          if (sg.grid[r * SONG_STEPS + c]){
+            const fromBottom = oldRows - 1 - r;
+            const nr = SONG_ROWS - 1 - fromBottom;
+            if (nr >= 0) t.grid[nr * SONG_STEPS + c] = 1;
+          }
+    }
+    sg.tracks = [t];
+    delete sg.grid;
+  }
+  if (!sg.scale) sg.scale = "penta";
+  if (!sg.pages) sg.pages = 1;
+  for (const t of sg.tracks){
+    if (!t.grid) t.grid = new Array(SONG_STEPS * SONG_ROWS * sg.pages).fill(0);
+    const want = SONG_STEPS * SONG_ROWS * sg.pages;
+    while (t.grid.length < want) t.grid.push(0);
+    if (t.vol === undefined) t.vol = 70;
+  }
+  return sg;
 }
 function song(n){
   const list = songs();
   while (list.length < n) list.push(blankSong());
-  return list[n - 1];
+  return fixSong(list[n - 1]);
+}
+function track(sg, i){
+  if (!sg.tracks.length) sg.tracks.push(blankTrack("piano"));
+  return sg.tracks[Math.max(0, Math.min(sg.tracks.length - 1, i))];
+}
+function totalSteps(sg){ return SONG_STEPS * (sg.pages || 1); }
+/* a note lives at (row, absolute step) */
+function noteAt(t, sg, r, absStep){ return t.grid[r * totalSteps(sg) + absStep]; }
+function setNoteAt(t, sg, r, absStep, v){ t.grid[r * totalSteps(sg) + absStep] = v ? 1 : 0; }
+/* changing the length has to keep the notes where they were */
+function setPages(sg, pages){
+  pages = Math.max(1, Math.min(8, Math.round(pages) || 1));
+  if (pages === sg.pages) return;
+  const oldTotal = totalSteps(sg), newTotal = SONG_STEPS * pages;
+  for (const t of sg.tracks){
+    const g = new Array(newTotal * SONG_ROWS).fill(0);
+    for (let r = 0; r < SONG_ROWS; r++)
+      for (let c = 0; c < Math.min(oldTotal, newTotal); c++)
+        g[r * newTotal + c] = t.grid[r * oldTotal + c] || 0;
+    t.grid = g;
+  }
+  sg.pages = pages;
+  curPage = Math.min(curPage, pages - 1);
 }
 
 /* ---------- the grid ---------- */
 const songCv = $("song"), songCtx = songCv.getContext("2d");
-const CELL_W = songCv.width / SONG_STEPS, CELL_H = songCv.height / SONG_ROWS;
+function cellW(){ return songCv.width / SONG_STEPS; }
+function cellH(){ return songCv.height / SONG_ROWS; }
 
 function drawSong(){
   const sg = song(curSong + 1);
+  const CW = cellW(), CH = cellH();
   songCtx.fillStyle = themeVar("--void", "#0c0e13");
   songCtx.fillRect(0, 0, songCv.width, songCv.height);
 
   if (sg.audio){
-    songCtx.fillStyle = "#8b95ab";
+    songCtx.fillStyle = themeVar("--dim", "#8b95ab");
     songCtx.font = "16px ui-monospace,monospace";
     songCtx.textAlign = "center";
     songCtx.fillText("song " + (curSong + 1) + " is an imported file", songCv.width/2, songCv.height/2 - 10);
@@ -8220,25 +8503,68 @@ function drawSong(){
     songCtx.fillText("press Clear to write your own notes instead", songCv.width/2, songCv.height/2 + 44);
     songCtx.textAlign = "left";
     $("song-note").textContent = "";
+    drawTrackList();
     return;
   }
 
+  const t = track(sg, curTrack);
+  const base = curPage * SONG_STEPS;
+  const drums = t.inst === "drums";
+
   for (let r = 0; r < SONG_ROWS; r++){
+    const dead = drums && !drumForRow(r);        // no drum lives on this row
     for (let c = 0; c < SONG_STEPS; c++){
-      const on = sg.grid[r * SONG_STEPS + c];
-      const beat = c % 4 === 0;
-      songCtx.fillStyle = on ? PALETTE[8 + (r % 6)] : (beat ? "#191d26" : "#12151c");
-      songCtx.fillRect(c*CELL_W + 1, r*CELL_H + 1, CELL_W - 2, CELL_H - 2);
+      const beat = c % 4 === 0, bar = c % 16 === 0;
+      songCtx.fillStyle = dead ? "rgba(0,0,0,.35)"
+        : bar ? "rgba(255,255,255,.09)" : (beat ? "rgba(255,255,255,.045)" : "rgba(255,255,255,.015)");
+      songCtx.fillRect(c*CW + 1, r*CH + 1, CW - 2, CH - 2);
     }
   }
-  if (musicState.playing && musicState.song === curSong + 1){
-    songCtx.fillStyle = "rgba(255,255,255,.18)";
-    songCtx.fillRect(musicState.step * CELL_W, 0, CELL_W, songCv.height);
+  /* the other tracks show through faintly, so parts can be lined up */
+  songCtx.globalAlpha = .30;
+  sg.tracks.forEach((other, i) => {
+    if (i === curTrack) return;
+    songCtx.fillStyle = trackColour(i);
+    for (let r = 0; r < SONG_ROWS; r++)
+      for (let c = 0; c < SONG_STEPS; c++)
+        if (noteAt(other, sg, r, base + c))
+          songCtx.fillRect(c*CW + 3, r*CH + 3, CW - 6, CH - 6);
+  });
+  songCtx.globalAlpha = 1;
+
+  songCtx.fillStyle = trackColour(curTrack);
+  for (let r = 0; r < SONG_ROWS; r++)
+    for (let c = 0; c < SONG_STEPS; c++)
+      if (noteAt(t, sg, r, base + c))
+        songCtx.fillRect(c*CW + 1, r*CH + 1, CW - 2, CH - 2);
+
+  /* drums get their names written down the side, since row means kit piece */
+  if (drums && CH >= 11){
+    songCtx.font = Math.min(10, CH - 3) + "px ui-monospace,monospace";
+    songCtx.fillStyle = themeVar("--dim", "#8b95ab");
+    for (let r = 0; r < SONG_ROWS; r++){
+      const n = drumName(r);
+      if (n) songCtx.fillText(n, 3, r*CH + CH - 3);
+    }
   }
-  $("tempo-label").textContent = sg.tempo + " bpm";
-  $("wave").value = sg.wave;
-  $("tempo").value = sg.tempo;
+
+  if (musicState.playing && musicState.song === curSong + 1){
+    const st = musicState.step;
+    if (st >= base && st < base + SONG_STEPS){
+      songCtx.fillStyle = "rgba(255,255,255,.20)";
+      songCtx.fillRect((st - base) * CW, 0, CW, songCv.height);
+    }
+  }
+  const tl = $("tempo-label"); if (tl) tl.textContent = sg.tempo + " bpm";
+  const tp = $("tempo"); if (tp) tp.value = sg.tempo;
+  const sc = $("song-scale"); if (sc) sc.value = sg.scale;
+  const pg = $("song-pages"); if (pg) pg.value = sg.pages;
+  const pl = $("page-label");
+  if (pl) pl.textContent = "page " + (curPage + 1) + " of " + sg.pages;
+  drawTrackList();
 }
+const TRACK_COLOURS = ["#5ac8fa","#ffd166","#ff6b6b","#7dff6b","#c77dff","#ff9f4a","#4ad9c9","#ff77a8"];
+function trackColour(i){ return TRACK_COLOURS[i % TRACK_COLOURS.length]; }
 
 let painting_song = 0;
 function songCell(e){
@@ -8251,25 +8577,156 @@ songCv.addEventListener("mousedown", e => {
   if (sg.audio) return;
   const { c, r } = songCell(e);
   if (c < 0 || r < 0 || c >= SONG_STEPS || r >= SONG_ROWS) return;
-  painting_song = sg.grid[r*SONG_STEPS + c] ? 2 : 1;      // drag to draw or to rub out
+  const t = track(sg, curTrack);
+  painting_song = noteAt(t, sg, r, curPage * SONG_STEPS + c) ? 2 : 1;
   setNote(c, r, painting_song === 1);
 });
 songCv.addEventListener("mousemove", e => {
+  const sg = song(curSong + 1);
   const { c, r } = songCell(e);
-  if (c >= 0 && r >= 0 && c < SONG_STEPS && r < SONG_ROWS)
-    $("song-note").textContent = "step " + (c + 1) + " · note " + rowName(r);
+  if (c >= 0 && r >= 0 && c < SONG_STEPS && r < SONG_ROWS){
+    const t = track(sg, curTrack);
+    $("song-note").textContent = "step " + (curPage * SONG_STEPS + c + 1) + " · " +
+      (t.inst === "drums" ? drumName(r) : rowName(r, sg));
+  }
   if (!painting_song) return;
   setNote(c, r, painting_song === 1);
 });
 window.addEventListener("mouseup", () => painting_song = 0);
+songCv.addEventListener("touchstart", e => {
+  const sg = song(curSong + 1);
+  if (sg.audio) return;
+  const t0 = e.touches[0]; if (!t0) return;
+  e.preventDefault();
+  const rect = songCv.getBoundingClientRect();
+  const c = Math.floor((t0.clientX - rect.left) / rect.width * SONG_STEPS);
+  const r = Math.floor((t0.clientY - rect.top) / rect.height * SONG_ROWS);
+  const t = track(sg, curTrack);
+  painting_song = noteAt(t, sg, r, curPage * SONG_STEPS + c) ? 2 : 1;
+  setNote(c, r, painting_song === 1);
+}, { passive:false });
+songCv.addEventListener("touchmove", e => {
+  if (!painting_song) return;
+  const t0 = e.touches[0]; if (!t0) return;
+  e.preventDefault();
+  const rect = songCv.getBoundingClientRect();
+  setNote(Math.floor((t0.clientX - rect.left) / rect.width * SONG_STEPS),
+          Math.floor((t0.clientY - rect.top) / rect.height * SONG_ROWS),
+          painting_song === 1);
+}, { passive:false });
+songCv.addEventListener("touchend", () => painting_song = 0);
 
 function setNote(c, r, on){
   if (c < 0 || r < 0 || c >= SONG_STEPS || r >= SONG_ROWS) return;
   const sg = song(curSong + 1);
-  const was = sg.grid[r*SONG_STEPS + c];
-  sg.grid[r*SONG_STEPS + c] = on ? 1 : 0;
-  if (on && !was) blip(rowFreq(r), sg.wave, 0.12);
+  const t = track(sg, curTrack);
+  if (t.inst === "drums" && !drumForRow(r)) return;    // nothing lives up here
+  const abs = curPage * SONG_STEPS + c;
+  const was = noteAt(t, sg, r, abs);
+  setNoteAt(t, sg, r, abs, on);
+  if (on && !was){
+    try { playNote(t.inst, rowFreq(r, sg), audioCtx().currentTime, .16, t.vol / 100, r); } catch(e){}
+  }
   drawSong(); save();
+}
+
+/* ---------- tracks ---------- */
+/* the instrument and scale menus, built from the tables above */
+function buildMusicMenus(){
+  const sel = $("track-inst");
+  if (sel && !sel.childElementCount){
+    for (const k of INST_ORDER){
+      const o = document.createElement("option");
+      o.value = k; o.textContent = INSTRUMENTS[k].label;
+      sel.appendChild(o);
+    }
+  }
+  const sc = $("song-scale");
+  if (sc && !sc.childElementCount){
+    for (const k in SCALES){
+      const o = document.createElement("option");
+      o.value = k; o.textContent = SCALES[k].label;
+      sc.appendChild(o);
+    }
+  }
+}
+function drawTrackList(){
+  const box = $("track-list"); if (!box) return;
+  const sg = song(curSong + 1);
+  box.innerHTML = "";
+  if (sg.audio){
+    box.innerHTML = '<div class="hint">an imported file has no tracks</div>';
+    return;
+  }
+  sg.tracks.forEach((t, i) => {
+    const row = document.createElement("div");
+    row.className = "trk" + (i === curTrack ? " on" : "");
+    const dot = document.createElement("i");
+    dot.style.background = trackColour(i);
+    row.appendChild(dot);
+    const name = document.createElement("b");
+    name.textContent = (INSTRUMENTS[t.inst] || {}).label || t.inst;
+    row.appendChild(name);
+    const count = document.createElement("em");
+    count.textContent = t.grid.filter(Boolean).length;
+    row.appendChild(count);
+    const m = document.createElement("button");
+    m.textContent = t.mute ? "🔇" : "🔊";
+    m.title = t.mute ? "silent — click to hear it" : "click to silence it";
+    m.onclick = ev => { ev.stopPropagation(); t.mute = !t.mute; drawTrackList(); save(); };
+    row.appendChild(m);
+    row.onclick = () => { curTrack = i; drawSong(); };
+    box.appendChild(row);
+  });
+  const sel = $("track-inst");
+  if (sel){
+    sel.value = track(sg, curTrack).inst;
+    sel.disabled = !!sg.audio;
+  }
+  const vol = $("track-vol");
+  if (vol) vol.value = track(sg, curTrack).vol;
+}
+function addTrack(inst){
+  const sg = song(curSong + 1);
+  if (sg.audio){ alert("This song is an imported file. Press Clear first to write your own."); return; }
+  if (sg.tracks.length >= 8){ alert("Eight tracks is the most one song can hold."); return; }
+  const t = blankTrack(inst || "piano");
+  t.grid = new Array(totalSteps(sg) * SONG_ROWS).fill(0);
+  sg.tracks.push(t);
+  curTrack = sg.tracks.length - 1;
+  drawSong(); drawSongList(); save();
+}
+function delTrack(){
+  const sg = song(curSong + 1);
+  if (sg.tracks.length < 2){ alert("A song always keeps one track."); return; }
+  sg.tracks.splice(curTrack, 1);
+  curTrack = Math.min(curTrack, sg.tracks.length - 1);
+  drawSong(); drawSongList(); save();
+}
+function setTrackInst(v){
+  const sg = song(curSong + 1);
+  track(sg, curTrack).inst = INSTRUMENTS[v] ? v : "piano";
+  drawSong(); save();
+}
+function setTrackVol(v){
+  const sg = song(curSong + 1);
+  track(sg, curTrack).vol = Math.max(0, Math.min(100, Math.round(+v)));
+  save();
+}
+function setScale(v){
+  const sg = song(curSong + 1);
+  sg.scale = SCALES[v] ? v : "penta";
+  drawSong(); save();
+}
+function setSongPages(v){
+  const sg = song(curSong + 1);
+  setPages(sg, v);
+  drawSong(); drawSongList(); save();
+}
+function songPage(d){
+  const sg = song(curSong + 1);
+  curPage = Math.max(0, Math.min(sg.pages - 1, curPage + d));
+  drawSong();
 }
 
 /* ---------- the list ---------- */
@@ -8278,25 +8735,28 @@ function drawSongList(){
   box.innerHTML = "";
   songs().forEach((sg, i) => {
     const b = document.createElement("button");
-    const notes = sg.audio ? "file" : sg.grid.filter(Boolean).length + " notes";
+    const notes = sg.audio ? "file"
+      : sg.tracks.reduce((n, t) => n + t.grid.filter(Boolean).length, 0) + " notes, " +
+        sg.tracks.length + (sg.tracks.length === 1 ? " track" : " tracks");
     b.textContent = "Song " + (i + 1) + " — " + notes;
     if (i === curSong) b.className = "on";
-    b.onclick = () => { curSong = i; drawSongList(); drawSong(); };
+    b.onclick = () => { curSong = i; curTrack = 0; curPage = 0; drawSongList(); drawSong(); };
     box.appendChild(b);
   });
 }
-function addSong(){ songs().push(blankSong()); curSong = songs().length - 1; drawSongList(); drawSong(); save(); }
+function addSong(){ songs().push(blankSong()); curSong = songs().length - 1; curTrack = 0; curPage = 0; drawSongList(); drawSong(); save(); }
 function copySong(){
   const sg = song(curSong + 1);
-  songs().push({ grid: sg.grid.slice(), tempo: sg.tempo, wave: sg.wave, audio: sg.audio, name: sg.name });
-  curSong = songs().length - 1; drawSongList(); drawSong(); save();
+  songs().push({ name:sg.name, tempo:sg.tempo, scale:sg.scale, pages:sg.pages, audio:sg.audio,
+                 tracks: sg.tracks.map(t => ({ inst:t.inst, vol:t.vol, mute:t.mute, grid:t.grid.slice() })) });
+  curSong = songs().length - 1; curTrack = 0; curPage = 0; drawSongList(); drawSong(); save();
 }
 function clearSong(){
   songs()[curSong] = blankSong();
+  curTrack = 0; curPage = 0;
   drawSongList(); drawSong(); save();
 }
 function setTempo(v){ song(curSong + 1).tempo = Math.round(+v); drawSong(); save(); }
-function setWave(v){ song(curSong + 1).wave = v; drawSong(); save(); }
 
 /* ---------- playing ---------- */
 const musicState = { playing:false, song:0, step:0, timer:null, el:null, loop:true };
@@ -8359,22 +8819,48 @@ function playSong(n, loop){
     return;
   }
 
-  const stepMs = 60000 / sg.tempo / 4;             // four steps to a beat
-  musicState.timer = setInterval(() => {
-    const st = musicState.step;
-    for (let r = 0; r < SONG_ROWS; r++)
-      if (sg.grid[r*SONG_STEPS + st]) blip(rowFreq(r), sg.wave, stepMs / 1000 * 1.6);
-    musicState.step = st + 1;
-    if (musicState.step >= SONG_STEPS){
-      if (musicState.loop) musicState.step = 0;
-      else { stopSong(); return; }
+  /* Notes are booked on the audio clock a little ahead of time rather than
+     played the moment a timer fires, because a timer in a busy page drifts
+     and music that drifts sounds wrong. The timer only decides what to book
+     next; the sound card keeps the time. */
+  const stepSec = 60 / sg.tempo / 4;               // four steps to a beat
+  const steps = totalSteps(sg);
+  let ac;
+  try { ac = audioCtx(); } catch(e){ return; }
+  musicState.nextTime = ac.currentTime + .06;
+  musicState.book = 0;
+  musicState.stepSec = stepSec;
+
+  const bookAhead = () => {
+    if (!musicState.playing) return;
+    const now = audioCtx().currentTime;
+    while (musicState.nextTime < now + .25){
+      const st = musicState.book % steps;
+      for (const t of sg.tracks){
+        if (t.mute) continue;
+        for (let r = 0; r < SONG_ROWS; r++){
+          if (!noteAt(t, sg, r, st)) continue;
+          playNote(t.inst, rowFreq(r, sg), musicState.nextTime,
+                   stepSec * 1.6, t.vol / 100, r);
+        }
+      }
+      musicState.step = st;
+      musicState.nextTime += stepSec;
+      musicState.book++;
+      if (!musicState.loop && musicState.book >= steps){
+        setTimeout(stopSong, (musicState.nextTime - now) * 1000 + 200);
+        return;
+      }
     }
-    if ($("v-music").classList.contains("on")) drawSong();
-  }, stepMs);
+    if ($("v-music") && $("v-music").classList.contains("on")) drawSong();
+  };
+  bookAhead();
+  musicState.timer = setInterval(bookAhead, 40);
   updatePlayButton();
 }
 function stopSong(){
   if (musicState.timer) clearInterval(musicState.timer);
+  musicState.book = 0; musicState.nextTime = 0;
   if (musicState.el){ musicState.el.pause(); musicState.el = null; }
   musicState.timer = null;
   musicState.playing = false;
@@ -8806,7 +9292,9 @@ function gameNow(name, author){
     name, author: author || "",
     mode: project.mode, lang: project.lang || "js", code: project.code,
     spriteSize: SW, roomMode: project.roomMode || "limited",
-    songs: (project.songs || []).map(sg => ({ ...sg, grid: sg.grid.slice() })),
+    songs: (project.songs || []).map(sg => Object.assign({}, sg, {
+      tracks: (sg.tracks || []).map(t => Object.assign({}, t, { grid: t.grid.slice() }))
+    })),
     sprites: project.sprites, rooms: project.rooms,
     frames: project.frames || null, names: project.names || null,
     exportOpts: Object.assign({}, exSettings()),
@@ -8861,7 +9349,9 @@ function libLoad(g){
               rooms:(g.rooms||[]).map(copyRoom),
               palette: fixed.pal.slice(), spriteSize: SW,
               roomMode: g.roomMode || "limited",
-              songs: (g.songs || []).map(sg => ({ ...sg, grid: (sg.grid || []).slice() })),
+              songs: (g.songs || []).map(sg => fixSong(Object.assign({}, sg, {
+                tracks: (sg.tracks || []).map(t => Object.assign({}, t, { grid: (t.grid || []).slice() }))
+              }))),
               fps: g.fps || 60, zoom: g.zoom || 512 };
   if (g.frames){                 // the extra animation frames, if it has any
     project.frames = {};
@@ -9379,6 +9869,36 @@ The <b>⬆ Export</b> tab has four things in it.
   Xbox and PlayStation need a registered developer account and a devkit
   machine you apply for before either company lets anything run, so nobody
   can hand those out. The desktop kit is what such a port starts from.
+
+<b style="color:var(--accent2)">Music</b>
+The <b>4 · Music</b> tab writes tunes. A song holds up to eight <b>tracks</b>
+playing at once, each with its own instrument, so one song can have a bass
+line under a piano part with drums behind it.
+
+<b>Instruments</b> — Piano, Bass guitar, Rock guitar, Electric guitar,
+Acoustic guitar, Tin whistle, Beepy, Soft, and Drums. None of them are
+recordings: each is a recipe for one note — which shapes of wave, how fast
+it arrives, how long it rings, how bright it is — which is why a guitar
+sounds like a guitar and the whole thing still fits in one file.
+
+<b>Drums</b> work by row rather than by pitch, the way a drum machine does:
+Kick and Kick 2 at the bottom, then toms, clap, rim, snare, hats, ride and
+crash going up. The rows above the kit are dark because nothing lives there.
+
+<b>Notes it can use</b> — five notes (nothing you click sounds wrong), major,
+minor, or every note, with twenty-five rows up the side instead of fifteen.
+
+<b>How long</b> — a song is one to eight pages of 32 steps, so it can run for
+a while instead of repeating every two bars. ◀ and ▶ move between pages.
+
+<code>music(1)</code>              play song 1, over and over
+<code>music(1, 0)</code>           ...just the once
+<code>music(0)</code>              stop the music
+
+  The other tracks show through faintly behind the one you are working on,
+  so parts can be lined up. 🔊 beside a track silences it while you listen
+  to the rest. Everything is booked on the sound card's own clock rather
+  than a page timer, so it stays in time even when the game is busy.
 
 <b style="color:var(--accent2)">Sound effects</b>
 The <b>5 · SFX</b> tab makes short noises out of seven sliders: a pitch,
@@ -10068,6 +10588,7 @@ $("sprite-size").value = SW;
 $("size-note").textContent = SW + " × " + SW + " pixels · room grid " + COLS + " × " + ROWS;
 setFps(project.fps || 60);
 buildLessons(); buildReleases(); buildHelp(); buildTouchpad(); loadTheme();
+buildMusicMenus();
 drawSfxList(); drawSfxPanel(); drawExportPanel(); drawExportSettings();
 drawModelList(); buildVoxTools();
 setMode(project.mode || "normal", true);

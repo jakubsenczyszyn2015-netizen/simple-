@@ -24,7 +24,10 @@ const must = ['function stopSong','function playSong','function drawSongList','f
   'function setLang','function hardStarter','id="lang"','function sourceLine',
   'case "rect"','case "towards"','case "savegame"','case "timer"',
   'function exportSays','function canDownload','function runIntro','function showLoading',
-  'id="export-said"','id="ex-intro-on"','id="ex-load-on"','function exSettings'];
+  'id="export-said"','id="ex-intro-on"','id="ex-load-on"','function exSettings',
+  'function playNote','function playDrum','function blankTrack','function fixSong',
+  'function addTrack','function setTrackInst','function drawTrackList','function setPages',
+  'id="track-list"','id="song-scale"','id="song-pages"','const INSTRUMENTS','const DRUM_KIT'];
 const missing = must.filter(m => !h.includes(m));
 
 // iOS 12.5 runs Safari 12, which cannot parse or run any of these

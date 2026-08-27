@@ -38,9 +38,14 @@ hide(1)
 - **Rooms** — stamp any sprite onto a tile grid with pencil, fill, line, square
   and circle tools. A room is either one screen or **endless**, for open worlds
   you explore with `camera(1)`. Unlimited rooms, shown from code with `room(2)`.
-- **Music** — songs numbered like sprites. Click notes onto a grid (a five-note
-  scale, so nothing sounds wrong), pick a speed and a sound, or import an mp3 or
-  wav. `music(1)` plays one; `title("My Game", 2)` plays one behind the title.
+- **Music** — songs numbered like sprites, each holding up to eight **tracks**
+  playing at once: Piano, Bass guitar, Rock guitar, Electric guitar, Acoustic
+  guitar, Tin whistle, Beepy, Soft and Drums. None of them are recordings —
+  each is a recipe for one note, which is why they all fit in one file. Drums
+  play by row like a drum machine. Pick five notes (nothing sounds wrong),
+  major, minor or every note, over 25 rows, and up to eight pages of 32 steps
+  so a song can run a while. Or import an mp3 or wav. `music(1)` plays one;
+  `title("My Game", 2)` plays one behind the title.
 - **SFX** — short noises built from seven sliders (pitch, slide, length,
   loudness, roughness, wobble, repeats), with the waveform drawn above them so
   you can see what each one does. Ten presets — Jump, Coin, Hit, Laser,
