@@ -14,8 +14,8 @@ const must = ['function stopSong','function playSong','function drawSongList','f
   'id="touchpad"','id="more-menu"','id="frame-strip"','function allMatches',
   'function makeZip','function kitElectron','function kitCapacitor','function exportJson',
   'id="v-export"','function standaloneHtml',
-  'function drawModelAt','function layerCanvas','function addLayer','function drawVoxel',
-  'id="v-models"','id="vox-layers"','case "voxel"','case "thickness"','case "spin"',
+  'function drawModelAt','function drawVoxModel','function visibleFaces','function drawVoxel',
+  'id="v-models"','id="vox-textures"','function pickFace','function paintTexturedFace','case "voxel"','case "thickness"','case "spin"',
   'function installPainter','function modelFromSprite',
   'function openTextbox','function drawTextbox','function stepRpg','function stepFollowers',
   'case "askmenu"','case "stats"','case "attack"','case "soul"','case "npc"','case "follow"',
@@ -33,7 +33,9 @@ const must = ['function stopSong','function playSong','function drawSongList','f
   'rangerTop','rangerLegs',
   'function drawRainbowCube','function parseTitleStep','function drawScriptTitle',
   'case "evenmorefancytitle"','case "titlemusic"','case "glide"','function stepGlides',
-  'const TITLE_VERBS','function playTitleTrack'];
+  'const TITLE_VERBS','function playTitleTrack',
+  'function voxSet','function fixModel','function voxClick','function smoothStage',
+  'case "rotatex"','case "spiny"','const VOX_FACES','function drawVoxFloor'];
 const missing = must.filter(m => !h.includes(m));
 
 // iOS 12.5 runs Safari 12, which cannot parse or run any of these

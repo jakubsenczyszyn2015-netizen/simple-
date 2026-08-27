@@ -29,12 +29,13 @@ hide(1)
   different sprite *numbers* — this keeps a walking player as sprite 1.
 - **Names** — give a sprite a name in the Paint tab and it works anywhere the
   number does: `show("player")` is `show(1)`.
-- **Models** — pixel art with a depth to it. A model is a stack of pictures:
-  layer 1 is the bottom slice, layer 2 sits on top, and drawing them all
-  turned by the same angle makes something you can walk around. Same seven
-  tools as Paint, a live preview you can drag to turn, and **⬆ Build from a
-  sprite** to stack one you already drew. `voxel(1)`, `rotate(1, 45)`,
-  `spin(1, 2)`.
+- **Voxels** — a box of little cubes you build in. Drag to turn it round,
+  click a face and a cube sticks to it, shift-click to take one off, scroll to
+  zoom, Front/Side/Top to snap square on. Cubes take a palette colour or wrap a
+  **sprite** round themselves, so a brick sprite makes brick blocks. **⬆ Build
+  from a sprite** stands a drawing up and makes it however many cubes deep.
+  `voxel(1)`, `rotatex/y/z(1, 45)`, `spinx/y/z(1, 2)`. Voxels and the 3D world
+  draw smoothly rather than in hard squares; ordinary sprite games stay crisp.
 - **Rooms** — stamp any sprite onto a tile grid with pencil, fill, line, square
   and circle tools. A room is either one screen or **endless**, for open worlds
   you explore with `camera(1)`. Unlimited rooms, shown from code with `room(2)`.
