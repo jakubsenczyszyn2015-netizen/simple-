@@ -1987,9 +1987,50 @@ function tokenizeLine(line){
   return line.trim();
 }
 
+/* How many brackets a line leaves open, not counting any inside quotes. */
+function openBrackets(text){
+  let depth = 0, inStr = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text.charAt(i);
+    if (c === '"'){ inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") depth--;
+  }
+  return depth;
+}
+/* A command with a lot in it is easier to read spread over several lines:
+
+     textbox("* The first one.",
+             "* Then the second.",
+             "* And the last.")
+
+   So a line that leaves a bracket open swallows the lines after it until
+   the brackets balance again. The whole thing keeps the line number it
+   started on, so an error still points at where you began writing it. */
+function joinWrapped(rows){
+  const out = [];
+  for (let i = 0; i < rows.length; i++){
+    let { text, n } = rows[i];
+    let depth = openBrackets(text);
+    while (depth > 0 && i + 1 < rows.length){
+      i++;
+      const nextBit = rows[i].text;
+      /* a comma at the join needs no space; anything else reads better with one */
+      text += (/[,(\[]$/.test(text) ? " " : " ") + nextBit;
+      depth += openBrackets(nextBit);
+    }
+    if (depth > 0)
+      throw new Err("this line opens a bracket that is never closed", n);
+    out.push({ text, n });
+  }
+  return out;
+}
+
 function parse(src){
-  const lines = src.split("\n").map((t, i) => ({ text: tokenizeLine(t), n: i + 1 }))
-                   .filter(l => l.text.length);
+  const lines = joinWrapped(
+    src.split("\n").map((t, i) => ({ text: tokenizeLine(t), n: i + 1 }))
+       .filter(l => l.text.length));
   let i = 0;
 
   /* an if can have an else: read up to "else", then up to "end" */
@@ -4589,12 +4630,17 @@ function runCall(st){
 
     /* ---- role-playing games ---- */
     case "textbox": case "text_box": {
+      /* Words are the boxfuls; a number among them is the face to show, so
+         textbox("hi", 1) still means what it always did and
+         textbox("one", "two") means two boxfuls in a row. */
       const all = A();
-      openTextbox(all.length ? all : [""], 0); break; }
+      const said = all.filter(v => typeof v !== "number");
+      const face = all.filter(v => typeof v === "number")[0];
+      openTextbox(said.length ? said : [""], face || 0); break; }
     case "talk": {
       const all = A();
       const who = all[0];
-      const said = all.slice(1);
+      const said = all.slice(1).filter(v => typeof v !== "number");
       openTextbox(said.length ? said : [""], who); break; }
     case "next": case "nextbox": case "next_box": { nextTextbox(); break; }
     case "menu": {
@@ -10769,6 +10815,8 @@ Notes
   8, 24, 32, 48 or 64, and the room grid changes to match.
 · Sprite numbers start at 1 and never run out.
 · Anything after <code>#</code> is a comment.
+· A command usually sits on one line, but one with a lot in it can be spread
+  over several — a line that leaves a bracket open carries on into the next.
 · Variables work anywhere a number does: <code>move(1, speed, 0)</code>
 
 <b style="color:var(--accent2)">Drawing on the screen yourself</b>
@@ -10845,6 +10893,10 @@ to the next instead of closing:
 
   The arrow in the corner is a <b>▼</b> while there is more to come and a
   <b>■</b> on the last one, with 1/3 beside it so you know where you are.
+
+  A command with a lot in it can be spread over as many lines as you like:
+  a line that leaves a bracket open carries on into the next one, and the
+  whole thing counts as the line it started on if anything goes wrong.
 
 <code>next()</code>                   move on from code instead of waiting
                           for Z — handy on a button

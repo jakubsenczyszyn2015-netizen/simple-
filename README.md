@@ -213,6 +213,15 @@ talk(3, "* Hi.")           ...with sprite 3's face in it
 textbox("* One.", "* Two.", "* Three.")   Z moves on to the next instead
                            of closing; ▼ while there is more, ■ on the last
 next()                     move on from code.  morepages()  pagenow()
+```
+
+A command usually sits on one line, but one with a lot in it can be spread over
+several — a line that leaves a bracket open carries on into the next:
+
+```
+textbox("* The first one.",
+        "* Then the second.",
+        "* And the last.")
 askmenu("Now what?", "Fight", "Mercy")   pick with the arrows and Z
 if chose("Fight")          true on the frame that one was picked
 stats(1, 20, 4, 1)         20 hit points, 4 attack, 1 defence

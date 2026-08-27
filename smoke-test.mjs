@@ -36,7 +36,8 @@ const must = ['function stopSong','function playSong','function drawSongList','f
   'const TITLE_VERBS','function playTitleTrack',
   'function voxSet','function fixModel','function voxClick','function smoothStage',
   'case "rotatex"','case "spiny"','const VOX_FACES','function drawVoxFloor',
-  'function nextTextbox','case "next"','case "morepages"'];
+  'function nextTextbox','case "next"','case "morepages"',
+  'function joinWrapped','function openBrackets'];
 const missing = must.filter(m => !h.includes(m));
 
 // iOS 12.5 runs Safari 12, which cannot parse or run any of these
