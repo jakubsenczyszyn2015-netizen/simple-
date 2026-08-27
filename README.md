@@ -330,9 +330,34 @@ fanciertitle("Go!")           drops in spinning, settles facing you
 fanciesttitle("Go!", 1)       sprite 1 glides in, leaps away, white flash,
                               then the spinning title
 scrolltitle("Go!", 2)         sprite 2 drifting diagonally behind the title
-customtitle("Go!", 1, 4, 5, 3)  your own sequence of numbered pieces
+evenmorefancytitle("Go!")     a rainbow wireframe cube turning in 3D,
+                              a flash, then the title lands on it
 titletile(2)                  a scrolling background behind any of them
 titlesprite(3)                which sprite the flying ones use
+titlemusic(2)                 the track for whichever title comes next
+```
+
+Every title screen takes a music track as its last number, and `customtitle()`
+plays a list of steps you write yourself:
+
+```
+customtitle("My Game",
+  "colour #101040 20", "fade 30", "sfx 2",
+  "glide 1 from 0 200 to 320 60 50",
+  "flash", "shake 20", "drop", "hold 40")
+```
+
+Steps: `fade`, `drop`, `spin`, `zoom`, `flash`, `hold`, `colour`, `flyby`,
+`glide`, `shake`, `say`, and `sfx` / `sound` / `music`, which take no time and
+just happen. Each takes its own number of frames. Plain numbers still work, so
+anything written the old way still runs.
+
+Gliding is a normal block too:
+
+```
+glide(1, 260, 180, 30)        slide there over 30 frames, easing in and out
+glideby(1, 40, 0, 20)         ...by that much instead
+stopglide(1)   if gliding(1)
 ```
 
 ## Two players

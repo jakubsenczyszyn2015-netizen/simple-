@@ -2250,6 +2250,7 @@ function evalExpr(src, line){
               Math.abs((a.y + a.h/2) - (p2.y + p2.h/2)) < a.h + reach) return +k;
         }
         return 0; }
+      case "gliding": return !!R.glides[Math.round(spriteArg(args[0]))];
       case "voxelx": case "voxel_x": return vactor(args[0]).x;
       case "voxely": case "voxel_y": return vactor(args[0]).y;
       case "voxelz": case "voxel_z": return vactor(args[0]).z;
@@ -2282,7 +2283,7 @@ sctx.imageSmoothingEnabled = false;
 
 const R = {
   running:false, prog:null, actors:{}, vars:{}, keys:{},
-  extraDraw:[], vox:{}, thick:{}, stats:{}, bag:[], memory:{}, timers:{}, ink:"#ffffff",
+  extraDraw:[], vox:{}, thick:{}, stats:{}, bag:[], memory:{}, timers:{}, ink:"#ffffff", glides:{},
   followers:[], bullets:[], npcs:{}, sframe:{}, splay:{},
   room:0, texts:[], frame:0, waitFrames:0, raf:0, startDone:false,
   title:null, buttons:[], clicks:[], titlesShown:{},   // title screens
@@ -2445,6 +2446,13 @@ function showTitle(name, style){
   // a background set with titletile() or scrolltitle() stays behind whichever
   // style comes next, so they can be put together
   R.titleScroll = R.titleTile || 0;
+}
+/* Every title screen takes a track number. titlemusic(2) sets one for
+   whichever title comes next, which is how customtitle gets one without
+   its list of steps becoming ambiguous. */
+function playTitleTrack(track){
+  const n = Math.round(track) || R.titleTrack || 0;
+  if (n > 0) playSong(n, true);
 }
 function addTitleButton(label){
   if (!R.title) return;
@@ -2691,12 +2699,28 @@ function stepCamera(){
    pick something from a menu is the frame chose() is true. Everything else
    comes after, once your code has moved things. */
 function stepRpg(){
+  stepGlides();
   stepSoul();
   stepFollowers();
   if (R.shake > 0) R.shake--;
   if (R.flash > 0) R.flash--;
   for (const k in R.timers) if (R.timers[k] > 0) R.timers[k]--;
 }
+/* Something told to glide moves a bit of the way each frame, easing in and
+   out so it starts and stops gently rather than jerking. */
+function stepGlides(){
+  for (const k in R.glides){
+    const g = R.glides[k];
+    g.t++;
+    const p = Math.min(1, g.t / g.len);
+    const e = p < .5 ? 2*p*p : 1 - Math.pow(-2*p + 2, 2) / 2;
+    const a = actor(+k);
+    a.x = g.fromX + (g.toX - g.fromX) * e;
+    a.y = g.fromY + (g.toY - g.fromY) * e;
+    if (p >= 1) delete R.glides[k];
+  }
+}
+
 /* a follower keeps to where the leader was a moment ago, so a line of
    them strings out behind rather than piling up on the same spot */
 function stepFollowers(){
@@ -4083,6 +4107,7 @@ const QUESTIONS = {
   howmany:'if howmany("Potion") > 1',   bagsize:"if bagsize() > 0",
   remembered:'if remembered("metdog")', soulhit:"if soulhit()",
   nearnpc:"if nearnpc()",               soulx:"if soulx() > 160",
+  gliding:"if gliding(1)",
   voxelx:"if voxelx(1) > 100",          voxely:"if voxely(1) > 100",
   voxelz:"if voxelz(1) > 0",            angle:"if angle(1) > 90",
   layers:"if layers(1) > 4",            modelof:'set(n, modelof("tree"))',
@@ -4144,6 +4169,22 @@ function runCall(st){
                          size: Math.max(6, Math.round(size) || 16), c: c || R.ink, mid:true }); break; }
     case "background": case "bg": {
       const [c] = A(); R.bgColour = String(c || "#000000"); break; }
+
+    /* ---- gliding: move somewhere smoothly, over time ---- */
+    case "glide": {
+      const [n, x, y, frames] = A();
+      const k = Math.round(spriteArg(n)), a = actor(k);
+      R.glides[k] = { fromX:a.x, fromY:a.y, toX:x || 0, toY:y || 0,
+                      len:Math.max(1, Math.round(frames) || 30), t:0 };
+      break; }
+    case "glideby": case "glide_by": {
+      const [n, dx, dy, frames] = A();
+      const k = Math.round(spriteArg(n)), a = actor(k);
+      R.glides[k] = { fromX:a.x, fromY:a.y, toX:a.x + (dx||0), toY:a.y + (dy||0),
+                      len:Math.max(1, Math.round(frames) || 30), t:0 };
+      break; }
+    case "stopglide": case "stop_glide": {
+      delete R.glides[Math.round(spriteArg(A()[0]))]; break; }
 
     /* ---- one-line movement ---- */
     case "towards": {
@@ -4426,7 +4467,7 @@ function runCall(st){
       const [name, track] = A();
       if (R.titlesShown[String(name)]) break;      // already dismissed, carry on
       showTitle(name);
-      if (track) playSong(Math.round(track), true);
+      playTitleTrack(track);
       collectTitleButtons(R.prog);
       throw new Wait(0);                            // hold everything until Play
     }
@@ -4572,18 +4613,18 @@ function runCall(st){
     /* ---- title screens, coming and going ---- */
     case "fancytitle": case "fancy_title": {
       const [nm, tr] = A();
-      showTitle(nm, "drop"); if (tr) playSong(Math.round(tr), true);
+      showTitle(nm, "drop"); playTitleTrack(tr);
       collectTitleButtons(R.prog); throw new Wait(0); }
     case "fanciertitle": case "fancier_title": {
       const [nm2, tr2] = A();
-      showTitle(nm2, "spin"); if (tr2) playSong(Math.round(tr2), true);
+      showTitle(nm2, "spin"); playTitleTrack(tr2);
       collectTitleButtons(R.prog); throw new Wait(0); }
     /* the showy ones */
     case "scrolltitle": case "scroll_title": {
       const [nm, tile, track] = A();
       R.titleTile = Math.round(tile) || 0;
       showTitle(nm, "plain");
-      if (track) playSong(Math.round(track), true);
+      playTitleTrack(track);
       collectTitleButtons(R.prog); throw new Wait(0); }
 
     case "fanciesttitle": case "fanciest_title": {
@@ -4591,16 +4632,44 @@ function runCall(st){
       showTitle(nm, "fanciest");
       R.titleAnim.sprite = Math.round(spr) || 1;
       ensureSprite(R.titleAnim.sprite);
-      if (track) playSong(Math.round(track), true);
+      playTitleTrack(track);
       collectTitleButtons(R.prog); throw new Wait(0); }
 
     case "customtitle": case "custom_title": {
       const args = A();
       const nm = args[0];
-      const steps = args.slice(1).map(v => Math.round(v)).filter(v => v > 0);
       showTitle(nm, "custom");
-      R.titleAnim.steps = steps.length ? steps : [1];
+      const script = [];
+      const unknown = [];
+      for (const raw of args.slice(1)){
+        const st2 = parseTitleStep(raw);
+        if (st2.verb === "?"){ unknown.push(st2.raw); continue; }
+        script.push(st2);
+      }
+      if (unknown.length)
+        throw new Err("customtitle() does not know \u201c" + unknown[0] + "\u201d. It can do: " +
+                      Object.keys(TITLE_VERBS).join(", "), st.n);
+      R.titleAnim.script = script.length ? script : [parseTitleStep("fade")];
+      if (R.titleTrack) playSong(R.titleTrack, true);
       collectTitleButtons(R.prog); throw new Wait(0); }
+
+    case "evenmorefancytitle": case "even_more_fancy_title": {
+      const [nm, tr] = A();
+      showTitle(nm, "custom");
+      /* black, then the cube turns for a while, then the title lands on it */
+      R.titleAnim.script = [
+        parseTitleStep("colour #05060f 14"),
+        parseTitleStep("cube 150"),
+        parseTitleStep("flash 14"),
+        parseTitleStep("drop 70")
+      ];
+      R.titleAnim.cube = true;
+      if (tr) playSong(Math.round(tr), true);
+      else if (R.titleTrack) playSong(R.titleTrack, true);
+      collectTitleButtons(R.prog); throw new Wait(0); }
+
+    case "titlemusic": case "title_music": {
+      R.titleTrack = Math.round(A()[0]) || 0; break; }
 
     case "titlesprite": case "title_sprite": {
       R.titleSprite = Math.round(A()[0]) || 1; ensureSprite(R.titleSprite); break; }
@@ -4752,6 +4821,7 @@ function startWith(source){
   R.vox = {}; R.thick = {}; R.thickAll = 0;   // models, and how thick a flat sprite is in 3D
   R.extraDraw = [];
   R.box = null; R.lastChoice = null; R.choiceHit = null; R.boxSpeed = 2;
+  R.glides = {};
   R.timers = {}; R.ink = "#ffffff"; R.bgColour = null;
   R.stats = {}; R.bag = []; R.memory = R.memory || {};
   R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
@@ -4759,11 +4829,12 @@ function startWith(source){
   R.vox = {}; R.thick = {}; R.thickAll = 0;   // models, and how thick a flat sprite is in 3D
   R.extraDraw = [];
   R.box = null; R.lastChoice = null; R.choiceHit = null; R.boxSpeed = 2;
+  R.glides = {};
   R.timers = {}; R.ink = "#ffffff"; R.bgColour = null;
   R.stats = {}; R.bag = []; R.memory = R.memory || {};
   R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
   R.npcs = {}; R.shake = 0; R.flash = 0; R.tint = null;
-  R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0;
+  R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0; R.titleTrack = 0;
   R.vars.coins = 0;                      // coin() counts into this one
   KEYBIND = {};
   if (project.mode === "hard" && !runHard()){ R.running = false; return; }
@@ -4789,7 +4860,7 @@ function doReset(){
   /* what remember() kept lives through a restart — that is the whole point of it */
   try { R.memory = JSON.parse(localStorage.getItem("simplepp-memory") || "{}"); } catch(e){ R.memory = {}; }
   R.sframe = {}; R.splay = {};   // which frame each sprite shows, and what is playing
-  R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0;
+  R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0; R.titleTrack = 0;
   R.clicks = []; R.vars.coins = 0;
   R.acc = 0; R.lastT = undefined;
   render();
@@ -5412,7 +5483,136 @@ const TITLE_STEPS = {
   6: { name:"hold still",     len:40 },
   7: { name:"zoom out",       len:45 }
 };
+/* =========================================================
+   A TITLE MADE OF STEPS
+   customtitle() used to take numbers, one per canned effect. It still
+   does — but a step can also be written out, with its own timing and
+   its own extras, so a title becomes a little script:
+
+     customtitle("My Game",
+       "colour #101040 20", "fade 30", "sfx 2",
+       "glide 1 from 0 200 to 320 60 50", "flash", "drop", "hold 40")
+
+   Each verb below says what it needs. Anything it does not understand
+   is named in the console rather than ignored.
+   ========================================================= */
+const TITLE_VERBS = {
+  fade:   { len:40, help:"fade [frames]" },
+  drop:   { len:70, help:"drop [frames]" },
+  spin:   { len:150, help:"spin [frames]" },
+  zoom:   { len:40, help:"zoom [frames]" },
+  flash:  { len:18, help:"flash [frames]" },
+  hold:   { len:40, help:"hold [frames]" },
+  colour: { len:30, help:"colour #ff0000 [frames]" },
+  flyby:  { len:44, help:"flyby [sprite] [frames]" },
+  glide:  { len:50, help:"glide <sprite> from <x> <y> to <x> <y> [frames]" },
+  shake:  { len:24, help:"shake [frames]" },
+  say:    { len:50, help:"say <some words> [frames]" },
+  sfx:    { len:1,  help:"sfx <number>" },
+  sound:  { len:1,  help:"sound <number>" },
+  music:  { len:1,  help:"music <number>" },
+  cube:   { len:150, help:"cube [frames]" }
+};
+/* the old numbered steps, kept so anything already written still runs */
+const TITLE_NUMBERS = ["", "fade", "drop", "spin", "flyby", "flash", "hold", "zoom"];
+
+function parseTitleStep(raw){
+  if (typeof raw === "number" || /^\s*\d+\s*$/.test(String(raw))){
+    const n = Math.round(+raw);
+    const verb = TITLE_NUMBERS[n] || "hold";
+    return { verb, len: TITLE_VERBS[verb].len };
+  }
+  const words = String(raw).trim().split(/\s+/);
+  const verb = (words[0] || "").toLowerCase().replace("color", "colour");
+  if (!TITLE_VERBS[verb]) return { verb:"?", raw:String(raw) };
+  const step = { verb, len: TITLE_VERBS[verb].len };
+  const nums = words.slice(1).filter(w => /^-?\d+$/.test(w)).map(Number);
+  if (verb === "colour"){
+    const hex = words.filter(w => /^#?[0-9a-f]{3,8}$/i.test(w) && w !== words[0])[0];
+    step.colour = hex ? (hex.charAt(0) === "#" ? hex : "#" + hex) : "#000000";
+    if (nums.length) step.len = Math.max(1, nums[nums.length - 1]);
+    return step;
+  }
+  if (verb === "say"){
+    /* everything that is not the verb or a trailing number is the words */
+    let rest = words.slice(1);
+    if (rest.length > 1 && /^\d+$/.test(rest[rest.length - 1])){
+      step.len = Math.max(1, +rest.pop());
+    }
+    step.words = rest.join(" ");
+    return step;
+  }
+  if (verb === "glide"){
+    step.sprite = nums.length ? nums[0] : 1;
+    const from = words.indexOf("from"), to = words.indexOf("to");
+    const at = (i) => [Number(words[i + 1]), Number(words[i + 2])];
+    step.from = from >= 0 ? at(from) : [0, VH / 2];
+    step.to   = to   >= 0 ? at(to)   : [VW, VH / 2];
+    if (nums.length > 5) step.len = Math.max(1, nums[nums.length - 1]);
+    return step;
+  }
+  if (verb === "sfx" || verb === "sound" || verb === "music"){
+    step.n = nums.length ? nums[0] : 1;
+    return step;
+  }
+  if (verb === "flyby"){
+    if (nums.length) step.sprite = nums[0];
+    if (nums.length > 1) step.len = Math.max(1, nums[1]);
+    return step;
+  }
+  if (nums.length) step.len = Math.max(1, nums[0]);
+  return step;
+}
+
+/* ---------- a rainbow cube, drawn as lines only ---------- */
+const CUBE_POINTS = [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],
+                     [-1,-1, 1],[1,-1, 1],[1,1, 1],[-1,1, 1]];
+const CUBE_EDGES = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],
+                    [0,4],[1,5],[2,6],[3,7]];
+function drawRainbowCube(t, cx, cy, size){
+  const ax = t * 0.021, ay = t * 0.017, az = t * 0.009;
+  const sa = Math.sin(ax), ca = Math.cos(ax);
+  const sb = Math.sin(ay), cb = Math.cos(ay);
+  const sc = Math.sin(az), cc = Math.cos(az);
+  const flat = CUBE_POINTS.map(pt => {
+    let [x, y, z] = pt;
+    let y2 = y * ca - z * sa, z2 = y * sa + z * ca;      // around X
+    let x2 = x * cb + z2 * sb; z2 = -x * sb + z2 * cb;   // around Y
+    let x3 = x2 * cc - y2 * sc, y3 = x2 * sc + y2 * cc;  // around Z
+    const d = 3.4 / (3.4 + z2);                          // a little perspective
+    return [cx + x3 * size * d, cy + y3 * size * d];
+  });
+  sctx.lineWidth = 2;
+  CUBE_EDGES.forEach(([a, b2], i) => {
+    /* every edge a different colour, cycling as it turns */
+    const hue = (i * 30 + t * 2) % 360;
+    sctx.strokeStyle = hslHex(hue, 100, 58);
+    sctx.beginPath();
+    sctx.moveTo(flat[a][0], flat[a][1]);
+    sctx.lineTo(flat[b2][0], flat[b2][1]);
+    sctx.stroke();
+  });
+  sctx.lineWidth = 1;
+}
+/* hsl without needing the browser to parse a string every frame */
+function hslHex(h, sPct, lPct){
+  const sv = sPct / 100, lv = lPct / 100;
+  const c = (1 - Math.abs(2 * lv - 1)) * sv;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = lv - c / 2;
+  let r = 0, g = 0, b2 = 0;
+  if (h < 60){ r = c; g = x; }
+  else if (h < 120){ r = x; g = c; }
+  else if (h < 180){ g = c; b2 = x; }
+  else if (h < 240){ g = x; b2 = c; }
+  else if (h < 300){ r = x; b2 = c; }
+  else { r = c; b2 = x; }
+  const hx = v => ("0" + Math.round((v + m) * 255).toString(16)).slice(-2);
+  return "#" + hx(r) + hx(g) + hx(b2);
+}
+
 function drawCustomTitle(anim){
+  if (anim.script) return drawScriptTitle(anim);
   const steps = anim.steps || [1];
   let t = anim.t, i = 0;
   while (i < steps.length - 1 && t > (TITLE_STEPS[steps[i]] || TITLE_STEPS[1]).len){
@@ -5448,6 +5648,98 @@ function drawCustomTitle(anim){
 
   drawTitleWord(y, squash, alpha);
   if (last && t > info.len) drawTitleButtons();
+}
+
+/* Plays the steps in order. Instant steps — a sound, a track — fire once
+   as the play head passes them and take no time at all. */
+function drawScriptTitle(anim){
+  const steps = anim.script;
+  let t = anim.t, i = 0;
+  while (i < steps.length - 1 && t > steps[i].len){ t -= steps[i].len; i++; }
+  const step = steps[i];
+  const last = i === steps.length - 1;
+  const k = Math.min(1, t / Math.max(1, step.len));
+
+  /* fire anything instant we have just walked past, exactly once */
+  if (!anim.fired) anim.fired = {};
+  for (let j = 0; j <= i; j++){
+    const sp = steps[j];
+    if (anim.fired[j]) continue;
+    if (sp.verb === "sfx"){ anim.fired[j] = 1; try { playSfx(sp.n); } catch(e){} }
+    else if (sp.verb === "sound"){ anim.fired[j] = 1; beep(sp.n); }
+    else if (sp.verb === "music"){ anim.fired[j] = 1; playSong(sp.n, true); }
+  }
+
+  let y = 58, squash = 1, alpha = 1, shakeX = 0, shakeY = 0;
+  let hideWord = false;
+
+  switch (step.verb){
+    case "colour":
+      sctx.fillStyle = step.colour;
+      sctx.fillRect(0, 0, VW, VH);
+      hideWord = !last;
+      break;
+    case "fade":  alpha = k; break;
+    case "zoom":  squash = 2 - k; break;
+    case "drop": {
+      const e = 1 - Math.pow(1 - k, 3);
+      y = -40 + 98 * e;
+      const after = t - step.len * 0.6;
+      if (after > 0 && after < 26) y -= Math.sin((after / 26) * Math.PI) * 16;
+      break; }
+    case "spin":
+      drawSpinningTitle(anim, t, last);
+      if (last && t > step.len) drawTitleButtons();
+      return;
+    case "flash":
+      sctx.fillStyle = "rgba(255,255,255," + (1 - k) + ")";
+      sctx.fillRect(0, 0, VW, VH);
+      hideWord = !last;
+      break;
+    case "shake":
+      shakeX = Math.round((Math.random() * 2 - 1) * 5);
+      shakeY = Math.round((Math.random() * 2 - 1) * 5);
+      break;
+    case "flyby": {
+      const size = SW * 2, cv = spriteCanvas(step.sprite || anim.sprite);
+      if (cv) sctx.drawImage(cv, Math.round(-size + (VW + size * 2) * k),
+                             Math.round(VH / 2 - size / 2), size, size);
+      hideWord = !last;
+      break; }
+    case "glide": {
+      const cv = spriteCanvas(step.sprite || anim.sprite);
+      const e = k < .5 ? 2*k*k : 1 - Math.pow(-2*k + 2, 2) / 2;    // ease in and out
+      const gx = step.from[0] + (step.to[0] - step.from[0]) * e;
+      const gy = step.from[1] + (step.to[1] - step.from[1]) * e;
+      const size = SW * 2;
+      if (cv) sctx.drawImage(cv, Math.round(gx - size/2), Math.round(gy - size/2), size, size);
+      hideWord = !last;
+      break; }
+    case "say": {
+      sctx.textAlign = "center";
+      sctx.font = "12px ui-monospace,monospace";
+      sctx.fillStyle = "#e8ecf5";
+      sctx.globalAlpha = Math.min(1, Math.min(k * 4, (1 - k) * 4 + .3));
+      sctx.fillText(step.words || "", VW / 2, VH / 2);
+      sctx.globalAlpha = 1;
+      sctx.textAlign = "left";
+      hideWord = !last;
+      break; }
+    case "cube":
+      drawRainbowCube(t, VW / 2, VH / 2 - 6, 42);
+      hideWord = !last;
+      break;
+    case "sfx": case "sound": case "music": case "hold":
+    default: break;
+  }
+
+  if (!hideWord){
+    sctx.save();
+    if (shakeX || shakeY) sctx.translate(shakeX, shakeY);
+    drawTitleWord(y, squash, alpha);
+    sctx.restore();
+  }
+  if (last && t > step.len) drawTitleButtons();
 }
 
 function drawSpinningTitle(anim, t, showButtons){
@@ -10025,6 +10317,58 @@ Title screens:
                           title screen is up, and stops when Play is
                           pressed. <code>fancytitle</code> and <code>fanciertitle</code> take
                           one too.
+
+<b style="color:var(--accent2)">Title screens</b>
+Every one of them takes a music track as its last number, and
+<code>titlemusic(2)</code> sets one for whichever title comes next.
+
+<code>title("My Game", 2)</code>       plain, with song 2 behind it
+<code>fancytitle("Go!", 2)</code>      drops in and bounces
+<code>fanciertitle("Go!", 2)</code>    drops in spinning
+<code>fanciesttitle("Go!", 1, 2)</code>  sprite 1 glides in, leaps away,
+                          white flash, then the spinning title
+<code>scrolltitle("Go!", 2, 3)</code>  sprite 2 drifting behind, song 3
+<code>evenmorefancytitle("Go!")</code> a rainbow wireframe cube turning in
+                          3D, then a flash, then the title lands on it
+
+<b style="color:var(--accent2)">Building your own title</b>
+<code>customtitle()</code> plays a list of steps, one after another. A step
+can be written out with its own timing and its own extras, so a title is a
+little script:
+
+<code>customtitle("My Game",</code>
+<code>  "colour #101040 20",</code>      <span style="color:var(--dim)">fill the screen for 20 frames</span>
+<code>  "fade 30",</code>               <span style="color:var(--dim)">the words fade in</span>
+<code>  "sfx 2",</code>                 <span style="color:var(--dim)">play sound effect 2, right now</span>
+<code>  "glide 1 from 0 200 to 320 60 50",</code>
+<code>  "flash", "shake 20", "drop", "hold 40")</code>
+
+Every step it knows:
+
+<code>fade [frames]</code>            the words appear
+<code>drop [frames]</code>            they fall in and bounce
+<code>spin [frames]</code>            they turn as they land
+<code>zoom [frames]</code>            they shrink into place
+<code>flash [frames]</code>           the screen goes white
+<code>hold [frames]</code>            nothing happens for a bit
+<code>colour #ff0000 [frames]</code>  fill the screen with a colour
+<code>flyby [sprite] [frames]</code>  a sprite shoots across
+<code>glide 1 from 10 20 to 90 40 [frames]</code>
+                          a sprite slides from one place to another
+<code>shake [frames]</code>           rattle the words
+<code>say some words [frames]</code>  a line of writing, fading in and out
+<code>sfx 2</code> · <code>sound 3</code> · <code>music 1</code>   these take no time; they just happen
+
+  Numbers still work — <code>customtitle("Go!", 1, 4, 5, 3)</code> is the
+  old way and still does the same thing. A step it doesn't know is named in
+  the error rather than skipped quietly.
+
+<b style="color:var(--accent2)">Gliding, in the game too</b>
+<code>glide(1, 260, 180, 30)</code>    slide sprite 1 there over 30 frames,
+                          starting and stopping gently
+<code>glideby(1, 40, 0, 20)</code>     ...by that much instead
+<code>stopglide(1)</code>             leave it where it got to
+<code>if gliding(1)</code>            is it still on its way?
 
 <code>title("My Game")</code>      big title with a Play button — the program
                           waits here until Play is clicked.
