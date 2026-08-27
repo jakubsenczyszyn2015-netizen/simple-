@@ -22,7 +22,9 @@ const must = ['function stopSong','function playSong','function drawSongList','f
   'function statsOf','function soulHits','function drawArena',
   'function pythonToJs','function luaToJs','function cppToJs','function translate',
   'function setLang','function hardStarter','id="lang"','function sourceLine',
-  'case "rect"','case "towards"','case "savegame"','case "timer"'];
+  'case "rect"','case "towards"','case "savegame"','case "timer"',
+  'function exportSays','function canDownload','function runIntro','function showLoading',
+  'id="export-said"','id="ex-intro-on"','id="ex-load-on"','function exSettings'];
 const missing = must.filter(m => !h.includes(m));
 
 // iOS 12.5 runs Safari 12, which cannot parse or run any of these
