@@ -234,6 +234,10 @@
   }
   #stage-wrap{background:var(--void);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px}
   #stage-frame{display:flex;align-items:center;justify-content:center;position:relative}
+  /* everything written under the stage lines up with it and with itself */
+  .stage-note{
+    width:100%; max-width:480px; text-align:center; line-height:1.5;
+  }
   #stage-frame:fullscreen{
     width:100vw; height:100vh; background:#000;
   }
@@ -267,14 +271,25 @@
   #stage-frame:fullscreen #touchpad .acts,
   #stage-frame:-webkit-full-screen #touchpad .acts{right:24px}
 
-  /* ---- narrower windows: shrink before anything wraps ---- */
-  @media (max-width: 1500px){
-    header{gap:5px; padding:6px 9px}
-    .tabs button{padding:5px 7px}
-    button{padding:5px 9px}
+  /* ---- narrower windows ----
+     Ten tabs with their words on need about 1500px. Rather than wrapping
+     onto a second row the moment a laptop is narrower than that, the bar
+     gives things up in order: the padding, then the word on Templates,
+     then the words on the tabs. Measured at 1280, 1366 and 1440. */
+  @media (max-width: 1560px){
+    header{gap:4px; padding:6px 8px}
+    header h1{margin-right:4px}
+    .tabs{gap:2px}
+    .tabs button{padding:5px 6px; font-size:12.5px}
+    button{padding:5px 8px}
+    .modepick button{padding:5px 7px}
   }
-  @media (max-width: 1340px){
-    .lbl{display:none}                     /* tabs become just their number */
+  @media (max-width: 1290px){
+    .lbl2{display:none}                    /* "Templates" becomes just its star */
+    .tabs button{font-size:12px; padding:4px 5px}
+  }
+  @media (max-width: 1130px){
+    .lbl{display:none}                     /* and the tabs become just a number */
   }
 
   /* ---- phones and small windows ---- */
@@ -492,7 +507,7 @@
   </label>
   <button id="ai-key-btn" onclick="setAIKey()" style="display:none">⚡ Real AI</button>
   <button id="ai-show" class="b-gallery" onclick="showAICode()" style="display:none">Show me the code</button>
-  <button class="b-gallery" onclick="openGallery()">✦ Templates</button>
+  <button class="b-gallery" onclick="openGallery()" title="Start from a template">✦<span class="lbl2"> Templates</span></button>
   <button class="b-run" onclick="run()">▶ Run</button>
   <button onclick="stop()">■ Stop</button>
   <div id="more-wrap">
@@ -561,14 +576,14 @@
       <div class="row" style="justify-content:center">
         <button id="fs-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
       </div>
-      <div class="row" style="justify-content:center;gap:8px;width:100%;max-width:300px">
+      <div class="row" style="justify-content:center;gap:8px;width:100%;max-width:400px">
         <label style="flex:1">Speed (frames per second)
           <input id="fps" type="range" min="5" max="120" step="1" value="60"
                  oninput="setFps(this.value)" style="width:100%">
         </label>
       </div>
-      <div id="fps-label" class="hint"></div>
-      <div class="hint">click the stage, then use the arrow keys / z · <b>F</b> for fullscreen</div>
+      <div id="fps-label" class="hint stage-note"></div>
+      <div class="hint stage-note">click the stage, then use the arrow keys / z · <b>F</b> for fullscreen</div>
       <div id="chat-bar" style="display:none;flex-direction:column;gap:6px;width:100%;max-width:480px">
         <div id="chat-log" style="height:88px;overflow:auto;background:var(--void);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;line-height:1.5"></div>
         <div class="row" style="flex-wrap:nowrap">
@@ -578,8 +593,8 @@
           <button onclick="closeChat()">✕</button>
         </div>
       </div>
-      <div id="coords" class="hint" style="font-variant-numeric:tabular-nums"></div>
-      <div id="stage-info" class="hint" style="text-align:center;max-width:300px"></div>
+      <div id="coords" class="hint stage-note" style="font-variant-numeric:tabular-nums"></div>
+      <div id="stage-info" class="hint stage-note"></div>
     </div>
   </section>
 
@@ -3023,12 +3038,33 @@ function keyNameOf(e){
   if (KEYBIND[raw]) return KEYBIND[raw];
   return KEYMAP[e.key] || KEYMAP[raw];
 }
+/* Is the person typing into something? z, x, c, e, p, space and enter are
+   all game keys, and swallowing them meant a name or a search box would not
+   take those letters at all while a game was running. Only the code editor
+   was let through before; every box has to be. */
+function typingSomewhere(){
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  /* a box inside a window that has been closed still holds focus in some
+     browsers; it is not being typed into, so it must not eat the keys */
+  if (el !== document.body && !el.offsetParent && getComputedStyle(el).position !== "fixed") return false;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag === "INPUT"){
+    const t = (el.type || "text").toLowerCase();
+    /* a checkbox or a slider is not typing — space and the arrows should
+       still reach the game from those */
+    return t !== "checkbox" && t !== "radio" && t !== "range" && t !== "button";
+  }
+  return el.isContentEditable === true;
+}
 window.addEventListener("keydown", e => {
+  if (typingSomewhere()) return;           // the keys belong to the box, not the game
   const k = keyNameOf(e);
   if (k){
     if (!R.keys[k]) R.keyHits[k] = true;   // a tap counts even if it ends before the next frame
     R.keys[k] = true;
-    if (R.running && document.activeElement.tagName !== "TEXTAREA") e.preventDefault();
+    if (R.running) e.preventDefault();
   }
 });
 window.addEventListener("keyup", e => {
