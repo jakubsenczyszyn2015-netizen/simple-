@@ -243,6 +243,16 @@ shake(10)  flash(8)  tint("#4400ff")
 
 `if ... else ... end` and `else if` work in Normal mode and up.
 
+`after that` on a line of its own holds back everything below it until
+whatever is happening has finished — a textbox read, a `wait()` over, a title
+gone — so a scene reads straight down the page:
+
+```
+textbox("Hi!")
+after that
+sfx(1)
+```
+
 `after start ... end` runs once after `when start` has finished and the first
 frame is drawn. You can write several `when start` blocks; they all run.
 

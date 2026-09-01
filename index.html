@@ -2090,13 +2090,40 @@ function parse(src){
         const b = blockWithElse();
         out.push({ k:"if", cond:m[1], body: b.body, other: b.other, n });
       }
+      else if (/^after\s+that$/i.test(text))       out.push({ k:"afterthat", n });
       else                                         out.push({ k:"call", text, n });
       if (single) return out;
     }
     if (stopAtEnd) throw new Err("a block was never closed with 'end'", lines.length ? lines[lines.length-1].n : 1);
     return out;
   }
-  return block(false);
+  return splitAfterThat(block(false));
+}
+
+/* ---------- "after that" ----------
+   A line on its own that means: hold everything below it until whatever is
+   happening has finished, then carry on.
+
+       textbox("Hi!")
+       after that
+       sfx(1)
+
+   The lines below the marker are lifted out into a step of their own, and
+   the step waits its turn. Several markers make several steps, so a whole
+   scene can be written straight down the page. */
+function splitAfterThat(list){
+  const out = [];
+  for (const st of list){
+    if (st.body) st.body = splitAfterThat(st.body);
+    if (st.other) st.other = splitAfterThat(st.other);
+    out.push(st);
+  }
+  const at = out.findIndex(st => st.k === "afterthat");
+  if (at < 0) return out;
+  const before = out.slice(0, at);
+  const after = splitAfterThat(out.slice(at + 1));      // and any markers after that one
+  before.push({ k:"later", body: after, n: out[at].n });
+  return before;
 }
 
 function Err(msg, line){ this.msg = msg; this.line = line; }
@@ -2331,6 +2358,7 @@ sctx.imageSmoothingEnabled = false;
 const R = {
   running:false, prog:null, actors:{}, vars:{}, keys:{},
   extraDraw:[], vox:{}, thick:{}, stats:{}, bag:[], memory:{}, timers:{}, ink:"#ffffff", glides:{},
+  later:[], laterFrom:[], looseDone:false,
   followers:[], bullets:[], npcs:{}, sframe:{}, splay:{},
   room:0, texts:[], frame:0, waitFrames:0, raf:0, startDone:false,
   title:null, buttons:[], clicks:[], titlesShown:{},   // title screens
@@ -4478,6 +4506,7 @@ function exec(list){
       const n = Math.max(0, Math.min(10000, Math.round(evalExpr(st.count, st.n))));
       for (let i = 0; i < n; i++) exec(st.body);
     }
+    else if (st.k === "later") queueLater(st);      // held back by "after that"
   }
 }
 
@@ -5284,6 +5313,7 @@ function startWith(source){
   R.box = null; R.lastChoice = null; R.choiceHit = null; R.boxSpeed = 2;
   R.glides = {};
   R.timers = {}; R.ink = "#ffffff"; R.bgColour = null;
+  R.later = []; R.laterFrom = []; R.looseDone = false;
   R.stats = {}; R.bag = []; R.memory = R.memory || {};
   R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
   R.npcs = {}; R.shake = 0; R.flash = 0; R.tint = null;
@@ -5292,6 +5322,7 @@ function startWith(source){
   R.box = null; R.lastChoice = null; R.choiceHit = null; R.boxSpeed = 2;
   R.glides = {};
   R.timers = {}; R.ink = "#ffffff"; R.bgColour = null;
+  R.later = []; R.laterFrom = []; R.looseDone = false;
   R.stats = {}; R.bag = []; R.memory = R.memory || {};
   R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
   R.npcs = {}; R.shake = 0; R.flash = 0; R.tint = null;
@@ -5324,6 +5355,10 @@ function doReset(){
   R.sframe = {}; R.splay = {};   // which frame each sprite shows, and what is playing
   R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0; R.titleTrack = 0;
   R.buttonsLive = false; R.titlePick = 0;
+  /* starting over means the loose lines at the top run again, and anything
+     that was waiting on an "after that" is forgotten */
+  R.looseDone = false; R.later = []; R.laterFrom = [];
+  R.box = null; R.glides = {}; R.timers = {};
   R.clicks = []; R.vars.coins = 0;
   R.acc = 0; R.lastT = undefined;
   render();
@@ -5334,6 +5369,24 @@ function stop(){
   R.running = false;
   cancelAnimationFrame(R.raf);
   if (typeof stopSong === "function") stopSong();
+}
+
+/* Lines held back by "after that" wait here until the screen is free: no
+   textbox on it, no dialogue, nothing counting down, and no title up. */
+function queueLater(st){
+  if (R.laterFrom.indexOf(st.n) >= 0) return;      // this line already has a turn waiting
+  R.laterFrom.push(st.n);
+  R.later.push({ body: st.body, n: st.n });
+}
+function screenBusy(){
+  return !!(R.box || R.dialogue || R.title || R.chat || R.waitFrames > 0 || R.ending);
+}
+function stepLater(){
+  if (!R.later.length || screenBusy()) return true;
+  const job = R.later.shift();
+  const i = R.laterFrom.indexOf(job.n);
+  if (i >= 0) R.laterFrom.splice(i, 1);
+  return safe(job.body, "the lines after \u201cafter that\u201d");
 }
 
 function safe(body, what){
@@ -5471,11 +5524,15 @@ function step(){
       if (R.uiClicks.includes(label) && !safe(b.body, "when button clicked")) return false;
     }
     else if (b.k === "call" || b.k === "if" || b.k === "repeat" ||
-             b.k === "resetif" || b.k === "resetblock"){
-      // loose top-level lines run once, like "when start"
-      if (R.frame === 0 && !safe([b], "your code")) return false;
+             b.k === "later" || b.k === "resetif" || b.k === "resetblock"){
+      /* Loose top-level lines run once, like "when start". This used to key
+         off R.frame === 0, which stopped being true the moment a title
+         screen was on screen counting frames of its own. */
+      if (!R.looseDone && !safe([b], "your code")) return false;
     }
   }
+  R.looseDone = true;
+  if (!stepLater()) return false;      // anything "after that" was waiting for
   stepVehicles();
   stepBehaviours();
   stepRoles();
@@ -11030,6 +11087,28 @@ the others, so you can take one and leave the rest.
 <code>textbox("* Hello.")</code>      a black box along the bottom that types
                           itself out. Z skips to the end, Z again closes it.
 <code>talk(3, "* Hi.")</code>         the same, with sprite 3's face in the box
+
+<b style="color:var(--accent2)">after that</b>
+A line on its own that means <i>wait until this has finished</i>. Everything
+below it is held back until the box has been read, the wait is over, or the
+title is gone — then it carries on:
+
+<code>textbox("Hi!")</code>
+<code>after that</code>
+<code>sfx(1)</code>
+
+Use it as many times as you like and a whole scene reads straight down the
+page:
+
+<code>textbox("one")</code>
+<code>after that</code>
+<code>textbox("two")</code>
+<code>after that</code>
+<code>ending("The End")</code>
+
+  It waits for a <b>textbox</b>, a <b>dialogue</b>, a <b>wait()</b>, a
+  <b>title screen</b> or an <b>ending</b> — anything that has taken over the
+  screen. It works on its own at the top of your program and inside a block.
 
 <b>One after another.</b> Just write another one on the next line. They
 <b>queue up</b> instead of the second shoving the first aside, and Z moves
