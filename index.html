@@ -2492,6 +2492,11 @@ function showTitle(name, style){
   R.lastTitle = R.title;
   R.buttons = [{ label:"Play", play:true }];
   R.titleAnim = { style: style || "plain", t: 0, sprite: R.titleSprite || 1, steps: null, phase: 0 };
+  /* The buttons are not there until they have been drawn. Without this there
+     was an invisible Play button sitting under the animation the whole time,
+     and clicking where it would eventually appear started the game early. */
+  R.buttonsLive = false;
+  R.titlePick = 0;
   // a background set with titletile() or scrolltitle() stays behind whichever
   // style comes next, so they can be put together
   R.titleScroll = R.titleTile || 0;
@@ -2523,8 +2528,9 @@ function collectTitleButtons(list){
 }
 function buttonRects(){
   const out = [];
-  const w = 130, h = 22, x = (VW - w) / 2;
-  R.buttons.forEach((b, i) => out.push({ b, x, y: 128 + i * 30, w, h }));
+  const w = 148, h = 26, x = (VW - w) / 2;
+  const top = VH - 24 - R.buttons.length * 32;
+  R.buttons.forEach((b, i) => out.push({ b, x, y: top + i * 32, w, h }));
   return out;
 }
 function stagePoint(e){
@@ -2535,6 +2541,11 @@ function stagePoint(e){
 stage.addEventListener("mousemove", e => {
   const p = stagePoint(e);
   R.mouse = { x: Math.round(p.x), y: Math.round(p.y) };
+  if (R.title && R.buttonsLive){
+    buttonRects().forEach((q, i) => {
+      if (p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h) R.titlePick = i;
+    });
+  }
   const el = $("coords");
   if (el) el.textContent = "x " + R.mouse.x + "   y " + R.mouse.y;
 });
@@ -2560,9 +2571,12 @@ function stageClick(e){
       R.spriteClicks.push(+key);
   }
 
+  /* nothing to press while the title is still making its entrance */
+  if (R.title && !R.buttonsLive) return;
   for (const q of buttonRects()){
     if (mx >= q.x && mx <= q.x + q.w && my >= q.y && my <= q.y + q.h){
-      R.clicks.push(q.b.label);
+      R.titlePick = buttonRects().indexOf(q);
+      if (R.clicks.indexOf(q.b.label) < 0) R.clicks.push(q.b.label);
       if (q.b.play){
         R.titlesShown[R.title] = true; R.title = null; R.buttons = []; R.startDone = false;
         stopSong();                       // the title tune ends when the game begins
@@ -2753,6 +2767,28 @@ function stepCamera(){
 /* The talking box is stepped BEFORE your code runs, so that the frame you
    pick something from a menu is the frame chose() is true. Everything else
    comes after, once your code has moved things. */
+/* Up and down choose, Z presses. The touch pad sends the same keys, so a
+   phone works without anybody aiming at a small rectangle. */
+function stepTitleKeys(){
+  if (!R.title || !R.buttonsLive) return;
+  const rects = buttonRects();
+  if (!rects.length) return;
+  if (R.keyHits.up)    R.titlePick = (R.titlePick - 1 + rects.length) % rects.length;
+  if (R.keyHits.down)  R.titlePick = (R.titlePick + 1) % rects.length;
+  if (R.keyHits.left)  R.titlePick = (R.titlePick - 1 + rects.length) % rects.length;
+  if (R.keyHits.right) R.titlePick = (R.titlePick + 1) % rects.length;
+  if (R.keyHits.z || R.keyHits.enter || R.keyHits.space){
+    const q = rects[Math.max(0, Math.min(rects.length - 1, R.titlePick))];
+    if (R.clicks.indexOf(q.b.label) < 0) R.clicks.push(q.b.label);
+    if (q.b.play){
+      R.titlesShown[R.title] = true; R.title = null; R.buttons = [];
+      R.startDone = false; R.buttonsLive = false;
+      stopSong();
+    }
+    beep(2);
+  }
+}
+
 function stepRpg(){
   stepGlides();
   stepSoul();
@@ -5260,6 +5296,7 @@ function startWith(source){
   R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
   R.npcs = {}; R.shake = 0; R.flash = 0; R.tint = null;
   R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0; R.titleTrack = 0;
+  R.buttonsLive = false; R.titlePick = 0;
   R.vars.coins = 0;                      // coin() counts into this one
   KEYBIND = {};
   if (project.mode === "hard" && !runHard()){ R.running = false; return; }
@@ -5286,6 +5323,7 @@ function doReset(){
   try { R.memory = JSON.parse(localStorage.getItem("simplepp-memory") || "{}"); } catch(e){ R.memory = {}; }
   R.sframe = {}; R.splay = {};   // which frame each sprite shows, and what is playing
   R.titleScroll = 0; R.titleSprite = 1; R.titleTile = 0; R.titleTrack = 0;
+  R.buttonsLive = false; R.titlePick = 0;
   R.clicks = []; R.vars.coins = 0;
   R.acc = 0; R.lastT = undefined;
   render();
@@ -5344,7 +5382,17 @@ function countFps(){
 
 function step(){
   // a title screen freezes the program until a button is pressed
-  if (R.title){ R.clicks = []; render(); return true; }
+  if (R.title){
+    /* R.clicks is NOT emptied here. The program is frozen while the title is
+       up, so clearing it every frame threw away every titleoption click
+       before anything could read it — clickbutton() could never be true.
+       It is cleared at the end of the first frame that actually runs. */
+    render();                 // draws the buttons, which is what arms them
+    stepTitleKeys();          // ...so the keys can press one
+    R.keyHits = {};
+    R.frame++;
+    return true;
+  }
 
   if (R.keyHits.p) R.paused = !R.paused;      // P always works, so nobody gets stuck
 
@@ -6199,31 +6247,122 @@ function drawSpinningTitle(anim, t, showButtons){
   if (t >= 40 && (showButtons === undefined || showButtons)) drawTitleButtons();
 }
 
+/* a rounded box, drawn by hand — Safari 12 has no ctx.roundRect */
+function roundRect(ctx, x, y, w, h, r){
+  const k = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + k, y);
+  ctx.lineTo(x + w - k, y);        ctx.quadraticCurveTo(x + w, y, x + w, y + k);
+  ctx.lineTo(x + w, y + h - k);    ctx.quadraticCurveTo(x + w, y + h, x + w - k, y + h);
+  ctx.lineTo(x + k, y + h);        ctx.quadraticCurveTo(x, y + h, x, y + h - k);
+  ctx.lineTo(x, y + k);            ctx.quadraticCurveTo(x, y, x + k, y);
+  ctx.closePath();
+}
+/* The words, big and with a proper outline round them so they can be read
+   over anything — a scrolling background, a sprite flying past, whatever
+   else the title is doing behind them. */
 function drawTitleWord(y, squash, alpha){
+  const words = String(R.title);
+  /* long names get smaller rather than running off the edges */
+  let size = 30;
+  sctx.font = "bold " + size + "px ui-monospace,Menlo,monospace";
+  while (size > 12 && sctx.measureText(words).width > VW - 36){
+    size -= 2;
+    sctx.font = "bold " + size + "px ui-monospace,Menlo,monospace";
+  }
   sctx.textAlign = "center";
-  sctx.font = "bold 26px ui-monospace,monospace";
   sctx.globalAlpha = alpha === undefined ? 1 : alpha;
   sctx.save();
   sctx.translate(VW / 2, 0);
   sctx.scale(squash || 1, 1);
-  sctx.fillStyle = "#0b1017"; sctx.fillText(R.title, 2 / (squash || 1), y + 2);
-  sctx.fillStyle = "#ffd166"; sctx.fillText(R.title, 0, y);
+  const sq = squash || 1;
+
+  /* a glow behind it, so it lifts off whatever is back there */
+  sctx.shadowColor = "rgba(255,180,40,.55)";
+  sctx.shadowBlur = 14;
+  sctx.fillStyle = "rgba(0,0,0,0)";
+  sctx.fillText(words, 0, y);
+  sctx.shadowBlur = 0;
+
+  sctx.lineJoin = "round";
+  sctx.strokeStyle = "#120c02";
+  sctx.lineWidth = 6 / Math.abs(sq || 1);
+  sctx.strokeText(words, 0, y);                 // the dark outline
+  sctx.fillStyle = "#8a5a00";
+  sctx.fillText(words, 0, y + 2 / sq);          // a shadow under it
+  const grad = sctx.createLinearGradient(0, y - size, 0, y + 4);
+  grad.addColorStop(0, "#fff3b0");
+  grad.addColorStop(0.55, "#ffd166");
+  grad.addColorStop(1, "#f0a020");
+  sctx.fillStyle = grad;
+  sctx.fillText(words, 0, y);
   sctx.restore();
   sctx.globalAlpha = 1;
   sctx.textAlign = "left";
 }
+/* The buttons. Whichever one is chosen is lit and has an arrow beside it,
+   so a keyboard, the touch pad and a mouse all agree about what is about to
+   happen. Drawing them is also what makes them clickable — until they are
+   on screen there is nothing to press. */
 function drawTitleButtons(){
+  const rects = buttonRects();
+  R.titlePick = Math.max(0, Math.min(rects.length - 1, R.titlePick || 0));
   sctx.textAlign = "center";
-  sctx.font = "10px ui-monospace,monospace";
-  for (const q of buttonRects()){
-    sctx.fillStyle = "#232734";
-    sctx.fillRect(q.x, q.y, q.w, q.h);
-    sctx.strokeStyle = "#5ac8fa"; sctx.lineWidth = 1;
-    sctx.strokeRect(q.x + .5, q.y + .5, q.w - 1, q.h - 1);
-    sctx.fillStyle = "#e8ecf5";
-    sctx.fillText(q.b.label, VW/2, q.y + 7);
-  }
+  sctx.font = "bold 12px ui-monospace,Menlo,monospace";
+  rects.forEach((q, i) => {
+    const on = i === R.titlePick;
+    const pulse = on ? (Math.sin(R.frame * 0.13) * 0.5 + 0.5) : 0;
+    const g = sctx.createLinearGradient(0, q.y, 0, q.y + q.h);
+    if (on){ g.addColorStop(0, "#2f4a6d"); g.addColorStop(1, "#1b2c44"); }
+    else   { g.addColorStop(0, "#242833"); g.addColorStop(1, "#171a23"); }
+    sctx.fillStyle = g;
+    roundRect(sctx, q.x, q.y, q.w, q.h, 6);
+    sctx.fill();
+    sctx.lineWidth = on ? 2 : 1;
+    sctx.strokeStyle = on ? "rgb(" + Math.round(120 + 90 * pulse) + "," +
+                                     Math.round(190 + 55 * pulse) + ",255)"
+                          : "#41506b";
+    roundRect(sctx, q.x + .5, q.y + .5, q.w - 1, q.h - 1, 6);
+    sctx.stroke();
+    sctx.fillStyle = on ? "#ffffff" : "#aeb8cc";
+    sctx.fillText(q.b.label, VW / 2, q.y + q.h / 2 + 4);
+    /* a plain chevron, because the pointing-triangle glyph is missing from
+       the monospace faces this draws with and comes out as a speck */
+    if (on){
+      sctx.fillText(">", q.x + 14, q.y + q.h / 2 + 4);
+      sctx.fillText("<", q.x + q.w - 14, q.y + q.h / 2 + 4);
+    }
+  });
+  /* what to press, in case it is not obvious */
+  sctx.font = "8px ui-monospace,Menlo,monospace";
+  sctx.fillStyle = "rgba(174,184,204,.8)";
+  sctx.fillText(rects.length > 1 ? "up and down to choose  \u00b7  Z or click to pick"
+                                 : "press Z, or click", VW / 2, VH - 11);
   sctx.textAlign = "left";
+  R.buttonsLive = true;             // now, and only now, they can be pressed
+}
+/* the sky behind a title: a gradient with a few specks drifting up it */
+function drawTitleSky(t){
+  const g = sctx.createLinearGradient(0, 0, 0, VH);
+  g.addColorStop(0, "#131a33");
+  g.addColorStop(0.55, "#0c1020");
+  g.addColorStop(1, "#05060d");
+  sctx.fillStyle = g;
+  sctx.fillRect(0, 0, VW, VH);
+  for (let i = 0; i < 26; i++){
+    const seed = i * 97.13;
+    const x = (seed * 3.7) % VW;
+    const y = (VH + 40 - ((seed * 1.9 + t * (0.25 + (i % 5) * 0.12)) % (VH + 40)));
+    const bright = .18 + ((i % 7) / 7) * .5;
+    sctx.fillStyle = "rgba(200,220,255," + bright.toFixed(2) + ")";
+    sctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+  }
+  /* a warm glow where the words will sit */
+  const r = sctx.createRadialGradient(VW / 2, 62, 4, VW / 2, 62, 130);
+  r.addColorStop(0, "rgba(255,190,70,.16)");
+  r.addColorStop(1, "rgba(255,190,70,0)");
+  sctx.fillStyle = r;
+  sctx.fillRect(0, 0, VW, VH);
 }
 
 function drawEnding(){
@@ -6250,8 +6389,7 @@ function drawTitle(){
   const anim = R.titleAnim || { style:"plain", t:0 };
   anim.t++;
 
-  sctx.fillStyle = "#0b0e18";
-  sctx.fillRect(0, 0, VW, VH);
+  drawTitleSky(anim.t);
   if (R.titleScroll) drawScrollingBackground();
 
   // custom titles are a list of steps, played one after another
@@ -6280,23 +6418,13 @@ function drawTitle(){
     } else squash = 1;                        // always ends facing you
   }
 
-  sctx.save();
-  sctx.translate(VW / 2, 0);
-  sctx.scale(squash, 1);
-  sctx.fillStyle = "#0b1017"; sctx.fillText(R.title, 2 / (squash || 1), y + 2);
-  sctx.fillStyle = "#ffd166"; sctx.fillText(R.title, 0, y);
-  sctx.restore();
+  /* a plain title breathes a little rather than sitting perfectly still */
+  if (anim.style === "plain") y += Math.sin(anim.t * 0.045) * 2.5;
 
-  if ((R.titleAnim || {}).style !== "plain" && (R.titleAnim || {}).t < 40){ sctx.textAlign = "left"; return; }
-  sctx.font = "10px ui-monospace,monospace";
-  for (const q of buttonRects()){
-    sctx.fillStyle = "#232734";
-    sctx.fillRect(q.x, q.y, q.w, q.h);
-    sctx.strokeStyle = "#5ac8fa"; sctx.lineWidth = 1;
-    sctx.strokeRect(q.x + .5, q.y + .5, q.w - 1, q.h - 1);
-    sctx.fillStyle = "#e8ecf5";
-    sctx.fillText(q.b.label, VW/2, q.y + 7);
-  }
+  drawTitleWord(y, squash, 1);
+
+  if (anim.style !== "plain" && anim.t < 40){ sctx.textAlign = "left"; return; }
+  drawTitleButtons();
   sctx.textAlign = "left";
 }
 
