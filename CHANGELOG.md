@@ -3,6 +3,66 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.14.1 — Writing a scene, and the letters you type
+
+### Fixed
+- **`sfx("start")` stopped the program on line 1.** The ten ready-made sounds
+  only existed as buttons in the SFX tab: pressing one copied its settings into
+  a slot, and until you did, nothing was called anything. So a perfectly
+  reasonable first line threw "there is no sound effect called “start”" and the
+  rest of the game never ran. Seventeen sounds now answer to their own name in
+  a brand new game — **start, jump, coin, boom, hurt, laser, power up, blip,
+  click, step, alarm, splash, win, lose, door, select, text** — with everyday
+  words mapped onto them, so `sfx("explosion")`, `sfx("BOOM!")` and
+  `sfx("bang")` are one noise and `sfx("game over")` is the losing one. Capitals
+  and punctuation are ignored. A sound you name yourself always wins over the
+  built-in one. An unknown name now lists the ones that work.
+- **The bottom of every title screen was falling off the edge.** `render()`
+  sets the canvas to draw text down from its top edge, once, for the whole
+  game — and the title screen was written as though text sat on a baseline. So
+  the words in the buttons sat low and their descenders crossed the border, and
+  the "press Z, or click" line hung over the last row of the screen and was cut
+  in half. Title text is measured from its middle now, the buttons leave room
+  underneath, and the baseline is put back for everything else.
+- **Saving a game never said what it saved.** It always kept your code — but
+  the note saying so went to the console, which lives in the Code tab, behind
+  the My Games window. So did "no room left in this browser's storage", which
+  meant a save that ran out of space looked exactly like one that worked. Both
+  are said in the window now, and a save reads back what went in: "Saved
+  “My Game” — 12 lines of code, 4 sprites, 1 room, 1 song". Opening a game says
+  the same.
+- **Z, X, C and E were being taken out of text boxes.** The game listens for
+  those keys, and the guard that keeps them out of the code editor only knew
+  about the editor — so naming a sprite "zoe" or searching Help for "chase"
+  quietly dropped letters. Anything you can type into keeps its letters now,
+  and a hidden box is never mistaken for the one you are using.
+- The top bar wrapped onto two rows on a laptop screen. It sheds the words
+  beside its icons as it narrows and stays one row from 800px up.
+- There was an invisible Play button under a title animation: clicking where it
+  would eventually appear started the game before the title had arrived. The
+  buttons exist only once they have been drawn.
+
+### Added
+- **`after that`** — an Easy-mode line of its own that holds everything below it
+  until whatever is happening has finished:
+
+  ```
+  textbox("Hi!")
+  after that
+  sfx("boom")
+  ```
+
+  Use it as often as you like and a whole scene reads straight down the page.
+- **Text boxes queue.** Two `textbox()` lines in a row give two boxes in a row,
+  in order, with no commas and no extra words. One `textbox("a", "b", "c")` is
+  three pages of the same box. Written inside `every frame` it still shows once.
+- **A command can be spread over several lines.** Open a bracket, carry on down
+  the page, close it where you like. Brackets inside quotes are left alone.
+- **Title screens look like title screens.** Big lettering with a dark outline
+  and a glow so it reads over anything behind it, a drifting starfield, and
+  buttons that light up — chosen with the arrow keys and Z, with the mouse, or
+  with the touch pad, all agreeing about what is about to happen.
+
 ## 0.14.0 — Voxels, a band, and ten looks
 
 ### Fixed

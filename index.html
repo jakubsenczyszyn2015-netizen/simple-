@@ -1131,6 +1131,7 @@
         <button onclick="backupLibrary()" title="Save every game in this browser to one file">⬇ Backup all</button>
         <button onclick="document.getElementById('libfile').click()" title="Add games from a backup file">⬆ Restore</button>
       </div>
+      <div id="lib-said" class="hint" style="margin-bottom:10px">Saving keeps <b>everything</b>: your code, your sprites and their extra frames, rooms, songs, sounds, voxel models and colours.</div>
       <input id="lib-search" type="text" placeholder="search your games by name or author"
              style="margin-bottom:10px" autocomplete="off">
       <div id="lib-list" class="cards"></div>
@@ -2572,7 +2573,9 @@ function collectTitleButtons(list){
 function buttonRects(){
   const out = [];
   const w = 148, h = 26, x = (VW - w) / 2;
-  const top = VH - 24 - R.buttons.length * 32;
+  /* Room is left under the lowest button for the "press Z" line. Without it
+     that line sat on the very last row of the screen and got clipped. */
+  const top = VH - 38 - R.buttons.length * 32;
   R.buttons.forEach((b, i) => out.push({ b, x, y: top + i * 32, w, h }));
   return out;
 }
@@ -4224,8 +4227,57 @@ const SFX_PRESETS = {
   Blip:     { wave:"square",   freq:700,  slide:0,    len:60,  vol:30, noise:0,  wobble:0,  repeat:1 },
   Step:     { wave:"triangle", freq:120,  slide:-40,  len:70,  vol:35, noise:60, wobble:0,  repeat:1 },
   Alarm:    { wave:"square",   freq:640,  slide:-240, len:260, vol:45, noise:0,  wobble:22, repeat:4 },
-  Splash:   { wave:"sine",     freq:900,  slide:-700, len:380, vol:40, noise:70, wobble:0,  repeat:1 }
+  Splash:   { wave:"sine",     freq:900,  slide:-700, len:380, vol:40, noise:70, wobble:0,  repeat:1 },
+  Start:    { wave:"square",   freq:440,  slide:440,  len:120, vol:40, noise:0,  wobble:0,  repeat:3 },
+  Win:      { wave:"square",   freq:520,  slide:700,  len:200, vol:40, noise:0,  wobble:0,  repeat:4 },
+  Lose:     { wave:"sawtooth", freq:400,  slide:-330, len:340, vol:45, noise:0,  wobble:0,  repeat:2 },
+  Door:     { wave:"triangle", freq:200,  slide:-120, len:300, vol:40, noise:45, wobble:0,  repeat:1 },
+  Select:   { wave:"square",   freq:880,  slide:0,    len:45,  vol:28, noise:0,  wobble:0,  repeat:1 },
+  Text:     { wave:"square",   freq:600,  slide:0,    len:30,  vol:22, noise:0,  wobble:0,  repeat:1 }
 };
+
+/* Everyday words for the sounds above, so nobody has to know the exact
+   spelling. sfx("boom!"), sfx("BOOM"), sfx("explosion") are all the same
+   sound, and none of them needs anything set up in the SFX tab first. */
+const SFX_WORDS = {
+  boom:"Explode", explosion:"Explode", explode:"Explode", bang:"Explode",
+  hurt:"Hit", ouch:"Hit", hit:"Hit", damage:"Hit", punch:"Hit",
+  jump:"Jump", hop:"Jump", bounce:"Jump",
+  coin:"Coin", pickup:"Coin", collect:"Coin", ring:"Coin", money:"Coin",
+  laser:"Laser", shoot:"Laser", zap:"Laser", shot:"Laser", pew:"Laser",
+  powerup:"Power up", "power up":"Power up", levelup:"Power up", "level up":"Power up",
+  blip:"Blip", beep:"Blip", click:"Select", select:"Select", menu:"Select",
+  step:"Step", walk:"Step", footstep:"Step", land:"Step",
+  alarm:"Alarm", siren:"Alarm", warning:"Alarm",
+  splash:"Splash", water:"Splash", swim:"Splash",
+  start:"Start", begin:"Start", go:"Start", ready:"Start",
+  win:"Win", yay:"Win", victory:"Win", complete:"Win", correct:"Win",
+  lose:"Lose", fail:"Lose", gameover:"Lose", "game over":"Lose", wrong:"Lose", die:"Lose",
+  door:"Door", open:"Door", chest:"Door",
+  text:"Text", talk:"Text", type:"Text", say:"Text"
+};
+/* letters, digits and single spaces — "Boom!!" and "boom" are the same word */
+function sfxWord(name){
+  return String(name || "").toLowerCase().replace(/[^a-z0-9 ]+/g, "").replace(/\s+/g, " ").trim();
+}
+/* One of the built-in sounds, by name, or nothing. Returns the settings
+   themselves rather than a slot number: these do not take up a place in the
+   SFX tab, they are simply there. */
+function sfxPreset(name){
+  const w = sfxWord(name);
+  if (!w) return null;
+  const key = SFX_WORDS[w] || Object.keys(SFX_PRESETS).filter(k => sfxWord(k) === w)[0];
+  if (!key || !SFX_PRESETS[key]) return null;
+  return Object.assign({ name: key, audio: null }, SFX_PRESETS[key]);
+}
+/* every name sfx("...") will answer to, for the error message and for Help */
+function sfxNamesKnown(){
+  const out = {};
+  for (const k in SFX_PRESETS) out[sfxWord(k)] = 1;
+  for (const k in SFX_WORDS) out[k] = 1;
+  for (const e of sfxAll()) if (e.name) out[sfxWord(e.name)] = 1;
+  return Object.keys(out).sort();
+}
 let curSfx = 0;
 
 function sfxAll(){
@@ -4252,7 +4304,9 @@ function noiseSource(ac){
   return src;
 }
 function playSfx(n){
-  const e = sfxAt(Math.round(n) || 1);
+  /* a number picks a sound out of the SFX tab; a set of settings (one of the
+     built-in named sounds) is played just as it comes */
+  const e = (n && typeof n === "object") ? n : sfxAt(Math.round(n) || 1);
   if (e.audio){ playSfxFile(e); return; }
   let ac;
   try { ac = audioCtx(); } catch(err){ return; }
@@ -4915,9 +4969,18 @@ function runCall(st){
       break; }
     case "sfx": {
       const [n] = A();
-      const k = typeof n === "string" ? (sfxByName(n) || 0) : Math.round(n);
-      if (!k) throw new Err("there is no sound effect called \u201c" + n + "\u201d \u2014 name one in the SFX tab", st.n);
-      playSfx(k); break; }
+      if (typeof n === "string"){
+        /* your own sounds win, so naming one "boom" in the SFX tab replaces
+           the built-in one rather than fighting it */
+        const mine = sfxByName(n);
+        if (mine){ playSfx(mine); break; }
+        const built = sfxPreset(n);
+        if (built){ playSfx(built); break; }
+        throw new Err("there is no sound called \u201c" + n + "\u201d. Try one of these: " +
+                      sfxNamesKnown().slice(0, 14).join(", ") +
+                      " \u2014 or make your own in the SFX tab and give it a name", st.n);
+      }
+      playSfx(Math.round(n) || 1); break; }
     case "stopplay": case "stop_play": {
       const [n] = A(); const k = Math.round(spriteArg(n));
       R.splay[k] = null; R.sframe[k] = 0; break; }
@@ -6364,6 +6427,10 @@ function drawTitleWord(y, squash, alpha){
     sctx.font = "bold " + size + "px ui-monospace,Menlo,monospace";
   }
   sctx.textAlign = "center";
+  /* render() leaves the canvas drawing text from its top edge, and the drop
+     and spin work out their y from that. Said out loud here so it cannot
+     quietly change underneath them. */
+  sctx.textBaseline = "top";
   sctx.globalAlpha = alpha === undefined ? 1 : alpha;
   sctx.save();
   sctx.translate(VW / 2, 0);
@@ -6401,6 +6468,11 @@ function drawTitleButtons(){
   const rects = buttonRects();
   R.titlePick = Math.max(0, Math.min(rects.length - 1, R.titlePick || 0));
   sctx.textAlign = "center";
+  /* Text was being drawn from its top edge (render() sets that, once, for the
+     whole game), so every label sat low in its button and the line at the
+     bottom hung off the screen. Measuring from the middle puts both where
+     the numbers below say they are. */
+  sctx.textBaseline = "middle";
   sctx.font = "bold 12px ui-monospace,Menlo,monospace";
   rects.forEach((q, i) => {
     const on = i === R.titlePick;
@@ -6418,20 +6490,21 @@ function drawTitleButtons(){
     roundRect(sctx, q.x + .5, q.y + .5, q.w - 1, q.h - 1, 6);
     sctx.stroke();
     sctx.fillStyle = on ? "#ffffff" : "#aeb8cc";
-    sctx.fillText(q.b.label, VW / 2, q.y + q.h / 2 + 4);
+    sctx.fillText(q.b.label, VW / 2, q.y + q.h / 2);
     /* a plain chevron, because the pointing-triangle glyph is missing from
        the monospace faces this draws with and comes out as a speck */
     if (on){
-      sctx.fillText(">", q.x + 14, q.y + q.h / 2 + 4);
-      sctx.fillText("<", q.x + q.w - 14, q.y + q.h / 2 + 4);
+      sctx.fillText(">", q.x + 14, q.y + q.h / 2);
+      sctx.fillText("<", q.x + q.w - 14, q.y + q.h / 2);
     }
   });
   /* what to press, in case it is not obvious */
   sctx.font = "8px ui-monospace,Menlo,monospace";
   sctx.fillStyle = "rgba(174,184,204,.8)";
   sctx.fillText(rects.length > 1 ? "up and down to choose  \u00b7  Z or click to pick"
-                                 : "press Z, or click", VW / 2, VH - 11);
+                                 : "press Z, or click", VW / 2, VH - 9);
   sctx.textAlign = "left";
+  sctx.textBaseline = "top";        // put it back the way the rest of the game expects
   R.buttonsLive = true;             // now, and only now, they can be pressed
 }
 /* the sky behind a title: a gradient with a few specks drifting up it */
@@ -10728,6 +10801,8 @@ function changeGame(name, line){
    out backwards. Now the panel is built once and only the list is redrawn. */
 function openLib(){
   $("lib-ov").classList.add("on");
+  libSaid("Saving keeps <b>everything</b>: your code, your sprites and their extra frames, " +
+          "rooms, songs, sounds, voxel models and colours.");
   $("lib-name").value   = project.name || "";
   $("lib-author").value = project.author || "";
   drawLibList();
@@ -10798,7 +10873,8 @@ function drawLibList(){
     const g = all[n];
     list.appendChild(gameCard(g, n, [
       ["Open", () => { libLoad(g); project.name = n; project.author = g.author || "";
-                       closeLib(); tab("code"); log("opened \u201c" + n + "\u201d", "ok"); }],
+                       closeLib(); tab("code");
+                       log("opened \u201c" + n + "\u201d \u2014 " + libSummary(g), "ok"); }],
       ["Delete", () => { if (confirm("Delete \u201c" + n + "\u201d from this browser?")){
                            const a2 = libRead(); delete a2[n]; libWrite(a2); drawLibList(); } }]
     ]));
@@ -10855,13 +10931,49 @@ function restoreLibrary(input){
   r.readAsText(f);
 }
 
+/* What went into the file, in words. The code is the part people worry about,
+   so it is counted first and said out loud. */
+function libSummary(g){
+  const lines = String(g.code || "").split("\n").filter(t => t.trim()).length;
+  const bits = [lines ? lines + (lines === 1 ? " line of code" : " lines of code") : "no code yet"];
+  const art = (g.sprites || []).filter(a => a.some(v => v)).length;
+  if (art) bits.push(art + (art === 1 ? " sprite" : " sprites"));
+  const rooms = (g.rooms || []).length;
+  if (rooms) bits.push(rooms + (rooms === 1 ? " room" : " rooms"));
+  const songs = (g.songs || []).length;
+  if (songs) bits.push(songs + (songs === 1 ? " song" : " songs"));
+  const sounds = (g.sfx || []).filter(e => e.name || e.audio).length;
+  if (sounds) bits.push(sounds + (sounds === 1 ? " sound" : " sounds"));
+  const models = (g.models || []).length;
+  if (models) bits.push(models + (models === 1 ? " model" : " models"));
+  return bits.join(", ");
+}
+function libSaid(html, bad){
+  const el = $("lib-said");
+  if (!el) return;
+  el.className = "hint" + (bad ? " err" : "");
+  el.innerHTML = html;
+}
 function libSaveHere(){
   const { name, author } = libFields();
   if (!name){ alert("Give the game a name first — the box just above."); $("lib-name").focus(); return; }
-  if (libSave(name, author)){
-    log("saved \u201c" + name + "\u201d to My Games", "ok");
-    drawLibList();
+  const had = libRead()[name];
+  const g = gameNow(name, author);
+  const all = libRead();
+  all[name] = g;
+  /* This used to report through the console on the Code tab, which is behind
+     the My Games window \u2014 so a save that failed for want of room looked
+     exactly like one that worked. */
+  if (!libWrite(all)){
+    libSaid("There was no room left in this browser to save \u201c" + escapeHtml(name) +
+            "\u201d. Delete a game you no longer need, or press <b>\u2b07 Backup all</b> " +
+            "to keep them as a file first.", true);
+    return;
   }
+  log("saved \u201c" + name + "\u201d to My Games \u2014 " + libSummary(g), "ok");
+  libSaid((had ? "Replaced \u201c" : "Saved \u201c") + escapeHtml(name) + "\u201d \u2014 " +
+          escapeHtml(libSummary(g)) + ". Opening it again brings all of that back.");
+  drawLibList();
 }
 
 /* =========================================================
@@ -11350,12 +11462,25 @@ somewhere it slides to, how long, how loud, how rough, how much it wobbles
 and how many times it repeats. The picture above the sliders is the sound
 itself, so you can see what each one does. Every change plays straight back.
 
-<code>sfx(1)</code>                play sound 1
-<code>sfx("jump")</code>           ...or call it by the name you gave it
+<code>sfx("boom")</code>          a sound by name — nothing to set up first
+<code>sfx(1)</code>                play sound 1 from the list on the left
+<code>sfx("my noise")</code>       ...or one you made and named yourself
 
-  Ten ready-made ones — <b>Jump</b>, <b>Coin</b>, <b>Hit</b>, <b>Laser</b>,
+  <b style="color:var(--accent2)">Sounds that are just there</b>
+  These work in a brand new game, before you have touched this tab at all:
+  <b>start</b>, <b>jump</b>, <b>coin</b>, <b>boom</b>, <b>hurt</b>,
+  <b>laser</b>, <b>power up</b>, <b>blip</b>, <b>click</b>, <b>step</b>,
+  <b>alarm</b>, <b>splash</b>, <b>win</b>, <b>lose</b>, <b>door</b>,
+  <b>select</b>, <b>text</b>. Everyday words for them count too, so
+  <code>sfx("explosion")</code>, <code>sfx("BOOM!")</code> and
+  <code>sfx("bang")</code> are all the same noise, and
+  <code>sfx("game over")</code> is the losing one. Name a sound of your own
+  <b>boom</b> in this tab and yours is used instead.
+
+  Sixteen ready-made ones — <b>Jump</b>, <b>Coin</b>, <b>Hit</b>, <b>Laser</b>,
   <b>Explode</b>, <b>Power up</b>, <b>Blip</b>, <b>Step</b>, <b>Alarm</b>,
-  <b>Splash</b> — fill the sliders in for you, then you push them about.
+  <b>Splash</b>, <b>Start</b>, <b>Win</b>, <b>Lose</b>, <b>Door</b>,
+  <b>Select</b>, <b>Text</b> — fill the sliders in for you, then you push them about.
   <b>🎤 Record</b> uses your own voice instead, and <b>📂 Import a sound</b>
   takes a wav or an mp3. (Recording needs Safari 14 or a recent Chrome or
   Firefox; importing works everywhere, including iOS 12.)
@@ -11824,6 +11949,18 @@ window.addEventListener("keydown", e => {
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.14.1", t:"Writing a scene, and the letters you type",
+    lines:[
+      "<b>Sounds you can just ask for by name.</b> <code>sfx(\u201cstart\u201d)</code> used to stop the whole program on line 1 \u2014 there was no sound called that, because the ready-made ones only existed as buttons in the SFX tab, and until you pressed one they were not really there. Seventeen sounds now answer to their own name in a brand new game: start, jump, coin, boom, hurt, laser, power up, blip, click, step, alarm, splash, win, lose, door, select, text. Everyday words count too, so <code>sfx(\u201cexplosion\u201d)</code>, <code>sfx(\u201cBOOM!\u201d)</code> and <code>sfx(\u201cbang\u201d)</code> are one noise, and <code>sfx(\u201cgame over\u201d)</code> is the losing one. Name a sound of your own <b>boom</b> and yours wins. If a name really is unknown, the message now lists the ones that work.",
+      "<b>The bottom of a title screen was falling off the screen.</b> The canvas had been told, once, at the top of the game, to draw text down from its top edge \u2014 so every title label landed lower than the numbers said, the words in the buttons sat off-centre, and \u201cpress Z, or click\u201d hung over the last row and got cut in half. Title text is measured from its middle now, and the buttons leave room underneath for the line.",
+      "<b>Saving a game says what it saved.</b> \u201cSaved \u2018My Game\u2019 \u2014 12 lines of code, 4 sprites, 1 song\u201d appears in the My Games window itself. It always kept your code; there was simply nothing on screen saying so, because the note went to the console behind the window \u2014 and so did \u201cno room left in this browser\u201d, which meant a save that failed looked exactly like one that worked. Both are said in the window now.",
+      "<b>Z, X, C and E type into boxes again.</b> The game watches for those keys, and it was taking them from every box on the page except the code editor \u2014 so naming a sprite \u201czoe\u201d or searching Help for \u201cchase\u201d dropped letters. Anything you can type into keeps its letters now.",
+      "<b><code>after that</code></b> \u2014 an Easy-mode line of its own that holds everything below it until whatever is happening has finished:<br><code>textbox(\u201cHi!\u201d)</code><br><code>after that</code><br><code>sfx(\u201cboom\u201d)</code><br>Use it as often as you like and a scene reads straight down the page.",
+      "<b>Text boxes queue.</b> Write two <code>textbox()</code> lines one after the other and you get two boxes in a row, in order, without any commas or extra words. One <code>textbox(\u201ca\u201d, \u201cb\u201d, \u201cc\u201d)</code> is three pages of the same box. Written inside <code>every frame</code> it still shows once, as before.",
+      "<b>A command can be spread over several lines</b> \u2014 open a bracket, carry on down the page, close it where you like. Long <code>textbox</code> and <code>customtitle</code> lines no longer have to fit on one row.",
+      "<b>Title screens got their looks back.</b> Big lettering with a dark outline and a glow so it can be read over anything, a starfield behind it, buttons that light up with the arrow keys as well as the mouse or a phone \u2014 and no invisible Play button under the animation, which used to let you start the game before the title had finished arriving.",
+      "The top bar no longer wraps onto two rows on a laptop screen: it drops the words next to the icons as it gets narrower, and stays one row from 800px up."
+    ] },
   { v:"0.14.0", t:"Voxels, a band, and ten looks",
     lines:[
       "<b>Fixed: exporting to .html didn\u2019t work properly.</b> An export is a snapshot of the editor as it stands, and Export became its own tab last release \u2014 so exporting while looking at the Export tab gave you a file that opened on the Export tab, with the game running correctly behind a page of cards about exporting. From any other tab it worked, which is why it seemed random. Also: the \u201cit saved\u201d message went to the console, which lives in the Code tab, so from the Export tab nothing at all appeared to happen; and iOS 12 Safari has no download attribute, so the click silently did nothing there. All three are fixed.",

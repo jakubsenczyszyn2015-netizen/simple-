@@ -49,9 +49,15 @@ hide(1)
   `title("My Game", 2)` plays one behind the title.
 - **SFX** — short noises built from seven sliders (pitch, slide, length,
   loudness, roughness, wobble, repeats), with the waveform drawn above them so
-  you can see what each one does. Ten presets — Jump, Coin, Hit, Laser,
-  Explode, Power up, Blip, Step, Alarm, Splash — plus 🎤 recording your own
-  voice or importing a wav/mp3. `sfx(1)` or `sfx("jump")` plays one.
+  you can see what each one does. Sixteen presets — Jump, Coin, Hit, Laser,
+  Explode, Power up, Blip, Step, Alarm, Splash, Start, Win, Lose, Door,
+  Select, Text — plus 🎤 recording your own voice or importing a wav/mp3.
+  `sfx(1)` plays one from the list; `sfx("boom")` plays a sound by name, and
+  seventeen of them are there in a brand new game with nothing set up first —
+  start, jump, coin, boom, hurt, laser, power up, blip, click, step, alarm,
+  splash, win, lose, door, select, text — with everyday words mapped onto
+  them, so `sfx("explosion")`, `sfx("BOOM!")` and `sfx("bang")` are one noise.
+  A sound you name yourself always wins over the built-in one.
 - **Help** — every command, with a search box that looks through all four modes
   and tells you which one each answer belongs to. Press **/** to jump to it.
 - **Learn** — short steps, each with a button that loads and runs the code.
@@ -250,7 +256,7 @@ gone — so a scene reads straight down the page:
 ```
 textbox("Hi!")
 after that
-sfx(1)
+sfx("boom")
 ```
 
 `after start ... end` runs once after `when start` has finished and the first
