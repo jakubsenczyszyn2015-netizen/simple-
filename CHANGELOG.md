@@ -3,6 +3,36 @@
 All notable changes to Simple++ live here, newest first.
 The same list is readable inside the app under the **≡ Changelog** tab.
 
+## 0.14.2 — wait, in seconds, that actually waits
+
+### Fixed
+- **`wait()` threw away everything written under it.** It worked by throwing
+  the program out of the block it was in, which stopped the countdown *and*
+  every line below the wait — so this ran the first line, paused, and then
+  simply never did the rest:
+
+  ```
+  put(1, 20, 100)
+  wait(1)
+  put(1, 200, 100)
+  ```
+
+  The lines under a `wait` are lifted out when the program is read and handed
+  back the moment the time is up, the same way `after that` works. A wait with
+  nothing under it is still a plain pause. Two waits in the same frame each
+  keep their own countdown.
+
+### Changed
+- **`wait()` is in seconds.** `wait(2)` is two seconds, `wait(0.5)` is half a
+  second, `wait(0.05)` is a blink. It used to count frames, which made `wait(1)`
+  a sixtieth of a second and left nobody able to guess what number to write.
+  The sum uses whatever the fps slider is set to, so a game running at 30
+  still waits the right length of time.
+- `waitframes(30)` is the old behaviour, for when exact frames matter.
+- Old code that says `wait(30)` meaning half a second now waits half a minute,
+  so the first time a whole number of ten or more is used the console says
+  what happened and what to write instead.
+
 ## 0.14.1 — Writing a scene, and the letters you type
 
 ### Fixed

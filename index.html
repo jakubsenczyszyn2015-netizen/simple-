@@ -2127,6 +2127,9 @@ function parse(src){
    The lines below the marker are lifted out into a step of their own, and
    the step waits its turn. Several markers make several steps, so a whole
    scene can be written straight down the page. */
+function isWaitLine(st){
+  return st.k === "call" && /^wait(frames|_frames)?\s*\(/i.test(st.text);
+}
 function splitAfterThat(list){
   const out = [];
   for (const st of list){
@@ -2134,12 +2137,21 @@ function splitAfterThat(list){
     if (st.other) st.other = splitAfterThat(st.other);
     out.push(st);
   }
-  const at = out.findIndex(st => st.k === "afterthat");
-  if (at < 0) return out;
-  const before = out.slice(0, at);
-  const after = splitAfterThat(out.slice(at + 1));      // and any markers after that one
-  before.push({ k:"later", body: after, n: out[at].n });
-  return before;
+  for (let i = 0; i < out.length; i++){
+    const st = out[i];
+    /* "after that" holds the rest until the screen is free */
+    if (st.k === "afterthat")
+      return out.slice(0, i).concat([{ k:"later", body: splitAfterThat(out.slice(i + 1)), n: st.n }]);
+    /* wait() holds the rest for a set time. It used to simply throw the
+       program out of the block it was in, so everything written under a
+       wait was quietly dropped and never ran at all. The lines below it
+       are lifted out here and given back when the time is up. A wait with
+       nothing under it stays a plain pause. */
+    if (isWaitLine(st) && i < out.length - 1)
+      return out.slice(0, i).concat([{ k:"waitthen", text: st.text,
+                                       body: splitAfterThat(out.slice(i + 1)), n: st.n }]);
+  }
+  return out;
 }
 
 function Err(msg, line){ this.msg = msg; this.line = line; }
@@ -2374,7 +2386,7 @@ sctx.imageSmoothingEnabled = false;
 const R = {
   running:false, prog:null, actors:{}, vars:{}, keys:{},
   extraDraw:[], vox:{}, thick:{}, stats:{}, bag:[], memory:{}, timers:{}, ink:"#ffffff", glides:{},
-  later:[], laterFrom:[], looseDone:false,
+  later:[], laterFrom:[], looseDone:false, waitJobs:[], saidWaitSecs:false,
   followers:[], bullets:[], npcs:{}, sframe:{}, splay:{},
   room:0, texts:[], frame:0, waitFrames:0, raf:0, startDone:false,
   title:null, buttons:[], clicks:[], titlesShown:{},   // title screens
@@ -4579,6 +4591,12 @@ function importSfx(input){
 /* ---------- statement execution ---------- */
 class Stop { }
 class Wait { constructor(f){ this.f = f; } }
+/* Seconds are what people think in; the game counts frames. The fps slider
+   decides how many frames a second is, so the sum is done here rather than
+   assuming sixty. */
+function secsToFrames(secs){
+  return Math.max(1, Math.round(Number(secs) * Math.max(1, R.fps || 60)));
+}
 
 function exec(list){
   for (const st of list){
@@ -4597,6 +4615,19 @@ function exec(list){
       for (let i = 0; i < n; i++) exec(st.body);
     }
     else if (st.k === "later") queueLater(st);      // held back by "after that"
+    else if (st.k === "waitthen"){
+      /* The wait itself is run as an ordinary command so it works out its own
+         time; the Wait it throws is caught here rather than thrown out of the
+         block, and the lines under it are kept for when it runs out. */
+      try { runCall({ k:"call", text: st.text, n: st.n }); }
+      catch (e){
+        if (!(e instanceof Wait)) throw e;
+        if (!R.waitJobs.some(w => w.n === st.n))
+          R.waitJobs.push({ left: e.f, body: st.body, n: st.n });
+        R.waitFrames = Math.max(R.waitFrames, e.f);   // the game holds still meanwhile
+        return;                                       // the rest of this block is in there
+      }
+    }
   }
 }
 
@@ -5349,7 +5380,22 @@ function runCall(st){
     case "reset": { resetGame(); break; }
     case "bind": { const [k, real] = A(); bindKey(k, real, st.n); break; }
 
-    case "wait":  { throw new Wait(Math.max(1, Math.round(A()[0] || 1))); }
+    /* wait(2) is two seconds. It used to be frames, which meant wait(1) was a
+       sixtieth of a second and nobody could guess what number to write. */
+    case "wait": {
+      const secs = Number(A()[0]);
+      if (!(secs > 0)) throw new Wait(1);
+      /* Somebody with older code will write wait(30) meaning half a second.
+         Rather than silently sitting there for half a minute, say so once. */
+      if (secs >= 10 && secs === Math.round(secs) && !R.saidWaitSecs){
+        R.saidWaitSecs = true;
+        log("wait(" + secs + ") is " + secs + " seconds now, not " + secs +
+            " frames \u2014 wait(" + (secs / 60).toFixed(2).replace(/0+$/, "").replace(/\.$/, "") +
+            ") is the same pause as before, and waitframes(" + secs + ") is the old way.", "err");
+      }
+      throw new Wait(secsToFrames(secs)); }
+    case "waitframes": case "wait_frames": {
+      throw new Wait(Math.max(1, Math.round(A()[0] || 1))); }
     case "stop":  { throw new Stop(); }
     case "note":  { log(String(A()[0])); break; }
     default: throw new Err("I don't know the command '" + name + "'" +
@@ -5413,6 +5459,7 @@ function startWith(source){
   R.glides = {};
   R.timers = {}; R.ink = "#ffffff"; R.bgColour = null;
   R.later = []; R.laterFrom = []; R.looseDone = false;
+  R.waitJobs = []; R.saidWaitSecs = false;
   R.stats = {}; R.bag = []; R.memory = R.memory || {};
   R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
   R.npcs = {}; R.shake = 0; R.flash = 0; R.tint = null;
@@ -5422,6 +5469,7 @@ function startWith(source){
   R.glides = {};
   R.timers = {}; R.ink = "#ffffff"; R.bgColour = null;
   R.later = []; R.laterFrom = []; R.looseDone = false;
+  R.waitJobs = []; R.saidWaitSecs = false;
   R.stats = {}; R.bag = []; R.memory = R.memory || {};
   R.soul = null; R.arena = null; R.bullets = []; R.followers = [];
   R.npcs = {}; R.shake = 0; R.flash = 0; R.tint = null;
@@ -5457,6 +5505,7 @@ function doReset(){
   /* starting over means the loose lines at the top run again, and anything
      that was waiting on an "after that" is forgotten */
   R.looseDone = false; R.later = []; R.laterFrom = [];
+  R.waitJobs = []; R.saidWaitSecs = false;
   R.box = null; R.glides = {}; R.timers = {};
   R.clicks = []; R.vars.coins = 0;
   R.acc = 0; R.lastT = undefined;
@@ -5470,6 +5519,19 @@ function stop(){
   if (typeof stopSong === "function") stopSong();
 }
 
+/* Each wait() counts its own lines down, so two of them in the same frame
+   cannot lose one another. When one runs out, the lines that were written
+   under it run \u2014 which is what wait() never used to do. */
+function stepWaits(){
+  if (!R.waitJobs.length) return true;
+  const due = [];
+  for (const w of R.waitJobs) if (--w.left <= 0) due.push(w);
+  if (!due.length) return true;
+  R.waitJobs = R.waitJobs.filter(w => w.left > 0);
+  for (const w of due) if (!safe(w.body, "the lines after wait()")) return false;
+  return true;
+}
+
 /* Lines held back by "after that" wait here until the screen is free: no
    textbox on it, no dialogue, nothing counting down, and no title up. */
 function queueLater(st){
@@ -5478,7 +5540,8 @@ function queueLater(st){
   R.later.push({ body: st.body, n: st.n });
 }
 function screenBusy(){
-  return !!(R.box || R.dialogue || R.title || R.chat || R.waitFrames > 0 || R.ending);
+  return !!(R.box || R.dialogue || R.title || R.chat ||
+            R.waitFrames > 0 || R.waitJobs.length || R.ending);
 }
 function stepLater(){
   if (!R.later.length || screenBusy()) return true;
@@ -5580,7 +5643,11 @@ function step(){
     render(); return true;
   }
 
-  if (R.waitFrames > 0){ R.waitFrames--; render(); return true; }
+  if (R.waitFrames > 0){
+    R.waitFrames--;
+    if (!stepWaits()) return false;   // any wait that has just run out
+    render(); return true;
+  }
   R.pausedTexts = R.texts;
   R.texts = [];
 
@@ -5623,7 +5690,8 @@ function step(){
       if (R.uiClicks.includes(label) && !safe(b.body, "when button clicked")) return false;
     }
     else if (b.k === "call" || b.k === "if" || b.k === "repeat" ||
-             b.k === "later" || b.k === "resetif" || b.k === "resetblock"){
+             b.k === "later" || b.k === "waitthen" ||
+             b.k === "resetif" || b.k === "resetblock"){
       /* Loose top-level lines run once, like "when start". This used to key
          off R.frame === 0, which stopped being true the moment a title
          screen was on screen counting frames of its own. */
@@ -8615,7 +8683,7 @@ const LESSONS = [
     c:`when start\n  room(1)\n  put(1, 32, 32)\n  show(1)\nend\n\nwhen key left\n  if free(1, -2, 0)\n    move(1, -2, 0)\n  end\nend\nwhen key right\n  if free(1, 2, 0)\n    move(1, 2, 0)\n  end\nend\nwhen key up\n  if free(1, 0, -2)\n    move(1, 0, -2)\n  end\nend\nwhen key down\n  if free(1, 0, 2)\n    move(1, 0, 2)\n  end\nend` },
 
   { t:"Do it again and again",
-    p:"repeat does something a number of times. wait() pauses for a while. Now go open a template and change everything in it.",
+    p:"repeat does something a number of times, all in one go. wait(1) pauses for a second before the lines under it carry on. Now go open a template and change everything in it.",
     c:`when start\n  show(1)\n  put(1, 0, 110)\n  repeat 10\n    move(1, 30, 0)\n  end\nend\n\nevery frame\n  print("that was 10 moves of 30", 40, 40)\nend` }
 ];
 
@@ -9431,7 +9499,7 @@ Blocks:
 
 Commands:
   show(n) hide(n) move(n,dx,dy) put(n,x,y) print(text,x,y) room(n)
-  set(v,0) add(v,1) wait(30) sound(1..6) settile(x,y,n) stop()
+  set(v,0) add(v,1) wait(2) sound(1..6) settile(x,y,n) stop()
   title("Name") titleoption("Button")
   solid(n) door(n) door(n,room)
   gravity(n, ground) jump(n, power) horizontal(n) vertical(n)
@@ -10988,7 +11056,10 @@ const HELP_CORE = `
 <code>room(2)</code>             show room 2 behind everything
 <code>set(score, 0)</code>       make a variable
 <code>add(score, 1)</code>       add to a variable
-<code>wait(30)</code>            wait 30 frames (about half a second)
+<code>wait(2)</code>             pause for two seconds, then carry on with
+                        the lines underneath
+<code>wait(0.5)</code>           half a second — decimals are fine
+<code>waitframes(30)</code>      thirty frames instead, if you want exact ones
 <code>sound(1)</code>            make a beep — try 1 to 6
 <code>music(1)</code>            play song 1 from the Music tab, over and over
 <code>music(1, 0)</code>         ...just once
@@ -11236,6 +11307,27 @@ the others, so you can take one and leave the rest.
                           itself out. Z skips to the end, Z again closes it.
 <code>talk(3, "* Hi.")</code>         the same, with sprite 3's face in the box
 
+<b style="color:var(--accent2)">wait</b>
+<code>wait(2)</code> holds everything for two seconds, and then the lines
+written <i>under</i> it carry on. Decimals are fine, so <code>wait(0.5)</code>
+is half a second and <code>wait(0.05)</code> is a blink:
+
+<code>put(1, 20, 100)</code>
+<code>wait(1)</code>
+<code>put(1, 200, 100)</code>
+<code>wait(1)</code>
+<code>ending("Gone!")</code>
+
+  Nothing else moves while it waits \u2014 it is a pause in the whole game, not
+  just in that one line. Inside <b>every frame</b> that makes a beat: the block
+  runs, waits, and comes round again, which is how you blink something on and
+  off or take a step every half second.
+
+  <code>waitframes(30)</code> counts frames instead, if you want exactly thirty
+  of them. A <b>repeat</b> block does all its turns in one go, so a
+  <code>wait</code> inside one cannot put a gap between them \u2014 use
+  <b>every frame</b> with a <code>wait</code> for that.
+
 <b style="color:var(--accent2)">after that</b>
 A line on its own that means <i>wait until this has finished</i>. Everything
 below it is held back until the box has been read, the wait is over, or the
@@ -11243,7 +11335,7 @@ title is gone — then it carries on:
 
 <code>textbox("Hi!")</code>
 <code>after that</code>
-<code>sfx(1)</code>
+<code>sfx("boom")</code>
 
 Use it as many times as you like and a whole scene reads straight down the
 page:
@@ -11254,7 +11346,7 @@ page:
 <code>after that</code>
 <code>ending("The End")</code>
 
-  It waits for a <b>textbox</b>, a <b>dialogue</b>, a <b>wait()</b>, a
+  It waits for a <b>textbox</b>, a <b>dialogue</b>, a <b>wait</b>, a
   <b>title screen</b> or an <b>ending</b> — anything that has taken over the
   screen. It works on its own at the top of your program and inside a block.
 
@@ -11949,6 +12041,13 @@ window.addEventListener("keydown", e => {
    CHANGELOG (the same list as CHANGELOG.md)
    ========================================================= */
 const RELEASES = [
+  { v:"0.14.2", t:"wait, in seconds, that actually waits",
+    lines:[
+      "<b><code>wait()</code> was throwing away everything written under it.</b> It worked by throwing the program out of the block it was in, which stopped the countdown \u2014 and every line below the wait with it. So <code>put(1, 20, 100)</code> / <code>wait(1)</code> / <code>put(1, 200, 100)</code> did the first line, paused, and then simply never did the rest. The lines under a wait are lifted out when your program is read and handed back the moment the time is up, the same way <b>after that</b> does it.",
+      "<b><code>wait()</code> is in seconds now.</b> <code>wait(2)</code> is two seconds, <code>wait(0.5)</code> is half a second, <code>wait(0.05)</code> is a blink. It used to count frames, so <code>wait(1)</code> was a sixtieth of a second and there was no guessing what number to write. The sum uses whatever the fps slider says, so a game running at 30 waits the right length of time too.",
+      "<code>waitframes(30)</code> is the old way, for when exact frames matter. Old code saying <code>wait(30)</code> for half a second now waits half a minute, so the console says so the first time and tells you what to write instead.",
+      "Nothing else moves during a wait \u2014 it is a pause in the whole game. Inside <b>every frame</b> that makes a beat: the block runs, waits, and comes round again, which is how you blink something on and off. A <b>repeat</b> still does all its turns in one go, so a wait inside one cannot space them out."
+    ] },
   { v:"0.14.1", t:"Writing a scene, and the letters you type",
     lines:[
       "<b>Sounds you can just ask for by name.</b> <code>sfx(\u201cstart\u201d)</code> used to stop the whole program on line 1 \u2014 there was no sound called that, because the ready-made ones only existed as buttons in the SFX tab, and until you pressed one they were not really there. Seventeen sounds now answer to their own name in a brand new game: start, jump, coin, boom, hurt, laser, power up, blip, click, step, alarm, splash, win, lose, door, select, text. Everyday words count too, so <code>sfx(\u201cexplosion\u201d)</code>, <code>sfx(\u201cBOOM!\u201d)</code> and <code>sfx(\u201cbang\u201d)</code> are one noise, and <code>sfx(\u201cgame over\u201d)</code> is the losing one. Name a sound of your own <b>boom</b> and yours wins. If a name really is unknown, the message now lists the ones that work.",

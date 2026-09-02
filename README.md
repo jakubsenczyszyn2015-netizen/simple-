@@ -249,6 +249,23 @@ shake(10)  flash(8)  tint("#4400ff")
 
 `if ... else ... end` and `else if` work in Normal mode and up.
 
+`wait(2)` holds everything for two seconds and then the lines written *under*
+it carry on. Decimals are fine — `wait(0.5)` is half a second. Nothing else
+moves while it waits, so inside `every frame` it makes a beat: the block runs,
+waits, and comes round again.
+
+```
+put(1, 20, 100)
+wait(1)
+put(1, 200, 100)
+wait(1)
+ending("Gone!")
+```
+
+`waitframes(30)` counts frames instead, if you want exactly thirty of them. A
+`repeat` block does all its turns in one go, so a `wait` inside one cannot put
+a gap between them — use `every frame` with a `wait` for that.
+
 `after that` on a line of its own holds back everything below it until
 whatever is happening has finished — a textbox read, a `wait()` over, a title
 gone — so a scene reads straight down the page:
